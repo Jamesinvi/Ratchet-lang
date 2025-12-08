@@ -4,6 +4,7 @@ enum ObjType
 {
     STRING,
     FUNCTION,
+    NATIVE_FUNCTION
 }
 
 enum FunctionType : char
@@ -33,6 +34,13 @@ struct ObjFunction
     Chunk chunk;
 }
 
+alias NativeFn = fn Value(int argCount, Value... args);
+struct ObjNative
+{
+    Obj obj;
+    NativeFn function;
+}
+
 fn ObjFunction* create_obj_function(String name, bool isConstant){
     ObjFunction* object = mem::new(ObjFunction);
     ObjString* stringObj = create_obj_string(name, isConstant);
@@ -53,6 +61,15 @@ fn ObjString* create_obj_string(String source, bool isConstant){
     return object;
 }
 
+fn ObjNative* create_obj_native(NativeFn function){
+    ObjNative* object = mem::new(ObjNative);
+
+    object.obj.type = ObjType.NATIVE_FUNCTION;
+    object.obj.isConstant=true;
+    object.function = function;
+    return object;
+}
+
 fn void Obj.debug_print(Obj* this) @dynamic {
     io::printf("%s, ", ObjType.names[this.type.ordinal]);
     if(this.allocIndex < ulong.max){
@@ -61,12 +78,13 @@ fn void Obj.debug_print(Obj* this) @dynamic {
         io::printf("untracked");
     }
     switch(this.type){
-        case ObjType.STRING: io::printf(" %s", ((ObjString*)this).str);
-        case ObjType.FUNCTION: io::printf(" %s", ((ObjFunction*)this).name.str);
+        case ObjType.STRING: io::printf(" '%s', refs:%2d", ((ObjString*)this).str, this.refCounter);
+        case ObjType.FUNCTION: io::printf(" '%s', refs:%2d", ((ObjFunction*)this).name.str, this.refCounter);
+        case ObjType.NATIVE_FUNCTION: io::printf(" <native fn>");
         default: break;
     }
     if (!this.isConstant && this.refCounter == 0){
-        io::printf("         <------- safe to GC");
+        io::printf("<------- safe to GC");
     }
     io::printf("\n");
 }

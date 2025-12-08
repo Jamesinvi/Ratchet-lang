@@ -105,7 +105,14 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.LESS.ordinal:           nextcase;
         case OpCode.CONCAT_STRING.ordinal:  nextcase;
         case OpCode.POP.ordinal:            nextcase;
-        case OpCode.DEBUG.ordinal:          nextcase;
+        case OpCode.ECHO.ordinal:           nextcase;
+        case OpCode.CAST_F_I.ordinal:       nextcase;
+        case OpCode.CAST_D_I.ordinal:       nextcase;
+        case OpCode.CAST_I_F.ordinal:       nextcase;
+        case OpCode.CAST_D_F.ordinal:       nextcase;
+        case OpCode.CAST_I_D.ordinal:       nextcase;
+        case OpCode.CAST_F_D.ordinal:       nextcase;
+        case OpCode.CAST_TO_STRING.ordinal: nextcase;
         case OpCode.RETURN.ordinal:     
             return single_byte_instruction(OpCode.names[instruction], currentOffset);
         case OpCode.CONSTANT.ordinal:

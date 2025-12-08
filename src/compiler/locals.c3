@@ -6,4 +6,5 @@ struct Local
 {
     Token name;
     int depth;
+    ValueType type;
 }

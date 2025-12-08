@@ -40,6 +40,8 @@ fn void Vm.init(Vm* this, ObjFunction* entryPoint){
     this.frame.function = entryPoint;
     this.frame.ip = (Byte*)&entryPoint.chunk.code[0];
     this.frame.slots = &this.stack.items[0];
+
+    this.define_native("clock", &clock_native);
 }
 
 fn void Vm.deinit(Vm* this){
@@ -118,6 +120,16 @@ macro @bin_op_equal(Vm* vm){
     }
 }
 
+macro @cast_top( Vm* vm, $SrcType, $DstType, $dstEnum, $srcField, $dstField)
+{
+    // Could pop/push but we can do it in place
+    Value* top = &vm.stack.items[vm.stack.size - 1];
+    $SrcType src = top.as.$eval($srcField);
+    top.type = ValueType.$eval($dstEnum);
+    top.as.$eval($dstField) = ($DstType)src;
+}
+
+
 const OP_ADD = 0;
 const OP_SUB = 1;
 const OP_MUL = 2;
@@ -145,8 +157,11 @@ macro @math_bin_op(Vm* vm, $Type, $type, $field, $op)
 }
 
 macro @negate_op(Vm* vm, $Type, $type, $field){
-    $Type right = vm.stack.pop().as.$eval($field);
-    vm.stack.push((Value){.type = ValueType.$eval($type), .as.$eval($field) = - right});
+    // We could pop/push here, instead we do it in place
+    Value* top = &vm.stack.items[vm.stack.size-1];
+    $Type right = top.as.$eval($field);
+    top.type = ValueType.$eval($type);
+    top.as.$eval($field) = -right;
 }
 
 macro Value @pop_obj(Vm* this){
@@ -218,7 +233,22 @@ fn RunResult run(Vm* vm){
 
             case OpCode.CONSTANT.ordinal:   vm.stack.push(@read_const(vm));
 
-            case OpCode.DEBUG.ordinal:      common::print_value(vm.stack.pop());
+            case OpCode.CAST_I_F.ordinal:   @cast_top(vm, int.typeid,    float.typeid,  "FLOAT",  "intNum",    "floatNum");
+            case OpCode.CAST_I_D.ordinal:   @cast_top(vm, int.typeid,    double.typeid, "DOUBLE", "intNum",    "doubleNum");
+            case OpCode.CAST_F_I.ordinal:   @cast_top(vm, float.typeid,  int.typeid,    "INT",    "floatNum",  "intNum");
+            case OpCode.CAST_F_D.ordinal:   @cast_top(vm, float.typeid,  double.typeid, "DOUBLE", "floatNum",  "doubleNum");
+            case OpCode.CAST_D_I.ordinal:   @cast_top(vm, double.typeid, int.typeid,    "INT",    "doubleNum", "intNum");
+            case OpCode.CAST_D_F.ordinal:   @cast_top(vm, double.typeid, float.typeid,  "FLOAT",  "doubleNum", "floatNum");
+
+            case OpCode.CAST_TO_STRING.ordinal: {
+                Value v = vm.stack.pop();
+                // convert v -> String representation
+                String s = common::value_to_string(&v);
+                Value result = @new_string(s); // or build directly from value_to_string
+                @push_obj(vm, result);
+            }
+            case OpCode.ECHO.ordinal:      common::print_value(vm.stack.pop());
+            
             case OpCode.JMP_IF_FALSE.ordinal: {
                 ushort offset = @read_ushort(vm);
                 if (!(vm.stack.peek().as.boolean)) vm.frame.ip += offset;
@@ -291,11 +321,23 @@ fn void Vm.call_value(Vm* vm, Value callee, int argCount){
         vm.error("Stack overflow");
         return;
     }
-    ObjFunction* function = common::@as_func(&callee);
-    CallFrame* frame = &vm.frames[vm.frameCount++];
-    frame.function = function;
-    frame.ip= (Byte*)&function.chunk.code[0];
-    frame.slots = &vm.stack.items[vm.stack.size - argCount -1];
+    Obj* calleeObj = callee.get_obj();
+    switch (calleeObj.type) {
+        case ObjType.FUNCTION:{
+            ObjFunction* function = common::@as_func(&callee);
+            CallFrame* frame = &vm.frames[vm.frameCount++];
+            frame.function = function;
+            frame.ip= (Byte*)&function.chunk.code[0];
+            frame.slots = &vm.stack.items[vm.stack.size - argCount -1];
+        }
+        case ObjType.NATIVE_FUNCTION:{
+            NativeFn native = common::@as_native(&callee).function;
+            Value result = native(argCount, vm.stack.peek_at(argCount));
+            vm.stack.size -= argCount + 1;
+            vm.stack.push(result);
+        }
+        default: vm.error("invalid call operation");
+    }
 }
 
 fn void Vm.error(Vm* vm, String msg){
@@ -318,51 +360,13 @@ fn void Vm.error(Vm* vm, String msg){
     }
 }
 
-fn void Vm.print_stack(Vm* this)
-{
-    io::printf("Stack |");
-    int counter = 0;
-
-    Value* begin = (Value*)&this.stack.items[0];
-    Value* end   = (Value*)&this.stack.items[this.stack.size];
-
-    for (Value* slot = begin; slot < end; slot++){
-        io::printf("[ ");
-        slot.debug_print();
-        io::printf(" ]");
-        counter++;
-    }
-
-    if (counter > 0) {
-        io::printf("<---Top\n");
-    } else {
-        io::printf("\n");
-    }
-}
-
-fn void Vm.print_disassembly(Vm* this)
-{
-    for(int i=0;i<this.frameCount;i++){
-        io::printfn("function : '%s'", this.frames[i].function.name.str);
-        print_function_and_children(this.frames[i].function);
-    }
-}
-
-fn void print_function_and_children(ObjFunction* function) {
-    if(function.name!=null){
-        io::printfn("function : '%s'", function.name.str);
-    }
-    function.chunk.debug_print();
-
-    // Also descend into function constants
-    for (int i = 0; i < (int)function.chunk.constants.len(); i++) {
-        Value* v = &function.chunk.constants[i];
-        if (v.type == ValueType.NO_GC_OBJ || v.type == ValueType.GC_OBJ) {
-            Obj* o = v.as.objRef;
-            if (o.type == ObjType.FUNCTION) {
-                ObjFunction* child = (ObjFunction*)o;
-                print_function_and_children(child);
-            }
-        }
-    }
+fn void Vm.define_native(Vm* vm, String name, NativeFn function) {
+    vm.stack.push(common::make_string(name, true));
+    vm.stack.push(common::make_native(function));
+    int nameIndex = vm.stack.size -2;
+    int valueIndex = vm.stack.size -1;
+    ObjString* nameObj = common::@as_string(&vm.stack.items[nameIndex]);
+    vm.globals.set(nameObj.str, vm.stack.items[valueIndex]);
+    vm.stack.pop();
+    vm.stack.pop();
 }

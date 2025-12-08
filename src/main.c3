@@ -40,8 +40,8 @@ fn int main(String[] args)
 
     vm.init(entryPoint);
     vm::run(&vm);
-    //vm.trackedHeap.debug_print();
-    //vm.untrackedHeap.debug_print();
+    vm.trackedHeap.debug_print();
+    vm.untrackedHeap.debug_print();
 
     vm.deinit();
     scanner.deinit();

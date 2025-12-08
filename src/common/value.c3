@@ -58,14 +58,20 @@ fn Value make_string(String str, bool isConstant) @inline {
 }
 
 fn Value make_function(String name, bool isConstant) @inline {
-    ObjFunction* string = common::create_obj_function(name, isConstant);
+    ObjFunction* func = common::create_obj_function(name, isConstant);
     Value v = {};
     v.type = ValueType.NO_GC_OBJ;
-    v.as.objRef = &string.obj;
+    v.as.objRef = &func.obj;
     return v;
 }
 
-
+fn Value make_native(NativeFn function) @inline {
+    ObjNative* native = common::create_obj_native(function);
+    Value v = {};
+    v.type = ValueType.NO_GC_OBJ;
+    v.as.objRef = &native.obj;
+    return v;
+}
 
 fn void Value.debug_print(Value* v) @dynamic{
     switch(v.type){
@@ -78,8 +84,9 @@ fn void Value.debug_print(Value* v) @dynamic{
         case ValueType.NO_GC_OBJ:   {
             switch (v.as.objRef.type)
             {
-                case ObjType.STRING: io::printf("fn %s", @as_string(v).str);
+                case ObjType.STRING: io::printf("\"%s\"", @as_string(v).str);
                 case ObjType.FUNCTION: io::printf("fn %s", @as_func(v).name.str);
+                case ObjType.NATIVE_FUNCTION: io::printf("<native_fn>");
             }
         }
     }
@@ -95,9 +102,34 @@ macro ObjFunction* @as_func(Value* v) {
     return casted;
 }
 
+macro ObjNative* @as_native(Value* v) {
+    ObjNative* casted = (ObjNative*) v.as.objRef;
+    return casted;
+}
+
 fn Obj* Value.get_obj(Value* this){
     Obj* casted = (Obj*)this.as.objRef;
     return casted;
+}
+
+fn String value_to_string(Value* v){
+    switch(v.type)
+    {
+        case ValueType.INT:         return string::format(mem, "%s", v.as.intNum);  
+        case ValueType.FLOAT:       return string::format(mem, "%s", v.as.floatNum);  
+        case ValueType.DOUBLE:      return string::format(mem, "%s", v.as.doubleNum);  
+        case ValueType.BOOL:        return string::format(mem, "%s", v.as.boolean);  
+        case ValueType.NULL:        return string::format(mem, "NULL");
+        case ValueType.GC_OBJ:      nextcase;
+        case ValueType.NO_GC_OBJ:   {
+            switch (v.as.objRef.type)
+            {
+                case ObjType.STRING:            return string::format(mem, "%s", @as_string(v).str);
+                case ObjType.FUNCTION:          return string::format(mem, "%s", @as_func(v).name.str);
+                case ObjType.NATIVE_FUNCTION:   return string::format(mem, "<native_fn>");
+            }
+        }
+    }
 }
 
 fn void print_value(Value v){
@@ -114,6 +146,7 @@ fn void print_value(Value v){
             {
                 case ObjType.STRING: io::printfn("%s", @as_string(&v).str);
                 case ObjType.FUNCTION: io::printfn("%s", @as_func(&v).name.str);
+                case ObjType.NATIVE_FUNCTION: io::printfn("<native_fn>");
             }
         }
     }
