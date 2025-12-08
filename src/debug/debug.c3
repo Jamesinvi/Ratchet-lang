@@ -5,7 +5,7 @@ import common;
 
 const SHOW_TOKENS = false;
 const SHOW_STACK = false;
-const SHOW_DISASSEMBLY = true;
+const SHOW_DISASSEMBLY = false;
 const DISASSMBLE_DURING_EXECUTION = false;
 
 
