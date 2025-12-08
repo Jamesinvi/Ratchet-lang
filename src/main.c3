@@ -1,6 +1,7 @@
 import scanner;
 import compiler;
 import common;
+import debug;
 import std::io;
 import std::collections;
 import vm;
@@ -28,15 +29,19 @@ fn int main(String[] args)
         scanner.parse_tokens();
     };
 
-    scanner.print_tokens();
+    debug::@print_tokens(&scanner);
     compiler.init(scanner.tokens);
-    compiler::compile(&compiler);
-
+    ObjFunction*? entryPoint = compiler::compile(&compiler);
+    if(catch err = entryPoint){
+        io::printfn("Compile error");
+        return 1;
+    }
     vm::Vm vm ={};
-    vm.init();
-    vm::run(&vm, &compiler.chunks[0]);
-    vm.trackedHeap.debug_print();
-    vm.untrackedHeap.debug_print();
+
+    vm.init(entryPoint);
+    vm::run(&vm);
+    //vm.trackedHeap.debug_print();
+    //vm.untrackedHeap.debug_print();
 
     vm.deinit();
     scanner.deinit();

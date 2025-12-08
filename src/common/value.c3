@@ -1,7 +1,7 @@
 module common;
 import std::io;
 
-enum ValueType
+enum ValueType : char
 {
     INT,
     FLOAT,
@@ -57,22 +57,41 @@ fn Value make_string(String str, bool isConstant) @inline {
     return v;
 }
 
+fn Value make_function(String name, bool isConstant) @inline {
+    ObjFunction* string = common::create_obj_function(name, isConstant);
+    Value v = {};
+    v.type = ValueType.NO_GC_OBJ;
+    v.as.objRef = &string.obj;
+    return v;
+}
 
-fn void Value.debug_print(Value* this) @dynamic{
-    switch(this.type)
-    {
-        case ValueType.INT:         io::printf("%s", this.as.intNum);  
-        case ValueType.FLOAT:       io::printf("%s", this.as.floatNum);  
-        case ValueType.DOUBLE:      io::printf("%s", this.as.doubleNum);  
-        case ValueType.BOOL:        io::printf("%s", this.as.boolean);  
-        case ValueType.GC_OBJ:      nextcase;
-        case ValueType.NO_GC_OBJ:   io::printf("\"%s\"", this.get_obj_string().str);
+
+
+fn void Value.debug_print(Value* v) @dynamic{
+    switch(v.type){
+        case ValueType.INT:         io::printf("%s", v.as.intNum);  
+        case ValueType.FLOAT:       io::printf("%s", v.as.floatNum);  
+        case ValueType.DOUBLE:      io::printf("%s", v.as.doubleNum);  
+        case ValueType.BOOL:        io::printf("%s", v.as.boolean);  
         case ValueType.NULL:        io::printf("NULL");
+        case ValueType.GC_OBJ:      nextcase;
+        case ValueType.NO_GC_OBJ:   {
+            switch (v.as.objRef.type)
+            {
+                case ObjType.STRING: io::printf("fn %s", @as_string(v).str);
+                case ObjType.FUNCTION: io::printf("fn %s", @as_func(v).name.str);
+            }
+        }
     }
 }
 
-fn ObjString* Value.get_obj_string(Value* this) @inline {
-    ObjString* casted = (ObjString*)this.as.objRef;
+macro ObjString* @as_string(Value* v) {
+    ObjString* casted = (ObjString*)v.as.objRef;
+    return casted;
+}
+
+macro ObjFunction* @as_func(Value* v) {
+    ObjFunction* casted = (ObjFunction*) v.as.objRef;
     return casted;
 }
 
@@ -88,8 +107,14 @@ fn void print_value(Value v){
         case ValueType.FLOAT:       io::printfn("%s", v.as.floatNum);  
         case ValueType.DOUBLE:      io::printfn("%s", v.as.doubleNum);  
         case ValueType.BOOL:        io::printfn("%s", v.as.boolean);  
-        case ValueType.GC_OBJ:      nextcase;
-        case ValueType.NO_GC_OBJ:   io::printfn("%s", v.get_obj_string().str);
         case ValueType.NULL:        io::printfn("NULL");
+        case ValueType.GC_OBJ:      nextcase;
+        case ValueType.NO_GC_OBJ:   {
+            switch (v.as.objRef.type)
+            {
+                case ObjType.STRING: io::printfn("%s", @as_string(&v).str);
+                case ObjType.FUNCTION: io::printfn("%s", @as_func(&v).name.str);
+            }
+        }
     }
 }

@@ -35,10 +35,21 @@ fn Type Stack.pop(Stack* this)
     return this.items[--this.size];
 }
 
+fn Type* Stack.pop_ref(Stack* this)
+{
+    return &this.items[--this.size];
+}
+
 fn Type Stack.peek(Stack* this)
 {
     return this.items[this.size-1];
 }
+
+fn Type Stack.peek_at(Stack* this, int distance)
+{
+    return this.items[this.size-1-distance];
+}
+
 
 fn bool Stack.is_empty(Stack* this)
 {

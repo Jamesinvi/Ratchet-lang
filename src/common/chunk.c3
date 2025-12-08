@@ -3,6 +3,10 @@ import std::collections::list;
 import std::io;
 alias Byte = char;
 
+macro ushort @read_ushort(Chunk* c,int currentOffset){
+    currentOffset+=2;
+    return (ushort)((c.currentOffset[-2] << 8) | c.currentOffset[-1]);
+}
 struct Chunk (DebugPrintable)
 {
     List{Byte} code;
@@ -63,6 +67,12 @@ fn int Chunk.add_const_string(Chunk* chunk, String src){
     return index;
 }
 
+fn int Chunk.add_const_function(Chunk* chunk, ObjFunction* function){
+    int index = (int)chunk.constants.len();
+    Value val = {.type = ValueType.NO_GC_OBJ, .as.objRef = (Obj*)function };
+    chunk.constants.push(val);
+    return index;}
+
 
 
 fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
@@ -100,10 +110,19 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
             return single_byte_instruction(OpCode.names[instruction], currentOffset);
         case OpCode.CONSTANT.ordinal:
             return constant_instruction(OpCode.names[instruction], chunk, currentOffset);
-        case OpCode.DEFINE_GLOBAL.ordinal:
+        case OpCode.DEFINE_GLOBAL.ordinal:  nextcase;
+        case OpCode.GET_GLOBAL.ordinal:     nextcase;
         case OpCode.SET_GLOBAL.ordinal:
-        case OpCode.GET_GLOBAL.ordinal:
             return constant_instruction(OpCode.names[instruction], chunk, currentOffset);
+        case OpCode.LOOP.ordinal:           nextcase;
+        case OpCode.JMP.ordinal:            nextcase;
+        case OpCode.JMP_IF_FALSE.ordinal:
+            return jump_instruction(OpCode.names[instruction], chunk, 1, currentOffset);
+        case OpCode.SET_LOCAL.ordinal:      nextcase;
+        case OpCode.GET_LOCAL.ordinal:      
+            return local_instruction(OpCode.names[instruction], chunk, currentOffset);
+        case OpCode.CALL.ordinal:           
+            return call_instruction(OpCode.names[instruction], chunk, currentOffset);
         default:
             io::printfn("Unknown opCode: %d", instruction);
             return currentOffset+1;
@@ -123,6 +142,28 @@ fn int constant_instruction(String name, Chunk* chunk, int currentOffset){
     io::printf("\n");
     return currentOffset+2;
 }
+
+fn int local_instruction(String name, Chunk* chunk, int currentOffset){
+    Byte constantIndex = chunk.code[(usz)currentOffset+1];
+    io::printf("%s, idx:%d",name, constantIndex);
+    io::printf("\n");
+    return currentOffset+2;
+}
+
+fn int call_instruction(String name, Chunk* chunk, int currentOffset){
+    Byte argCount = chunk.code[(usz)currentOffset + 1];
+    io::printf("%s, argc:%d\n", name, argCount);
+    return currentOffset + 2; // opcode + arg count
+}
+
+
+fn int jump_instruction(String name, Chunk* chunk, int sign, int currentOffset){
+    ushort jump = (ushort)(chunk.code[(usz)currentOffset + 1] << 8);
+    jump |= chunk.code[(usz)currentOffset + 2];
+    io::printf("%s, from:%d    | to: %d\n", name, currentOffset,currentOffset + 3 + sign * jump);
+    return currentOffset + 3;
+}
+
 
 fn void Chunk.print_constant(Chunk* this, int index){
     Value* v = &this.constants[index];

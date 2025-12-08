@@ -19,4 +19,9 @@ enum OpCode: Byte
     DEBUG,
     POP,
     DEFINE_GLOBAL,      GET_GLOBAL,     SET_GLOBAL,
+    DEFINE_LOCAL,       GET_LOCAL,      SET_LOCAL,
+    JMP,                JMP_IF_FALSE,
+    LOOP,
+    INCREMENT,
+    CALL,
 }

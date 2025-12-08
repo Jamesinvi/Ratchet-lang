@@ -14,7 +14,7 @@ enum TokenType : uint {
     IDENTIFIER, STRING, INTEGER, FLOAT, DOUBLE,
 
     // Keywords.
-    AND, CLASS, ELSE, FALSE, FUN, FOR, IF, NULL, OR,
+    AND, CLASS, ELSE, FALSE, FN, FOR, IF, NULL, OR,
     PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE, DEBUG,
 
     // Types
@@ -41,7 +41,7 @@ Keyword[*] keywords = {
     {.tokenType = CLASS, .value = "class"},
     {.tokenType = ELSE, .value = "else"},
     {.tokenType = FALSE, .value = "false"},
-    {.tokenType = FUN, .value = "fn"},
+    {.tokenType = FN, .value = "fn"},
     {.tokenType = FOR, .value = "for"},
     {.tokenType = IF, .value = "if"},
     {.tokenType = NULL, .value = "null"},
