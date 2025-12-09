@@ -103,6 +103,7 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.CONST_TRUE.ordinal:     nextcase;
         case OpCode.CONST_NULL.ordinal:     nextcase;
         case OpCode.LESS.ordinal:           nextcase;
+        case OpCode.INT_LESS.ordinal:       nextcase;
         case OpCode.CONCAT_STRING.ordinal:  nextcase;
         case OpCode.POP.ordinal:            nextcase;
         case OpCode.ECHO.ordinal:           nextcase;
@@ -117,6 +118,9 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
             return single_byte_instruction(OpCode.names[instruction], currentOffset);
         case OpCode.CONSTANT.ordinal:
             return constant_instruction(OpCode.names[instruction], chunk, currentOffset);
+        case OpCode.INC_LOCAL.ordinal:      nextcase;
+        case OpCode.DEC_LOCAL.ordinal:      
+            return increment_instruction(OpCode.names[instruction], chunk, currentOffset);
         case OpCode.DEFINE_GLOBAL.ordinal:  nextcase;
         case OpCode.GET_GLOBAL.ordinal:     nextcase;
         case OpCode.SET_GLOBAL.ordinal:
@@ -149,6 +153,14 @@ fn int constant_instruction(String name, Chunk* chunk, int currentOffset){
     io::printf("\n");
     return currentOffset+2;
 }
+
+fn int increment_instruction(String name, Chunk* chunk, int currentOffset){
+    Byte constantIndex = chunk.code[(usz)currentOffset+1];
+    io::printf("%s, idx:%d",name, constantIndex);
+    io::printf("\n");
+    return currentOffset+2;
+}
+
 
 fn int local_instruction(String name, Chunk* chunk, int currentOffset){
     Byte constantIndex = chunk.code[(usz)currentOffset+1];

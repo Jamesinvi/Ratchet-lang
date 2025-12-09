@@ -77,8 +77,8 @@ macro Value @new_string(String s){
 }
 
 macro @bin_op_greater(Vm* vm){
-    Value right = vm.stack.pop();
-    Value left = vm.stack.pop();
+    Value right = vm.stack.pop_val();
+    Value left = vm.stack.pop_val();
     switch(left.type){
         case ValueType.BOOL:   vm.stack.push(@new_bool(left.as.boolean   > right.as.boolean));
         case ValueType.INT:    vm.stack.push(@new_bool(left.as.intNum    > right.as.intNum));
@@ -89,8 +89,8 @@ macro @bin_op_greater(Vm* vm){
 }
 
 macro @bin_op_less(Vm* vm){
-    Value right = vm.stack.pop();
-    Value left = vm.stack.pop();
+    Value right = vm.stack.pop_val();
+    Value left = vm.stack.pop_val();
     switch(left.type){
         case ValueType.BOOL:   vm.stack.push(@new_bool(left.as.boolean   < right.as.boolean));
         case ValueType.INT:    vm.stack.push(@new_bool(left.as.intNum    < right.as.intNum));
@@ -101,8 +101,8 @@ macro @bin_op_less(Vm* vm){
 }
 
 macro @bin_op_equal(Vm* vm){
-    Value right = vm.stack.pop();
-    Value left = vm.stack.pop();
+    Value right = vm.stack.pop_val();
+    Value left = vm.stack.pop_val();
     switch(left.type){
         case ValueType.BOOL:   vm.stack.push(@new_bool(left.as.boolean   == right.as.boolean));
         case ValueType.INT:    vm.stack.push(@new_bool(left.as.intNum    == right.as.intNum));
@@ -123,7 +123,7 @@ macro @bin_op_equal(Vm* vm){
 macro @cast_top( Vm* vm, $SrcType, $DstType, $dstEnum, $srcField, $dstField)
 {
     // Could pop/push but we can do it in place
-    Value* top = &vm.stack.items[vm.stack.size - 1];
+    Value top = vm.stack.peek();
     $SrcType src = top.as.$eval($srcField);
     top.type = ValueType.$eval($dstEnum);
     top.as.$eval($dstField) = ($DstType)src;
@@ -135,10 +135,22 @@ const OP_SUB = 1;
 const OP_MUL = 2;
 const OP_DIV = 3;
 
+macro @math_inc_or_dec(Vm* vm, $field, $op)
+{
+    Byte slot = @read_byte(vm);
+    Value* v = &vm.frame.slots[slot];
+    $switch $op:
+        $case OP_ADD: v.as.$eval($field)++;
+        $case OP_SUB: v.as.$eval($field)--;
+        $default:
+            $error("Unknown inc/dec op");
+    $endswitch
+    vm.stack.push(*v);
+}
 macro @math_bin_op(Vm* vm, $Type, $type, $field, $op)
 {
-    $Type right = vm.stack.pop().as.$eval($field);
-    $Type left  = vm.stack.pop().as.$eval($field);
+    $Type right = vm.stack.pop_val().as.$eval($field);
+    $Type left  = vm.stack.pop_val().as.$eval($field);
     Value result = {.type = ValueType.$eval($type)};
 
     $switch $op:
@@ -158,14 +170,14 @@ macro @math_bin_op(Vm* vm, $Type, $type, $field, $op)
 
 macro @negate_op(Vm* vm, $Type, $type, $field){
     // We could pop/push here, instead we do it in place
-    Value* top = &vm.stack.items[vm.stack.size-1];
+    Value* top = vm.stack.peek_ref();
     $Type right = top.as.$eval($field);
     top.type = ValueType.$eval($type);
     top.as.$eval($field) = -right;
 }
 
 macro Value @pop_obj(Vm* this){
-    Value rightVal = this.stack.pop();
+    Value rightVal = this.stack.pop_val();
     Obj* right = rightVal.get_obj();
     this.trackedHeap.release_obj(right);
     return rightVal;
@@ -184,9 +196,9 @@ fn RunResult run(Vm* vm){
     while(true){
         Byte instruction;
         debug::@print_instruction(vm);
-        switch (instruction = @read_byte(vm)) {
+        switch (instruction = @read_byte(vm)){
             case OpCode.RETURN.ordinal: {
-                Value result = vm.stack.pop();
+                Value result = vm.stack.pop_val();
                 int frameBase = (int)(vm.frame.slots - &vm.stack.items[0]);
 
                 vm.frameCount--;
@@ -200,12 +212,17 @@ fn RunResult run(Vm* vm){
                 vm.stack.push(result);
             }
 
-            case OpCode.POP.ordinal:           vm.stack.pop();
+            case OpCode.POP.ordinal:           vm.stack.pop_val();
             case OpCode.EQUAL.ordinal:         @bin_op_equal(vm);
             case OpCode.GREATER.ordinal:       @bin_op_greater(vm);
             case OpCode.LESS.ordinal:          @bin_op_less(vm);
+            case OpCode.INT_LESS.ordinal: {
+                Value right = vm.stack.pop_val();
+                Value left = vm.stack.pop_val();
+                vm.stack.push(@new_bool(left.as.intNum < right.as.intNum));
+            }
 
-            case OpCode.NOT.ordinal:           vm.stack.push(@new_bool(!vm.stack.pop().as.boolean));
+            case OpCode.NOT.ordinal:           vm.stack.push(@new_bool(!vm.stack.pop_val().as.boolean));
 
             case OpCode.CONST_FALSE.ordinal:   vm.stack.push(@new_bool(false));
             case OpCode.CONST_TRUE.ordinal:    vm.stack.push(@new_bool(true));
@@ -215,6 +232,9 @@ fn RunResult run(Vm* vm){
             case OpCode.NEGATE_FLOAT.ordinal:  @negate_op(vm, float.typeid,   "FLOAT",  "floatNum");
             case OpCode.NEGATE_DOUBLE.ordinal: @negate_op(vm, double.typeid,  "DOUBLE", "doubleNum");
 
+            case OpCode.INC_LOCAL.ordinal:    @math_inc_or_dec(vm,  "intNum",      OP_ADD);
+            case OpCode.DEC_LOCAL.ordinal:    @math_inc_or_dec(vm,  "intNum",      OP_SUB);
+           
             case OpCode.ADD_INT.ordinal:    @math_bin_op(vm, int.typeid,       "INT",    "intNum",      OP_ADD);
             case OpCode.ADD_FLOAT.ordinal:  @math_bin_op(vm, float.typeid,     "FLOAT",  "floatNum",    OP_ADD);
             case OpCode.ADD_DOUBLE.ordinal: @math_bin_op(vm, double.typeid,    "DOUBLE", "doubleNum",   OP_ADD);
@@ -241,13 +261,13 @@ fn RunResult run(Vm* vm){
             case OpCode.CAST_D_F.ordinal:   @cast_top(vm, double.typeid, float.typeid,  "FLOAT",  "doubleNum", "floatNum");
 
             case OpCode.CAST_TO_STRING.ordinal: {
-                Value v = vm.stack.pop();
+                Value v = vm.stack.pop_val();
                 // convert v -> String representation
                 String s = common::value_to_string(&v);
                 Value result = @new_string(s); // or build directly from value_to_string
                 @push_obj(vm, result);
             }
-            case OpCode.ECHO.ordinal:      common::print_value(vm.stack.pop());
+            case OpCode.ECHO.ordinal:      common::print_value(vm.stack.pop_val());
             
             case OpCode.JMP_IF_FALSE.ordinal: {
                 ushort offset = @read_ushort(vm);
@@ -268,7 +288,7 @@ fn RunResult run(Vm* vm){
             case OpCode.DEFINE_GLOBAL.ordinal:{
                 Value v = @read_const(vm);
                 String name = common::@as_string(&v).str;
-                vm.globals.set(name,vm.stack.pop());
+                vm.globals.set(name,vm.stack.pop_val());
             }
             case OpCode.SET_GLOBAL.ordinal:{
                 Value v = @read_const(vm);
@@ -367,6 +387,6 @@ fn void Vm.define_native(Vm* vm, String name, NativeFn function) {
     int valueIndex = vm.stack.size -1;
     ObjString* nameObj = common::@as_string(&vm.stack.items[nameIndex]);
     vm.globals.set(nameObj.str, vm.stack.items[valueIndex]);
-    vm.stack.pop();
-    vm.stack.pop();
+    vm.stack.pop_ref();
+    vm.stack.pop_ref();
 }

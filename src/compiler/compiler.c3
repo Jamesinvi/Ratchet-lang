@@ -125,12 +125,14 @@ fn ObjFunction* Compiler.end(Compiler* this)
 
 fn void Compiler.declaration(Compiler* this)
 {
-    if (this.check_type_token()) {
+    if (this.check_any_type_token()) {
         ValueType declType = this.match_type("Expected type before variable name");
         this.currentDeclType = declType;
-        this.var_declaration(declType);
+        this.var_declaration();
     } else if (this.match(TokenType.FN)) {
         this.fun_declaration();
+    } else if (this.match(TokenType.STRUCT_T)) {
+        this.struct_definition();
     } else {
         this.statement();
     }
@@ -259,9 +261,60 @@ fn void Compiler.end_scope(Compiler* this)
     }
 }
 
+// ---------- Struct declarations & access ----------
+
+fn void Compiler.struct_definition(Compiler* this){
+    this.consume(TokenType.IDENTIFIER, "Expected struct name after 'struct'");
+    String name = this.previous.value;
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name'}");
+
+    if(common::declaredStructs.has_key(name)){
+        this.error("This struct has already been defined elsewhere");
+        return;
+    }
+    StructTypeInfo structInfo = {};
+    structInfo.init();
+    ushort fieldCounter = 0;
+    structInfo.name = String.copy(name, mem);
+
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
+        if (this.check_any_type_token()) {
+            FieldInfo fieldInfo = {};
+            ValueType fieldType = this.match_type("Expected type before field name");
+
+            // If it was a struct type, `this.previous` holds the type identifier (e.g. "Vec2")
+            String typeName = this.previous.value;
+
+            this.consume(TokenType.IDENTIFIER, "Expected field name.");
+
+            ValueMetadata fieldMetadata = {};
+            fieldMetadata.typeIndex = get_type_index(fieldType, typeName);
+
+            fieldInfo.metadata = fieldMetadata;
+            fieldInfo.name     = String.copy(this.previous.value, mem); // field name
+            fieldInfo.type     = fieldType;
+
+            this.consume(TokenType.SEMICOLON, "Expected ';' after field declaration.");
+
+            structInfo.fieldInfos.push(fieldInfo);
+            fieldCounter++;
+        } else if (this.check(TokenType.METHOD)) {
+            // TODO
+        } else {
+            this.error("Unsupported declaration inside struct (for now).");
+            this.advance(); // crude resync
+        }
+    }
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' to close struct body");
+    structInfo.fieldCount = fieldCounter;
+    uint structTypesLen =(uint) common::structTypes.size;
+    common::structTypes.push(structInfo);
+    common::declaredStructs.set(structInfo.name, structTypesLen);
+}
+
 // ---------- Variable declarations & access ----------
 
-fn void Compiler.var_declaration(Compiler* this, ValueType declType)
+fn void Compiler.var_declaration(Compiler* this)
 {
     Byte index = this.parse_variable("Expected variable name");
 
@@ -383,7 +436,12 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
 
     if (canAssign && this.match(TokenType.EQUAL)) {
         this.expression();
+        int line = this.previous.line;
         this.compile_bytes((Byte)setOp, (Byte)arg, this.previous.line);
+        // try peephole optimize: i = i + 1 / i = i - 1
+        if (setOp == (Byte)OpCode.SET_LOCAL) {
+            this.maybe_optimize_local_inc_dec(arg, line);
+        }
     } else {
         this.compile_bytes((Byte)getOp, (Byte)arg, this.previous.line);
     }
@@ -515,7 +573,7 @@ fn void Compiler.or(Compiler* this)
 fn void Compiler.grouping(Compiler* this, bool canAssign)
 {
     // We are right after seeing '(' as a prefix.
-    if (this.check_type_token()) {
+    if (this.check_builtin_type_token()) {
         // --- CAST: (type) unaryExpression ---
         ValueType targetType = this.match_type("Expected type in cast.");
         // Ensure we really have "( type )"
@@ -602,7 +660,7 @@ fn void Compiler.binary(Compiler* this)
         case TokenType.EQUAL_EQUAL:   this.compile_byte((Byte)OpCode.EQUAL, this.previous.line);
         case TokenType.GREATER:       this.compile_byte((Byte)OpCode.GREATER, this.previous.line);
         case TokenType.GREATER_EQUAL: this.compile_bytes((Byte)OpCode.LESS, (Byte)OpCode.NOT, this.previous.line);
-        case TokenType.LESS:          this.compile_byte((Byte)OpCode.LESS, this.previous.line);
+        case TokenType.LESS:          this.compile_less(this.previous.line);
         case TokenType.LESS_EQUAL:    this.compile_bytes((Byte)OpCode.GREATER, (Byte)OpCode.NOT, this.previous.line);
         default: this.error("Unsupported token");
     }
@@ -623,7 +681,20 @@ fn void Compiler.literal_null(Compiler* this)
     this.compile_byte((Byte)OpCode.CONST_NULL, this.previous.line);
 }
 
-// ---------- Type-aware arithmetic codegen ----------
+// ---------- Type-aware arithmetic/logic codegen ----------
+
+fn void Compiler.compile_less(Compiler* this, int line)
+{
+    ValueType right = this.typeStack.peek();
+    ValueType left  = this.typeStack.peek_at(1);
+
+    if(right==ValueType.INT && right==left){
+        this.compile_byte((Byte)OpCode.INT_LESS, line);
+    } else {
+        this.compile_byte((Byte)OpCode.LESS, this.previous.line);
+    }
+
+}
 
 fn void Compiler.compile_div(Compiler* this, int line)
 {

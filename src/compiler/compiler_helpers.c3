@@ -38,7 +38,19 @@ fn bool Compiler.check(Compiler* this, TokenType tokenType)
     return this.current.tokenType == tokenType;
 }
 
-fn bool Compiler.check_type_token(Compiler* this)
+fn bool Compiler.check_struct_type_token(Compiler* this)
+{
+    bool typeAlreadyDeclared = common::declaredStructs.has_key(this.current.value);
+    return this.check(TokenType.IDENTIFIER) && typeAlreadyDeclared;
+}
+
+fn bool Compiler.check_any_type_token(Compiler* this)
+{
+    return this.check_builtin_type_token() || this.check_struct_type_token();
+}
+
+
+fn bool Compiler.check_builtin_type_token(Compiler* this)
 {
     return this.check(TokenType.NULL)      ||
            this.check(TokenType.INTEGER_T) ||
@@ -59,10 +71,22 @@ fn ValueType Compiler.match_type(Compiler* this, String errMsg)
         return ValueType.DOUBLE;
     } else if (this.match(TokenType.STRING_T)) {
         return ValueType.GC_OBJ;
+    } else if (this.check_struct_type_token()) {
+        this.advance();
+        return ValueType.STRUCT;
     } else {
         this.error(errMsg);
         return ValueType.NULL;
     }
+}
+
+fn uint get_type_index(ValueType type, String name){
+    if(type != ValueType.STRUCT){
+        return common::NOT_STRUCT;
+    }else{
+        return common::declaredStructs.get(name)!!;
+    }
+
 }
 
 // ---------- Errors ----------

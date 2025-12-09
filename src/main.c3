@@ -28,6 +28,7 @@ fn int main(String[] args)
         scanner.init(file);
         scanner.parse_tokens();
     };
+    assert(Value.sizeof == 16);
 
     debug::@print_tokens(&scanner);
     compiler.init(scanner.tokens);
@@ -36,14 +37,14 @@ fn int main(String[] args)
         io::printfn("Compile error");
         return 1;
     }
+    scanner.deinit();
     vm::Vm vm ={};
 
     vm.init(entryPoint);
     vm::run(&vm);
     //vm.trackedHeap.debug_print();
     //vm.untrackedHeap.debug_print();
-
+    common::print_all_struct_types();
     vm.deinit();
-    scanner.deinit();
     return 0;
 }

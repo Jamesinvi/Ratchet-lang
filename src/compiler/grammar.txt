@@ -2,9 +2,9 @@ program        → declaration* EOF ;
 
 // DECLARATIONS
 declaration    → structDecl | funDecl | varDecl | statement ;
-structDecl     → "struct" IDENTIFIER ( "<" IDENTIFIER )?
-                 "{" (varDecl | function)* "}" ;
+structDecl     → "struct" IDENTIFIER "{" (varDecl | function)* "}" ;
 funDecl        → "fn" function ;
+methodDecl     → "method" function;
 varDecl        → type IDENTIFIER ( "=" expression )? ";" ;
 type           → "int" | "float" | "double" | "string";
 

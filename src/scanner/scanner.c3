@@ -174,6 +174,13 @@ fn void Scanner.number(Scanner* this) {
         this.advance();
     }
 
+    // If a letter immediately follows a number literal: 123abc → error
+    if (common::is_alpha_ascii(this.peek())) {
+        common::error_lin(this.line, this.column, "Number literal cannot be immediately followed by letters");
+        return;
+    }
+
+
     if (this.is_at_end()) {
         common::error_lin(this.line, this.column, "Unterminated number");
         return;
@@ -200,7 +207,7 @@ fn void Scanner.keyword(Scanner* this) {
         }
     }
 
-    while (common::is_alpha_ascii(this.peek())) {
+    while (common::is_alpha_ascii(this.peek()) || common::is_digit(this.peek())) {
         this.advance();
     }
     this.add_token(TokenType.IDENTIFIER);
