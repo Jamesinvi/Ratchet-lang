@@ -37,6 +37,14 @@ fn void print_function_and_children(ObjFunction* function) {
     if(function.name!=null){
         io::printfn("function : '%s'", function.name.str);
     }
+    io::printf("Locals: [");
+    foreach (idx, slot : function.slots){
+        if(idx>0){
+            io::printf("|");
+        }
+        io::printf("%s, %s, @%s", ValueType.names[slot.type.ordinal], slot.sizeInBytes, slot.offset);
+    }
+    io::printf("]\n");
     function.chunk.debug_print();
 
     // Also descend into function constants

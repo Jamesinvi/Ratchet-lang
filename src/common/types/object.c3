@@ -1,5 +1,6 @@
 module common;
 import std::io;
+import std::collections::list;
 enum ObjType
 {
     STRING,
@@ -32,8 +33,17 @@ struct ObjFunction
     ObjString* name;
     ushort arity;
     Chunk chunk;
+
+    List{SlotInfo} slots;
+    ushort totalLocalsBytes;
 }
 
+struct SlotInfo
+{
+    ValueType type;
+    ushort sizeInBytes;
+    ushort offset;      // Byte offset from frame start
+}
 alias NativeFn = fn Value(int argCount, Value... args);
 struct ObjNative
 {
@@ -48,6 +58,7 @@ fn ObjFunction* create_obj_function(String name, bool isConstant){
     object.obj.type = ObjType.FUNCTION;
     object.name = stringObj;
     object.chunk.init();
+    object.slots.init(mem);
     return object;
 }
 
@@ -68,6 +79,21 @@ fn ObjNative* create_obj_native(NativeFn function){
     object.obj.isConstant=true;
     object.function = function;
     return object;
+}
+
+fn ushort ObjFunction.add_slot(ObjFunction* this, ValueType type){
+    ushort size = get_type_size(type);
+    ushort offset = this.totalLocalsBytes;
+
+    SlotInfo slotInfo = {
+        .type = type,
+        .sizeInBytes = size,
+        .offset = offset,
+    };
+    this.slots.push(slotInfo);
+    this.totalLocalsBytes += size;
+
+    return size;
 }
 
 fn void Obj.debug_print(Obj* this) @dynamic {

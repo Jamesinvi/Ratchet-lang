@@ -363,10 +363,13 @@ fn void Compiler.add_local(Compiler* this, Token name)
         return;
     }
 
+    ushort slotIndex = this.currentScope.function.add_slot(this.currentDeclType);
+
     Local* local = &this.currentScope.locals[this.currentScope.localCount++];
-    local.type  = this.currentDeclType;
     local.name  = name;
     local.depth = -1;
+    local.slotIdx = slotIndex;
+
 }
 
 fn void Compiler.mark_initialized(Compiler* this)
@@ -421,7 +424,7 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
         setOp = (Byte)OpCode.SET_LOCAL;
 
         Local* local = &this.currentScope.locals[arg];
-        ValueType varType = local.type;
+        ValueType varType = this.currentScope.function.slots[local.slotIdx].type;
 
         if (!canAssign || !this.check(TokenType.EQUAL)) {
             this.compile_bytes(getOp, (Byte)arg, this.previous.line);
