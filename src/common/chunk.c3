@@ -219,14 +219,11 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.FLOAT_LESS.ordinal:    nextcase;
         case OpCode.DOUBLE_GREATER.ordinal:    nextcase;
         case OpCode.DOUBLE_EQUAL.ordinal:    nextcase;
-        case OpCode.DOUBLE_LESS.ordinal:    nextcase;
-
 
         case OpCode.CONST_FALSE.ordinal:    nextcase;
         case OpCode.CONST_TRUE.ordinal:     nextcase;
         case OpCode.CONST_NULL.ordinal:     nextcase;
         case OpCode.CONCAT_STRING.ordinal:  nextcase;
-        case OpCode.ECHO.ordinal:           nextcase;
         case OpCode.CAST_F_I.ordinal:       nextcase;
         case OpCode.CAST_D_I.ordinal:       nextcase;
         case OpCode.CAST_I_F.ordinal:       nextcase;
@@ -235,6 +232,7 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.CAST_F_D.ordinal:       nextcase;
         case OpCode.RETURN.ordinal:     
             return single_byte_instruction(OpCode.names[instruction], currentOffset);
+        case OpCode.ECHO.ordinal:           nextcase;
         case OpCode.CAST_TO_STRING.ordinal:
             return single_and_type_instruction(OpCode.names[instruction], chunk, currentOffset);
         case OpCode.POP.ordinal:            
@@ -333,18 +331,18 @@ fn void Chunk.print_constant(Chunk* this, int offset){
     Byte* bytes = &this.constants[info.offset];
     
     switch(info.type){
-        case ValueType.INT:         io::printf("%d", @as_int(bytes));  
-        case ValueType.FLOAT:       io::printf("%f", @as_float(bytes));  
-        case ValueType.DOUBLE:      io::printf("%f", @as_double(bytes));  
-        case ValueType.BOOL:        io::printf("%s", @as_bool(bytes));  
+        case ValueType.INT:         io::printf("%d", @as(int, bytes));  
+        case ValueType.FLOAT:       io::printf("%f", @as(float, bytes,));  
+        case ValueType.DOUBLE:      io::printf("%f", @as(double, bytes,));  
+        case ValueType.BOOL:        io::printf("%s", @as(bool, bytes,));  
         case ValueType.STRUCT:      io::printf("struct, change to print");
         case ValueType.NULL:        io::printf("NULL");
         case ValueType.GC_OBJ:      nextcase;
         case ValueType.NO_GC_OBJ:   {
-            switch (@as_obj(bytes).type)
+            switch (@as(Obj*, bytes).type)
             {
-                case ObjType.STRING: io::printf("\"%s\"", @as_string(bytes).str);
-                case ObjType.FUNCTION: io::printf("fn %s", @as_func(bytes).name.str);
+                case ObjType.STRING: io::printf("\"%s\"", @as(ObjString*, bytes).str);
+                case ObjType.FUNCTION: io::printf("fn %s", @as(ObjFunction*, bytes).name.str);
                 case ObjType.NATIVE_FUNCTION: io::printf("<native_fn>");
             }
         }

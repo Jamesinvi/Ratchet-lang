@@ -16,7 +16,6 @@ fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, ValueType returnType,
     this.scopeDepth = 0;
     this.localCount = 0;
     this.returnType = returnType;
-    this.enclosing  = c.currentScope;
     this.function   = common::create_obj_function(name, false);
     this.nextSlot  = 0;
 
@@ -25,6 +24,4 @@ fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, ValueType returnType,
     local.depth      = 0;
     local.name.value = "";
 
-    // Now install this tracker in the compiler
-    c.currentScope = this;
 }

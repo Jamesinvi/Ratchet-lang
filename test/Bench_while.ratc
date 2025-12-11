@@ -1,0 +1,11 @@
+fn null program(){
+	double start = clock();
+	int i = 0;
+	while(i<100000000){
+		i = i+1;
+	}
+	echo (i);
+	double end = clock();
+	echo(end-start);
+	return;
+}

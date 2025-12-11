@@ -1,0 +1,9 @@
+fn null program(){
+	int prova = 1;
+	return;
+}
+
+fn int test(){
+	int t = 5;
+	double gr = 31.2;
+}

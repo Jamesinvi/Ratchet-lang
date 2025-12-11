@@ -55,7 +55,7 @@ fn void print_function_and_children(ObjFunction* function) {
         SlotInfo info = function.chunk.debugConstantsSlots[i];
         if (info.type == ValueType.NO_GC_OBJ || info.type == ValueType.GC_OBJ) {
             Byte* constantBytes = &function.chunk.constants[info.offset];
-            ObjFunction* child = common::@as_func(constantBytes);
+            ObjFunction* child = common::@as(ObjFunction*, constantBytes);
             if (((Obj*)child).type == ObjType.FUNCTION) {
                 print_function_and_children(child);
             }

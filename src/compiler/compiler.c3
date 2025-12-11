@@ -30,23 +30,25 @@ enum Precedence
 
 struct Compiler
 {
-    List{Token}          input;
-    Token*               current;
-    Token*               previous;
-    bool                 hadError;
-    bool                 panicMode;
+    List{Token} input;
+    Token* current;
+    Token* previous;
+    bool hadError;
+    bool panicMode;
 
-    TypeStack            typeStack; 
-    ObjFunction*         entryPoint;
+    TypeStack typeStack; 
+    ObjFunction* entryPoint;
 
-    List{ScopeTracker}   scopes;
-    ScopeTracker*        currentScope;
-    ScopeTracker         rootScope;
+    List{ScopeTracker} scopes;
+    ScopeTracker* currentScope;
+    ScopeTracker rootScope;
 
     HashMap{String,ValueType} functionReturnTypes;
-    bool                 hasPendingCalleeType;
-    ValueType            pendingCalleeReturnType;
-    ValueType            currentDeclType;
+    bool hasPendingCalleeType;
+    ValueType pendingCalleeReturnType;
+    ValueType currentDeclType;
+
+    bool returnFoundInCurrentScope;
 }
 
 // ---------- Lifecycle ----------
@@ -107,7 +109,7 @@ fn ObjFunction*? compile(Compiler* compiler)
     }
     
     if (compiler.entryPoint != null) {
-        compiler.compile_program_call();
+        compiler.emit_program_call();
     } else {
         compiler.error("program function not defined. All programs must define a fn null program()");
     }
@@ -121,7 +123,7 @@ fn ObjFunction*? compile(Compiler* compiler)
 
 fn ObjFunction* Compiler.end(Compiler* this)
 {
-    this.compile_op(OpCode.RETURN, this.previous.line);
+    this.emit_op(OpCode.RETURN, this.previous.line);
     ObjFunction* function = this.currentScope.function;
     return function;
 }
@@ -171,12 +173,12 @@ fn void Compiler.expression_statement(Compiler* this)
     if (this.typeStack.size > restorePoint) {
         // Normal case: expression left one value
         ValueType type = this.typeStack.pop();
-        this.compile_pop_of_type(type, this.previous.line);
+        this.emit_pop_of_type(type, this.previous.line);
 
         // If somehow more values are left (buggy rules), drop them too
         while (this.typeStack.size > restorePoint) {
             ValueType extra = this.typeStack.pop();
-            this.compile_pop_of_type(extra, this.previous.line);
+            this.emit_pop_of_type(extra, this.previous.line);
         }
     }
 }
@@ -185,11 +187,14 @@ fn void Compiler.debug_statment(Compiler* this)
 {
     this.expression();
     this.consume(TokenType.SEMICOLON, "Expected ';' after value.");
-    this.compile_op(OpCode.ECHO, this.previous.line);
+    ValueType type = this.typeStack.pop();
+    this.emit_op_u8(OpCode.ECHO, (Byte)type, this.previous.line);
 }
 
 fn void Compiler.return_statement(Compiler* this)
 {
+    this.returnFoundInCurrentScope = true;
+
     int line = this.previous.line;
 
     if (this.currentScope.enclosing == null) {
@@ -198,13 +203,13 @@ fn void Compiler.return_statement(Compiler* this)
 
     if (this.check(TokenType.SEMICOLON)) {
         this.consume(TokenType.SEMICOLON, "Expect ';' after return.");
-        this.compile_op(OpCode.RETURN, line);
+        this.emit_op(OpCode.RETURN, line);
         return;
     }
 
     this.expression();
     this.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
-    this.compile_op(OpCode.RETURN, line);
+    this.emit_op(OpCode.RETURN, line);
 }
 
 fn void Compiler.if_statement(Compiler* this)
@@ -216,19 +221,19 @@ fn void Compiler.if_statement(Compiler* this)
     // Condition type
     ValueType condType = this.typeStack.pop();
 
-    int thenJump = this.compile_jump(OpCode.JMP_IF_FALSE, this.previous.line);
-    this.compile_pop_of_type(condType, this.previous.line); 
+    int thenJump = this.emit_jump(OpCode.JMP_IF_FALSE, this.previous.line);
+    this.emit_pop_of_type(condType, this.previous.line); 
 
     this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'if' condition.");
     this.begin_scope();
     this.block();
     this.end_scope();
 
-    int elseJump = this.compile_jump(OpCode.JMP, this.previous.line);
+    int elseJump = this.emit_jump(OpCode.JMP, this.previous.line);
 
     this.patch_jump(thenJump);
     // If we jumped here, condition was false and is still on the stack:
-    this.compile_pop_of_type(condType, this.previous.line);
+    this.emit_pop_of_type(condType, this.previous.line);
 
     if (this.match(TokenType.ELSE)) {
         this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'else'.");
@@ -251,15 +256,15 @@ fn void Compiler.while_statement(Compiler* this)
 
     ValueType condType = this.typeStack.pop();
 
-    int exitJump = this.compile_jump(OpCode.JMP_IF_FALSE, this.previous.line);
-    this.compile_pop_of_type(ValueType.BOOL, this.previous.line); // pop when condition is true
+    int exitJump = this.emit_jump(OpCode.JMP_IF_FALSE, this.previous.line);
+    this.emit_pop_of_type(ValueType.BOOL, this.previous.line); // pop when condition is true
 
     this.statement();
 
-    this.compile_loop(loopStart);
+    this.emit_loop(loopStart);
 
     this.patch_jump(exitJump);
-    this.compile_pop_of_type(condType, this.previous.line);
+    this.emit_pop_of_type(condType, this.previous.line);
 }
 
 fn void Compiler.block(Compiler* this)
@@ -354,7 +359,7 @@ fn void Compiler.var_declaration(Compiler* this)
             this.typeStack.size = restorePoint;
         }
     } else {
-        this.compile_op(OpCode.CONST_NULL, this.previous.line);
+        this.emit_op(OpCode.CONST_NULL, this.previous.line);
     }
 
     this.consume(TokenType.SEMICOLON, "Expected ';' after declaration");
@@ -424,10 +429,10 @@ fn void Compiler.define_variable(Compiler* this, ushort globalsIndex)
         this.mark_initialized();
         Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
         // emit SET_LOCAL with slot index
-        this.compile_op_u16(OpCode.SET_LOCAL, local.slotIdx, this.previous.line);
+        this.emit_op_u16(OpCode.SET_LOCAL, local.slotIdx, this.previous.line);
         return;
     }
-    this.compile_op_u16(OpCode.DEFINE_GLOBAL, globalsIndex, this.previous.line);
+    this.emit_op_u16(OpCode.DEFINE_GLOBAL, globalsIndex, this.previous.line);
 }
 
 fn void Compiler.variable(Compiler* this, bool canAssign)
@@ -465,7 +470,7 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
         ValueType varType = this.currentScope.function.slots[slotIdx].type;
 
         if (!canAssign || !this.check(TokenType.EQUAL)) {
-            this.compile_op_u16(getOp, slotIdx, this.previous.line);
+            this.emit_op_u16(getOp, slotIdx, this.previous.line);
             this.typeStack.push(varType);
             return;
         }
@@ -473,7 +478,7 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
         if (this.match(TokenType.EQUAL)) {
             this.expression();
             ValueType rhsType = this.typeStack.pop();
-            this.compile_op_u16(setOp, slotIdx, this.previous.line);
+            this.emit_op_u16(setOp, slotIdx, this.previous.line);
             this.maybe_optimize_local_inc_dec(slotIdx, this.previous.line);
         }
     } else {
@@ -484,9 +489,10 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
         if (canAssign && this.match(TokenType.EQUAL)) {
             this.expression();
             ValueType rhsType = this.typeStack.pop();
-            this.compile_op_u16(setOp, (ushort)arg, this.previous.line);
+            this.emit_op_u16(setOp, (ushort)arg, this.previous.line);
         } else {
-            this.compile_op_u16(getOp, (ushort)arg, this.previous.line);
+            this.emit_op_u16(getOp, (ushort)arg, this.previous.line);
+            this.typeStack.push(ValueType.GC_OBJ);
         }
     }
 }
@@ -501,27 +507,47 @@ fn void Compiler.fun_declaration(Compiler* this)
 
     this.functionReturnTypes.set(nameToken.value, returnType);
 
-    bool isTopLevel           = (this.currentScope.enclosing == null);
-    bool isProgram            = strings_equal(nameToken.value, "program");
-    bool isEntryPointCandidate = isTopLevel && isProgram;
+    bool isTopLevel = (this.currentScope.enclosing == null);
+    bool isProgram = strings_equal(nameToken.value, "program");
+    bool isEntryPoint = isTopLevel && isProgram;
 
     this.mark_initialized();
-    this.function(returnType, isEntryPointCandidate);
+    this.function(returnType, isEntryPoint);
     this.define_variable(globalsIndex);
 }
 
-fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPointCandidate)
+fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoint)
 {
     ScopeTracker* prevScope = this.currentScope;
+
+    // Create a new scope and get a reference to it.
     this.scopes.push({});
     ScopeTracker* newScope = &this.scopes[this.scopes.size-1];
     newScope.init(this, returnType, this.previous.value);
-    
+    // We set the enclosing scope to the current one
+    newScope.enclosing  = this.currentScope;
+    // Install the newly created scope as the current one
+    this.currentScope = newScope;
+
+    this.returnFoundInCurrentScope = false;
     this.begin_scope();
 
+    if (isEntryPoint) {
+        if (this.entryPoint != null){
+            this.error("can only contain one \"program\" function");
+        }
+        if (returnType != ValueType.NULL) {
+            this.error("program must have return type 'null'.");
+        }
+    }
+
+    // function shape => fn <name> (<arg1>, <arg2>) {   }
     this.consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
+    // the function could have no parameters, so check
     if (!this.check(TokenType.RIGHT_PAREN)) {
         do {
+            // Here we are DEFINING a function, so expressions are NOT valid
+            // We expect a variable shape (type + name)
             this.currentScope.function.arity++;
             ValueType paramRetType = this.match_type("Expected parameter type");
             if (this.currentScope.function.arity > 255) {
@@ -532,37 +558,44 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
             this.define_variable(constant);
         } while (this.match(TokenType.COMMA));
     }
+    // No shorthands, both ')' and '{' must be present
     this.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters");
     this.consume(TokenType.LEFT_BRACE, "Expect '{' before body.");
     this.block();
 
-    ObjFunction* function = this.currentScope.function; 
-    this.compile_op(OpCode.RETURN, this.previous.line);  
-    
-    this.currentScope = prevScope;            
+   
+   if(!this.returnFoundInCurrentScope){
+        this.error("No return found in function");
+   }
 
-    if (isEntryPointCandidate) {
-        if (returnType != ValueType.NULL) {
-            this.error("program must have return type 'null'.");
-        }
+    ObjFunction* function = this.currentScope.function;
+
+    if (isEntryPoint) {
         if (function.arity != 0) {
             this.error("program must not take parameters.");
         }
         this.entryPoint = function;
     }
 
+    this.currentScope = prevScope;            
+
+
     ushort offset = this.ensure_constant(this.get_current_chunk().add_const_function(function));
-    this.compile_op_u16(OpCode.CONST_FUNC, offset, this.previous.line);
+    this.emit_op_u16(OpCode.CONST_FUNC, offset, this.previous.line);
 }
+
 fn void Compiler.call(Compiler* this, bool canAssign)
 {
-    Byte argCount = this.arg_list();
-    this.compile_op_u8(OpCode.CALL, argCount, this.previous.line);
+    Byte argCount = this.call_args_count();
+    this.emit_op_u8(OpCode.CALL, argCount, this.previous.line);
     
+    // Remove all arguments from the type stack
     for (int i = 0; i < argCount; i++) {
         this.typeStack.pop();
     }
-
+    // If type wasn't set, then error
+    // If it was, push it on the stack, and reset the global state
+    // "hasPengingCalleeType"
     if (this.hasPendingCalleeType) {
         this.typeStack.push(this.pendingCalleeReturnType);
         this.hasPendingCalleeType = false;
@@ -571,10 +604,11 @@ fn void Compiler.call(Compiler* this, bool canAssign)
     }
 }
 
-fn Byte Compiler.arg_list(Compiler* this)
+fn Byte Compiler.call_args_count(Compiler* this)
 {
     Byte count = 0;
-
+    // We're CALLING a function, so we allow expressions as arguments
+    // Consume as many as we can find.
     if (!this.check(TokenType.RIGHT_PAREN)) {
         do {
             this.expression();
@@ -599,12 +633,12 @@ fn void Compiler.expression(Compiler* this)
 fn void Compiler.and(Compiler* this)
 {
     int line = this.previous.line;
-    int jump = this.compile_jump(OpCode.JMP_IF_FALSE, line);
+    int jump = this.emit_jump(OpCode.JMP_IF_FALSE, line);
 
     // left operand (bool) is on top
     ValueType condType = this.typeStack.pop();
     assert(condType == ValueType.BOOL);
-    this.compile_pop_of_type(condType, line);
+    this.emit_pop_of_type(condType, line);
 
     this.parse_precedence(Precedence.AND);
     this.patch_jump(jump);
@@ -613,13 +647,13 @@ fn void Compiler.and(Compiler* this)
 fn void Compiler.or(Compiler* this)
 {
     int line = this.previous.line;
-    int elseJump = this.compile_jump(OpCode.JMP_IF_FALSE, line);
-    int endJump  = this.compile_jump(OpCode.JMP, line);
+    int elseJump = this.emit_jump(OpCode.JMP_IF_FALSE, line);
+    int endJump  = this.emit_jump(OpCode.JMP, line);
 
     this.patch_jump(elseJump);
 
     ValueType condType = this.typeStack.pop();
-    this.compile_pop_of_type(condType, line);
+    this.emit_pop_of_type(condType, line);
 
     this.parse_precedence(Precedence.OR);
     this.patch_jump(endJump);
@@ -627,20 +661,17 @@ fn void Compiler.or(Compiler* this)
 
 fn void Compiler.grouping(Compiler* this, bool canAssign)
 {
-    // We are right after seeing '(' as a prefix.
+    // If we see '(' and then a type, it must be a cast
     if (this.check_builtin_type_token()) {
-        // --- CAST: (type) unaryExpression ---
         ValueType targetType = this.match_type("Expected type in cast.");
-        // Ensure we really have "( type )"
+        // Ensure we really have closing ')'
         this.consume(TokenType.RIGHT_PAREN, "Expected ')' after cast type.");
         int line = this.previous.line;
-
         // Now parse the operand at UNARY precedence so:
         // (int)1+2 => cast applies to 1, not (1+2)
         this.parse_precedence(Precedence.UNARY);
-
         // We now have operand value on stack + typeStack top = operandType
-        this.compile_cast(targetType, line);
+        this.emit_cast(targetType, line);
         return;
     }
 
@@ -655,19 +686,19 @@ fn void Compiler.number(Compiler* this, bool canAssign)
         case TokenType.INTEGER:
             int ival = common::parse_int(this.previous.value);
             ushort offset = this.get_current_chunk().add_const_int(ival);
-            this.compile_op_u16(OpCode.CONST_INT, offset, this.previous.line);
+            this.emit_op_u16(OpCode.CONST_INT, offset, this.previous.line);
             this.typeStack.push(ValueType.INT);
 
         case TokenType.FLOAT:
             float  fval = common::parse_float(this.previous.value);
             ushort offset = this.get_current_chunk().add_const_float(fval);
-            this.compile_op_u16(OpCode.CONST_FLOAT, offset, this.previous.line);
+            this.emit_op_u16(OpCode.CONST_FLOAT, offset, this.previous.line);
             this.typeStack.push(ValueType.FLOAT);
 
         case TokenType.DOUBLE:
             double dval = common::parse_double(this.previous.value);
             ushort offset = this.get_current_chunk().add_const_double(dval);
-            this.compile_op_u16(OpCode.CONST_DOUBLE, offset, this.previous.line);
+            this.emit_op_u16(OpCode.CONST_DOUBLE, offset, this.previous.line);
             this.typeStack.push(ValueType.DOUBLE);
 
         default:
@@ -679,26 +710,24 @@ fn void Compiler.string(Compiler* this, bool canAssign)
 {
     String source = this.previous.value;
     int offset = this.get_current_chunk().add_const_string(source);
-    this.compile_op_u16(OpCode.CONST_STRING, this.ensure_constant(offset), this.previous.line);
+    this.emit_op_u16(OpCode.CONST_STRING, this.ensure_constant(offset), this.previous.line);
     this.typeStack.push(ValueType.GC_OBJ);
 }
 
 fn void Compiler.unary(Compiler* this, bool canAssign)
 {
-    int       operatorLine = this.previous.line;
+    int operatorLine = this.previous.line;
     TokenType operatorType = this.previous.tokenType;
 
     this.parse_precedence(Precedence.UNARY);
 
     switch (operatorType) {
-        case TokenType.MINUS:
-            this.compile_op(OpCode.NEGATE_DOUBLE, operatorLine);
-        case TokenType.BANG:
-            this.compile_op(OpCode.NOT, operatorLine);
-        default:
-            break;
+        case TokenType.MINUS:       this.emit_op(OpCode.NEGATE_DOUBLE, operatorLine);
+        case TokenType.BANG:        this.emit_op(OpCode.NOT, operatorLine);
+        default:                    this.error("Unsupported operator");
     }
 }
+
 
 fn void Compiler.binary(Compiler* this)
 {
@@ -707,262 +736,41 @@ fn void Compiler.binary(Compiler* this)
     this.parse_precedence((Precedence)(rule.precedence + 1));
 
     switch (operatorType) {
-        case TokenType.PLUS:          this.compile_add(this.previous.line);
-        case TokenType.MINUS:         this.compile_sub(this.previous.line);
-        case TokenType.STAR:          this.compile_mul(this.previous.line);
-        case TokenType.SLASH:         this.compile_div(this.previous.line);
-        case TokenType.BANG_EQUAL:    this.compile_not_equal(this.previous.line);
-        case TokenType.EQUAL_EQUAL:   this.compile_equal(this.previous.line);
-        case TokenType.GREATER:       this.compile_greater(this.previous.line);
-        case TokenType.GREATER_EQUAL: this.compile_greater_equal(this.previous.line);
-        case TokenType.LESS:          this.compile_less(this.previous.line);
-        case TokenType.LESS_EQUAL:    this.compile_less_equal(this.previous.line);
+        case TokenType.PLUS:          this.emit_numeric_binary(OpCode.ADD_INT, OpCode.ADD_FLOAT, OpCode.ADD_DOUBLE, this.previous.line);
+        case TokenType.MINUS:         this.emit_numeric_binary(OpCode.SUB_INT, OpCode.SUB_FLOAT, OpCode.SUB_DOUBLE, this.previous.line);
+        case TokenType.STAR:          this.emit_numeric_binary(OpCode.MUL_INT, OpCode.MUL_FLOAT, OpCode.MUL_DOUBLE, this.previous.line);
+        case TokenType.SLASH:         this.emit_numeric_binary(OpCode.DIV_INT, OpCode.DIV_FLOAT, OpCode.DIV_DOUBLE, this.previous.line);
+        case TokenType.BANG_EQUAL:    this.emit_not_equal(this.previous.line);
+        case TokenType.EQUAL_EQUAL:   this.emit_numeric_binary(OpCode.INT_EQUAL, OpCode.FLOAT_EQUAL, OpCode.DOUBLE_EQUAL, this.previous.line);
+        case TokenType.GREATER:       this.emit_numeric_binary(OpCode.INT_GREATER, OpCode.FLOAT_GREATER, OpCode.DOUBLE_GREATER, this.previous.line);
+        case TokenType.GREATER_EQUAL: this.emit_greater_equal(this.previous.line);
+        case TokenType.LESS:          this.emit_numeric_binary(OpCode.INT_LESS, OpCode.FLOAT_LESS, OpCode.DOUBLE_LESS, this.previous.line);
+        case TokenType.LESS_EQUAL:    this.emit_less_equal(this.previous.line);
         default: this.error("Unsupported token");
     }
 }
 
 fn void Compiler.literal_true(Compiler* this)
 {
-    this.compile_op(OpCode.CONST_TRUE, this.previous.line);
+    this.emit_op(OpCode.CONST_TRUE, this.previous.line);
+    this.typeStack.push(ValueType.BOOL);
 }
 
 fn void Compiler.literal_false(Compiler* this)
 {
-    this.compile_op(OpCode.CONST_FALSE, this.previous.line);
+    this.emit_op(OpCode.CONST_FALSE, this.previous.line);
+    this.typeStack.push(ValueType.BOOL);
 }
 
 fn void Compiler.literal_null(Compiler* this)
 {
-    this.compile_op(OpCode.CONST_NULL, this.previous.line);
+    this.emit_op(OpCode.CONST_NULL, this.previous.line);
+    this.typeStack.push(ValueType.NULL);
 }
 
 // ---------- Type-aware arithmetic/logic codegen ----------
 
 // ---------- Type-aware comparison codegen ----------
-
-// a == b
-fn void Compiler.compile_equal(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    if (left != right) {
-        this.error("Type mismatch in '=='.");
-        return;
-    }
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.INT_EQUAL, line);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.FLOAT_EQUAL, line);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.DOUBLE_EQUAL, line);
-        default:
-            this.error("Unsupported '==' operand types");
-    }
-
-    // Comparisons always produce bool
-    this.typeStack.push(ValueType.BOOL);
-}
-
-// a != b  =>  !(a == b)
-fn void Compiler.compile_not_equal(Compiler* this, int line)
-{
-    // This pops both operands and pushes a bool
-    this.compile_equal(line);
-    // Now negate the bool on top of the stack
-    this.compile_op(OpCode.NOT, line);
-    // Type is still BOOL
-}
-
-// a < b
-fn void Compiler.compile_less(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    if (left != right) {
-        this.error("Type mismatch in '<'.");
-        return;
-    }
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.INT_LESS, line);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.FLOAT_LESS, line);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.DOUBLE_LESS, line);
-        default:
-            this.error("Unsupported '<' operand types");
-    }
-
-    this.typeStack.push(ValueType.BOOL);
-}
-
-// a > b
-fn void Compiler.compile_greater(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    if (left != right) {
-        this.error("Type mismatch in '>'.");
-        return;
-    }
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.INT_GREATER, line);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.FLOAT_GREATER, line);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.DOUBLE_GREATER, line);
-        default:
-            this.error("Unsupported '>' operand types");
-    }
-
-    this.typeStack.push(ValueType.BOOL);
-}
-
-// a <= b  =>  !(a > b)
-fn void Compiler.compile_less_equal(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    if (left != right) {
-        this.error("Type mismatch in '<='.");
-        return;
-    }
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.INT_GREATER, line);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.FLOAT_GREATER, line);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.DOUBLE_GREATER, line);
-        default:
-            this.error("Unsupported '<=' operand types");
-    }
-
-    this.compile_op(OpCode.NOT, line);
-    this.typeStack.push(ValueType.BOOL);
-}
-
-// a >= b  =>  !(a < b)
-fn void Compiler.compile_greater_equal(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    if (left != right) {
-        this.error("Type mismatch in '>='.");
-        return;
-    }
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.INT_LESS, line);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.FLOAT_LESS, line);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.DOUBLE_LESS, line);
-        default:
-            this.error("Unsupported '>=' operand types");
-    }
-
-    this.compile_op(OpCode.NOT, line);
-    this.typeStack.push(ValueType.BOOL);
-}
-
-fn void Compiler.compile_div(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.DIV_INT, line);
-            this.typeStack.push(ValueType.INT);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.DIV_FLOAT, line);
-            this.typeStack.push(ValueType.FLOAT);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.DIV_DOUBLE, line);
-            this.typeStack.push(ValueType.DOUBLE);
-        default:
-            this.error("Unsupported divide");
-    }
-}
-
-fn void Compiler.compile_mul(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.MUL_INT, line);
-            this.typeStack.push(ValueType.INT);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.MUL_FLOAT, line);
-            this.typeStack.push(ValueType.FLOAT);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.MUL_DOUBLE, line);
-            this.typeStack.push(ValueType.DOUBLE);
-        default:
-            this.error("Unsupported multiply");
-    }
-}
-
-fn void Compiler.compile_sub(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.SUB_INT, line);
-            this.typeStack.push(ValueType.INT);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.SUB_FLOAT, line);
-            this.typeStack.push(ValueType.FLOAT);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.SUB_DOUBLE, line);
-            this.typeStack.push(ValueType.DOUBLE);
-        default:
-            this.error("Unsupported subtraction");
-    }
-}
-
-fn void Compiler.compile_add(Compiler* this, int line)
-{
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
-
-    switch (left) {
-        case ValueType.INT:
-            this.compile_op(OpCode.ADD_INT, line);
-            this.typeStack.push(ValueType.INT);
-        case ValueType.FLOAT:
-            this.compile_op(OpCode.ADD_FLOAT, line);
-            this.typeStack.push(ValueType.FLOAT);
-        case ValueType.DOUBLE:
-            this.compile_op(OpCode.ADD_DOUBLE, line);
-            this.typeStack.push(ValueType.DOUBLE);
-        case ValueType.GC_OBJ:
-            this.compile_op(OpCode.CONCAT_STRING, line);
-            this.typeStack.push(ValueType.NO_GC_OBJ);
-        case ValueType.NO_GC_OBJ:
-            this.compile_op(OpCode.CONCAT_STRING, line);
-            this.typeStack.push(ValueType.GC_OBJ);
-        default:
-            this.error("Unsupported add");
-    }
-}
 
 
 // ---------- Precedence engine ----------

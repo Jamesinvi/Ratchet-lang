@@ -92,6 +92,21 @@ fn uint get_type_index(ValueType type, String name){
 
 // ---------- Errors ----------
 
+fn void Compiler.warning(Compiler* this, String msg)
+{
+    this.warning_at(this.previous, msg);
+}
+
+fn void Compiler.warning_at(Compiler* this, Token* token, String msg)
+{
+    if (this.panicMode) return;
+
+    io::eprintf("[line %d] Warning", token.line);
+    io::eprintf(" at '%s'", token.value);
+    io::eprintf(", %s \n", msg);
+}
+
+
 fn void Compiler.error(Compiler* this, String msg)
 {
     this.error_at(this.previous, msg);
@@ -101,16 +116,16 @@ fn void Compiler.error_at(Compiler* this, Token* token, String msg)
 {
     if (this.panicMode) return;
 
-    io::printf("[line %d] Error", token.line);
+    io::eprintf("[line %d] Error", token.line);
     this.hadError  = true;
     this.panicMode = true;
 
     if (token.tokenType == TokenType.EOF) {
-        io::printf(" at end");
+        io::eprintf(" at end");
     } else {
-        io::printf(" at '%s'", token.value);
+        io::eprintf(" at '%s'", token.value);
     }
-    io::printf(", %s \n", msg);
+    io::eprintf(", %s \n", msg);
 }
 
 // ---------- Identifier helpers ----------
@@ -143,177 +158,15 @@ fn int Compiler.resolve_local(Compiler* this, Token* name)
 
 // ---------- Program entry ----------
 
-fn void Compiler.compile_program_call(Compiler* this)
+fn void Compiler.emit_program_call(Compiler* this)
 {
     Token name = {.tokenType = TokenType.IDENTIFIER, .value = "program", .line = this.previous.line};
 
     this.named_variable(name, false);
-    this.compile_op_u8(OpCode.CALL, 0, name.line);
+    this.emit_op_u8(OpCode.CALL, 0, name.line);
 }
 
 // ---------- Bytecode helpers ----------
-
-fn void Compiler.compile_byte(Compiler* this, Byte byte, int line)
-{
-    this.get_current_chunk().append_to_chunk(byte, line);
-}
-
-fn void Compiler.compile_ops(Compiler* this, OpCode op1, OpCode op2, int line)
-{
-    this.compile_byte((Byte)op1, line);
-    this.compile_byte((Byte)op2, line);
-}
-
-fn void Compiler.compile_op(Compiler* this, OpCode op1, int line)
-{
-    this.compile_byte((Byte)op1, line);
-}
-
-
-fn void Compiler.compile_op_u16(Compiler* this, OpCode opCode, ushort operandIndex, int line)
-{
-    this.compile_byte((Byte)opCode, line);
-    this.compile_byte((Byte)operandIndex >> 8, line);   // High byte
-    this.compile_byte((Byte)operandIndex & 0xFF, line); // Low byte
-}
-
-fn void Compiler.compile_op_u8(Compiler* this, OpCode opCode, Byte byte, int line)
-{
-    this.compile_byte((Byte)opCode, line);
-    this.compile_byte(byte, line);
-}
-
-
-fn int Compiler.compile_jump(Compiler* this, OpCode opCode, int line)
-{
-    this.compile_byte((Byte)opCode, line);
-    this.compile_byte(0xff, line);
-    this.compile_byte(0xff, line);
-    return (int)this.get_current_chunk().code.size - 2;
-}
-
-fn void Compiler.compile_loop(Compiler* this, int loopStart)
-{
-
-    int offset = (int)this.get_current_chunk().code.size +3 - loopStart;
-    if (offset > ushort.max) {
-        this.error("Loop body too large.");
-    }
-    this.compile_op_u16(OpCode.LOOP, (ushort)offset, this.previous.line);
-}
-
-fn void Compiler.patch_jump(Compiler* this, int offset)
-{
-    int jumpLen = (int)this.get_current_chunk().code.size - offset - 2;
-
-    if (jumpLen > ushort.max) {
-        this.error("Jump size too big");
-        return;
-    }
-
-    this.get_current_chunk().code[offset]         = (Byte)((jumpLen >> 8) & 0xff);
-    this.get_current_chunk().code[(usz)(offset+1)] = (Byte)(jumpLen & 0xff);
-}
-
-fn void Compiler.compile_cast(Compiler* this, ValueType targetType, int line)
-{
-    ValueType source = this.typeStack.pop();
-
-    // No-op cast
-    if (source == targetType) {
-        this.typeStack.push(source);
-        return;
-    }
-
-    switch (targetType) {
-        case ValueType.INT:
-            switch (source) {
-                case ValueType.FLOAT:
-                    this.compile_byte((Byte)OpCode.CAST_F_I, line);
-                case ValueType.DOUBLE:
-                    this.compile_byte((Byte)OpCode.CAST_D_I, line);
-                case ValueType.GC_OBJ:  nextcase;
-                default:
-                    this.error("Unsupported cast to int.");
-            }
-            this.typeStack.push(ValueType.INT);
-            return;
-
-        case ValueType.FLOAT:
-            switch (source) {
-                case ValueType.INT:
-                    this.compile_byte((Byte)OpCode.CAST_I_F, line);
-                case ValueType.DOUBLE:
-                    this.compile_byte((Byte)OpCode.CAST_D_F, line);
-                case ValueType.GC_OBJ:  nextcase;
-                default:
-                    this.error("Unsupported cast to float.");
-            }
-            this.typeStack.push(ValueType.FLOAT);
-            return;
-
-        case ValueType.DOUBLE:
-            switch (source) {
-                case ValueType.INT:
-                    this.compile_byte((Byte)OpCode.CAST_I_D, line);
-                case ValueType.FLOAT:
-                    this.compile_byte((Byte)OpCode.CAST_F_D, line);
-                case ValueType.GC_OBJ:  nextcase;
-                default:
-                    this.error("Unsupported cast to double.");
-            }
-            this.typeStack.push(ValueType.DOUBLE);
-            return;
-
-        case ValueType.GC_OBJ: // string
-            switch (source) {
-                case ValueType.INT:
-                case ValueType.FLOAT:
-                case ValueType.DOUBLE:
-                case ValueType.NULL:
-                case ValueType.BOOL:
-                case ValueType.NO_GC_OBJ:
-                    // Generic "value → string" op
-                    this.compile_byte((Byte)OpCode.CAST_TO_STRING, line);
-                    this.compile_byte((Byte)source, line);
-                    this.typeStack.push(ValueType.GC_OBJ);
-                    return;
-
-                case ValueType.GC_OBJ:
-                    // string -> string is handled above as no-op
-                    this.typeStack.push(ValueType.GC_OBJ);
-                    return;
-
-                default:
-                    this.error("Unsupported cast to string.");
-                    this.typeStack.push(targetType); // keep stack balanced after error
-                    return;
-            }
-
-        default:
-            this.error("Unsupported cast target type.");
-            this.typeStack.push(targetType);
-            return;
-    }
-}
-
-
-fn void Compiler.compile_pop_of_type(Compiler* this, ValueType t, int line)
-{
-    Byte size = 0;
-    switch (t) {
-        case ValueType.INT:         size = (Byte)int.sizeof;
-        case ValueType.FLOAT:       size = (Byte)float.sizeof;
-        case ValueType.DOUBLE:      size = (Byte)double.sizeof;
-        case ValueType.BOOL:        size = (Byte)bool.sizeof;
-        case ValueType.GC_OBJ:      nextcase;
-        case ValueType.NO_GC_OBJ:   size = (Byte)uptr.sizeof;
-        case ValueType.NULL:        size = 1;
-        default:    this.error("compile_pop_of_type: unsupported type");
-    }
-
-    this.compile_op_u8(OpCode.POP, size, line);
-}
 
 fn ushort Compiler.ensure_constant(Compiler* this, int constantIndex)
 {

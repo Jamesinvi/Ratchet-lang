@@ -54,5 +54,5 @@ fn void Compiler.maybe_optimize_local_inc_dec(Compiler* this, int slot, int line
         newOp = OpCode.DEC_LOCAL;
     }
         
-    this.compile_op_u16(newOp, (ushort)slot, line);
+    this.emit_op_u16(newOp, (ushort)slot, line);
 }
