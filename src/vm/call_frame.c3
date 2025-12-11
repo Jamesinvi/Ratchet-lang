@@ -5,5 +5,5 @@ struct CallFrame
 {
     ObjFunction* function;
     Byte* ip;
-    Value* slots;
+    ushort base;
 }

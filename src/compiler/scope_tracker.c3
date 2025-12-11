@@ -3,12 +3,13 @@ import common;
 
 struct ScopeTracker
 {
-    ScopeTracker* enclosing;
-    ObjFunction* function;
-    ValueType returnType;
     Local[Byte.max] locals;
     int localCount;
     int scopeDepth;
+    ushort nextSlot;
+    ValueType returnType;
+    ScopeTracker* enclosing;
+    ObjFunction* function;
 }
 
 fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, ValueType returnType, String name){
@@ -17,6 +18,7 @@ fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, ValueType returnType,
     this.returnType = returnType;
     this.enclosing  = c.currentScope;
     this.function   = common::create_obj_function(name, false);
+    this.nextSlot  = 0;
 
     // Dummy local 0 for this function
     Local* local = &this.locals[this.localCount++];

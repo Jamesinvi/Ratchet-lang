@@ -1,7 +1,7 @@
 module common;
 import std::io;
 import std::collections::list;
-enum ObjType
+enum ObjType : Byte
 {
     STRING,
     FUNCTION,
@@ -13,7 +13,7 @@ enum FunctionType : char
     FUNCTION,
     SCRIPT,
 }
-struct Obj (DebugPrintable)
+struct Obj (DebugPrintable)  @align(16)
 {
     ObjType type;
     ulong allocIndex;
@@ -43,8 +43,9 @@ struct SlotInfo
     ValueType type;
     ushort sizeInBytes;
     ushort offset;      // Byte offset from frame start
+    ushort index;       // slot index in the table
 }
-alias NativeFn = fn Value(int argCount, Value... args);
+alias NativeFn = fn double();
 struct ObjNative
 {
     Obj obj;
@@ -90,10 +91,11 @@ fn ushort ObjFunction.add_slot(ObjFunction* this, ValueType type){
         .sizeInBytes = size,
         .offset = offset,
     };
+    ushort index = (ushort)this.slots.len();
     this.slots.push(slotInfo);
     this.totalLocalsBytes += size;
 
-    return size;
+    return index;
 }
 
 fn void Obj.debug_print(Obj* this) @dynamic {

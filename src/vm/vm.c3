@@ -5,7 +5,6 @@ import std::collections::map;
 import debug;
 import std::io;
 alias Chunk = common::Chunk;
-alias VmStack = common::fixed_stack::FixedStack{Value};
 alias Byte = char;
 
 const FRAMES_MAX = 64;
@@ -19,374 +18,508 @@ enum RunResult
 
 struct Vm
 {
-    VmStack stack;
+    Byte[STACK_MAX] stack;
+    ushort stackHead;
+
     CallFrame* frame;
     CallFrame[FRAMES_MAX] frames;
     int frameCount;
+
     HeapTracker trackedHeap;
     HeapTracker untrackedHeap;
-    HashMap{String, Value} globals;
+    HashMap{String, Obj*} globals;
 }
 
 fn void Vm.init(Vm* this, ObjFunction* entryPoint){
-    this.stack.size = 0;
+    this.stackHead = 0;
     this.frameCount = 0;
     this.trackedHeap.init("TRACKED HEAP");
     this.untrackedHeap.init("UNTRACKED HEAP");
     this.globals.init(mem);
 
-    this.stack.push(@new_function(entryPoint));
     this.frame = &this.frames[this.frameCount++];
     this.frame.function = entryPoint;
     this.frame.ip = (Byte*)&entryPoint.chunk.code[0];
-    this.frame.slots = &this.stack.items[0];
+    this.frame.base = 0;
+    this.stackHead = entryPoint.totalLocalsBytes;
+
 
     this.define_native("clock", &clock_native);
 }
 
 fn void Vm.deinit(Vm* this){
     this.trackedHeap.free();
+    this.untrackedHeap.free();
     this.globals.free();
 }
-macro Byte @read_byte(Vm* vm){
+macro Byte @read_u8(Vm* vm){
     return *vm.frame.ip++;
 }
-macro ushort @read_ushort(Vm* vm){
+
+macro ushort @read_u16(Vm* vm){
+    ushort hi = (ushort)vm.frame.ip[0];
+    ushort lo = (ushort)vm.frame.ip[1];
     vm.frame.ip += 2;
-    return (ushort)((vm.frame.ip[-2] << 8) | vm.frame.ip[-1]);
+    return (ushort)((hi << 8) | lo);
 }
 
-macro Value @read_const(Vm* vm){
-    return vm.frame.function.chunk.constants[@read_byte(vm)];
+macro @read_const(Vm* vm, $Type, ushort offset) {
+    Byte* bytes = &vm.frame.function.chunk.constants[offset];
+    return @unaligned_load(*($Type*)bytes, $Type.alignof);
 }
 
-macro Value @null_val(){
-    return {.type = ValueType.NULL, .as.boolean = false};
+const OP_LESS = 0;
+const OP_GREATER = 1;
+const OP_EQUAL = 2;
+const OP_ADD = 3;
+const OP_SUB = 4;
+const OP_MUL = 5;
+const OP_DIV = 6;
+const OP_NEGATE = 7;
+
+macro @compare(Vm* vm, $Type, $op){
+    $Type right = @pop_val(vm, $Type);
+    $Type left = @pop_val(vm, $Type);
+    $switch $op:
+        $case OP_LESS:       @push_bool(vm, left < right);
+        $case OP_GREATER:    @push_bool(vm, left > right);
+        $case OP_EQUAL:      @push_bool(vm, left == right);
+    $endswitch
 }
 
-macro Value @new_function(ObjFunction* obj){
-    return {.type = ValueType.NO_GC_OBJ, .as.objRef = (Obj*)obj};
-}
 
-macro Value @new_bool(bool b){
-    return {.type = ValueType.BOOL, .as.boolean = b};
-}
 
-macro Value @new_string(String s){
-    return common::make_string(s, false);
-}
 
-macro @bin_op_greater(Vm* vm){
-    Value right = vm.stack.pop_val();
-    Value left = vm.stack.pop_val();
-    switch(left.type){
-        case ValueType.BOOL:   vm.stack.push(@new_bool(left.as.boolean   > right.as.boolean));
-        case ValueType.INT:    vm.stack.push(@new_bool(left.as.intNum    > right.as.intNum));
-        case ValueType.DOUBLE: vm.stack.push(@new_bool(left.as.doubleNum > right.as.doubleNum));
-        case ValueType.FLOAT:  vm.stack.push(@new_bool(left.as.floatNum  > right.as.floatNum));
-        default: vm.error("unsupported operation between left types");
-    }
-}
-
-macro @bin_op_less(Vm* vm){
-    Value right = vm.stack.pop_val();
-    Value left = vm.stack.pop_val();
-    switch(left.type){
-        case ValueType.BOOL:   vm.stack.push(@new_bool(left.as.boolean   < right.as.boolean));
-        case ValueType.INT:    vm.stack.push(@new_bool(left.as.intNum    < right.as.intNum));
-        case ValueType.DOUBLE: vm.stack.push(@new_bool(left.as.doubleNum < right.as.doubleNum));
-        case ValueType.FLOAT:  vm.stack.push(@new_bool(left.as.floatNum  < right.as.floatNum));
-        default: vm.error("unsupported operation between these types");
-    }
-}
-
-macro @bin_op_equal(Vm* vm){
-    Value right = vm.stack.pop_val();
-    Value left = vm.stack.pop_val();
-    switch(left.type){
-        case ValueType.BOOL:   vm.stack.push(@new_bool(left.as.boolean   == right.as.boolean));
-        case ValueType.INT:    vm.stack.push(@new_bool(left.as.intNum    == right.as.intNum));
-        case ValueType.DOUBLE: vm.stack.push(@new_bool(left.as.doubleNum == right.as.doubleNum));
-        case ValueType.FLOAT:  vm.stack.push(@new_bool(left.as.floatNum  == right.as.floatNum));
-        case ValueType.GC_OBJ:  nextcase;
-        case ValueType.NO_GC_OBJ: {
-            ObjString* rightObj = common::@as_string(&right);
-            ObjString* leftObj = common::@as_string(&left);
-            Value result = @new_bool(common::string_equals(rightObj.str,leftObj.str));
-            vm.stack.push(result);
-
+macro @math_int(Vm* vm, $op){
+    int right = @pop_val(vm, int);
+    int left = @pop_val(vm, int);
+    $switch $op:
+        $case OP_ADD:       @push_int(vm, left + right);
+        $case OP_SUB:       @push_int(vm, left - right);
+        $case OP_MUL:       @push_int(vm, left * right);
+        $case OP_DIV:{
+            if (right == 0) {
+                vm.error("Division by zero");
+            }
+            @push_int(vm, left / right);
         }
-        default: vm.error("unsupported operation between these types");
-    }
-}
-
-macro @cast_top( Vm* vm, $SrcType, $DstType, $dstEnum, $srcField, $dstField)
-{
-    // Could pop/push but we can do it in place
-    Value top = vm.stack.peek();
-    $SrcType src = top.as.$eval($srcField);
-    top.type = ValueType.$eval($dstEnum);
-    top.as.$eval($dstField) = ($DstType)src;
-}
-
-
-const OP_ADD = 0;
-const OP_SUB = 1;
-const OP_MUL = 2;
-const OP_DIV = 3;
-
-macro @math_inc_or_dec(Vm* vm, $field, $op)
-{
-    Byte slot = @read_byte(vm);
-    Value* v = &vm.frame.slots[slot];
-    $switch $op:
-        $case OP_ADD: v.as.$eval($field)++;
-        $case OP_SUB: v.as.$eval($field)--;
-        $default:
-            $error("Unknown inc/dec op");
     $endswitch
-    vm.stack.push(*v);
 }
-macro @math_bin_op(Vm* vm, $Type, $type, $field, $op)
-{
-    $Type right = vm.stack.pop_val().as.$eval($field);
-    $Type left  = vm.stack.pop_val().as.$eval($field);
-    Value result = {.type = ValueType.$eval($type)};
 
+macro @math_float(Vm* vm, $op){
+    float right = @pop_val(vm, float);
+    float left = @pop_val(vm, float);
     $switch $op:
-        $case OP_ADD:
-            result.as.$eval($field) = left + right;
-        $case OP_SUB:
-            result.as.$eval($field) = left - right;
-        $case OP_MUL:
-            result.as.$eval($field) = left * right;
-        $case OP_DIV:
-            result.as.$eval($field) = left / right;
-        $default:
-            $error("Unknown bin op");
+        $case OP_ADD:       @push_float(vm, left + right);
+        $case OP_SUB:       @push_float(vm, left - right);
+        $case OP_MUL:       @push_float(vm, left * right);
+        $case OP_DIV:{
+            if (right == 0f) {
+                vm.error("Division by zero");
+            }
+            @push_float(vm, left / right);
+        }
     $endswitch
-    vm.stack.push(result);
 }
 
-macro @negate_op(Vm* vm, $Type, $type, $field){
-    // We could pop/push here, instead we do it in place
-    Value* top = vm.stack.peek_ref();
-    $Type right = top.as.$eval($field);
-    top.type = ValueType.$eval($type);
-    top.as.$eval($field) = -right;
+
+macro @math_double(Vm* vm, $op){
+    double right = @pop_val(vm, double);
+    double left = @pop_val(vm, double);
+    $switch $op:
+        $case OP_ADD:       @push_double(vm, left + right);
+        $case OP_SUB:       @push_double(vm, left - right);
+        $case OP_MUL:       @push_double(vm, left * right);
+        $case OP_DIV:{
+            if (right == 0f) {
+                vm.error("Division by zero");
+            }
+            @push_double(vm, left / right);
+        }
+    $endswitch
 }
 
-macro Value @pop_obj(Vm* this){
-    Value rightVal = this.stack.pop_val();
-    Obj* right = rightVal.get_obj();
-    this.trackedHeap.release_obj(right);
-    return rightVal;
+macro @negate_int(Vm* vm){
+    int right = @pop_val(vm, int);
+    @push_int(vm, -right);
 }
 
-macro @push_obj(Vm* this, Value v){
-    Obj* object = (v.get_obj());
-    this.trackedHeap.track_alloc(object);
-    this.trackedHeap.retain_obj(object);
-    this.stack.push(v);
+macro @negate_float(Vm* vm){
+    float right = @pop_val(vm, float);
+    @push_float(vm, -right);
 }
 
-fn RunResult run(Vm* vm){
+macro @negate_double(Vm* vm){
+    double right = @pop_val(vm, double);
+    @push_double(vm, -right);
+}
+
+
+macro @read_local(Vm* vm, $Type, ushort offset) {
+    Byte* bytes = &vm.stack[offset];
+    return @unaligned_load(*($Type*)bytes, $Type.alignof);
+}
+
+macro @peek_val(Vm* vm, $Type){
+    Byte* src = &vm.stack[vm.stackHead - $Type.sizeof];
+    return @unaligned_load(*($Type*)src, $Type.alignof);
+}
+
+macro @pop_val(Vm* vm, $Type) {
+    vm.stackHead -= $Type.sizeof;
+    Byte* src = &vm.stack[vm.stackHead];
+    return @unaligned_load(*($Type*)src, $Type.alignof);
+}
+
+macro void @push_int(Vm* vm, int value) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(int*)dst, value, int.alignof);
+    vm.stackHead += int.sizeof;
+}
+
+macro void @push_float(Vm* vm, float value) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(float*)dst, value, float.alignof);
+    vm.stackHead += float.sizeof;
+}
+
+macro void @push_double(Vm* vm, double value) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(double*)dst, value, double.alignof);
+    vm.stackHead += double.sizeof;
+}
+
+macro void @push_bool(Vm* vm, bool value) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(bool*)dst, value, bool.alignof);
+    vm.stackHead += bool.sizeof;
+
+}
+
+macro void @push_obj(Vm* vm, Obj* obj) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(Obj**)dst, obj, uptr.alignof);
+    vm.stackHead += uptr.sizeof;
+}
+
+macro void @push_func(Vm* vm, ObjFunction* func) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(ObjFunction**)dst, func, uptr.alignof);
+    vm.stackHead += uptr.sizeof;
+}
+
+macro void @push_string(Vm* vm, ObjString* str) {
+    Byte* dst = &vm.stack[vm.stackHead];
+    @unaligned_store(*(ObjString**)dst, str, uptr.alignof);
+    vm.stackHead += uptr.sizeof;
+}
+
+
+fn RunResult run(Vm* vm) {
     debug::@print_disassembly(vm);
-    vm.frame = &vm.frames[vm.frameCount - 1];
-    while(true){
-        Byte instruction;
+
+    while (true) {
+        Byte instruction = @read_u8(vm);  
+        //io::printfn("%s", vm.stackHead);  
         debug::@print_instruction(vm);
-        switch (instruction = @read_byte(vm)){
+        switch (instruction) {
+
+            // ---------- Constants ----------
+
+            case OpCode.CONST_INT.ordinal: {
+                ushort offset = @read_u16(vm);
+                int v = @read_const(vm, int, offset);
+                @push_int(vm, v);
+            }
+
+            case OpCode.CONST_FLOAT.ordinal: {
+                ushort offset = @read_u16(vm);
+                float v = @read_const(vm, float, offset);
+                @push_float(vm, v);
+            }
+
+            case OpCode.CONST_DOUBLE.ordinal: {
+                ushort offset = @read_u16(vm);
+                double v = @read_const(vm, double, offset);
+                @push_double(vm, v);
+            }
+
+            case OpCode.CONST_FUNC.ordinal: {
+                ushort offset = @read_u16(vm);
+                ObjFunction* func = @read_const(vm, ObjFunction*, offset);
+                @push_func(vm, func);
+            }
+
+            case OpCode.CONST_TRUE.ordinal: {
+                @push_bool(vm,  true);
+            }
+
+            case OpCode.CONST_FALSE.ordinal: {
+                @push_bool(vm,  false);
+            }
+
+            case OpCode.CONST_NULL.ordinal: {
+                @push_bool(vm,  false);
+            }
+
+            // ---------- Locals ----------
+
+            case OpCode.GET_LOCAL.ordinal: {
+                ushort slotIndex = @read_u16(vm);
+                SlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort offset = vm.frame.base + info.offset;
+
+                switch (info.type) {
+                    case ValueType.INT: {
+                        int v = @read_local(vm, int, offset);
+                        @push_int(vm, v);
+                    }
+
+                    case ValueType.FLOAT: {
+                        float v = @read_local(vm, float, offset);
+                        @push_float(vm, v);
+                    }
+
+                    case ValueType.DOUBLE: {
+                        double v = @read_local(vm, double, offset);
+                        @push_double(vm, v);
+                    }
+
+                    case ValueType.BOOL: {
+                        bool v = @read_local(vm, bool, offset);
+                        @push_bool(vm, v);
+                    }
+
+                    case ValueType.GC_OBJ:
+                    case ValueType.NO_GC_OBJ: {
+                        Obj* v = @read_local(vm, Obj*, offset);
+                        @push_obj(vm, v);
+                    }
+                    case ValueType.NULL: {
+                        @push_bool(vm, false); // or special NULL handling
+                    }
+
+                    default:
+                        vm.error("Unsupported local type in GET_LOCAL");
+                        return RunResult.RUNTIME_ERR;
+                }
+            }
+
+            case OpCode.SET_LOCAL.ordinal: {
+                ushort slotIndex = @read_u16(vm);
+                SlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort offset = vm.frame.base + info.offset;
+
+                vm.stackHead -= info.sizeInBytes;
+                for (int i = 0; i < info.sizeInBytes; i++) {
+                    vm.stack[offset + i] = vm.stack[vm.stackHead + i];
+                }
+            }
+
+            // ---------- Globals: function-only ----------
+
+            case OpCode.DEFINE_GLOBAL.ordinal: {
+                // const: string name
+                ushort nameOffset = @read_u16(vm);
+                ObjString* nameObj = @read_const(vm, ObjString*, nameOffset);
+                String name = nameObj.str;
+
+                Obj* obj = @pop_val(vm, Obj*);
+                vm.globals.set(name, obj);
+            }
+
+            case OpCode.GET_GLOBAL.ordinal: {
+                ushort nameOffset = @read_u16(vm);
+                ObjString* nameObj = @read_const(vm, ObjString*, nameOffset);
+                String name = nameObj.str;
+
+                Obj*? maybeObj = vm.globals.get(name);
+                if (catch err = maybeObj) {
+                    vm.error("Undefined global");
+                    return RunResult.RUNTIME_ERR;
+                }
+                @push_obj(vm, maybeObj);
+            }
+
+            // ---------- Control flow -----------------
+            
+            case OpCode.JMP.ordinal: {
+                ushort offset = @read_u16(vm);
+                vm.frame.ip += offset;
+            }
+            
+            case OpCode.JMP_IF_FALSE.ordinal: {
+                ushort offset = @read_u16(vm);
+                // Compiler keeps the condition on the stack and POPs it later,
+                // so we just peek it here.
+                if (!@peek_val(vm, bool)) {
+                    vm.frame.ip += offset;
+                }
+            }
+
+            case OpCode.LOOP.ordinal: {
+                ushort offset = @read_u16(vm);
+                vm.frame.ip -= offset;
+            }
+
+            // ----------- Casts ---------------------
+
+            case OpCode.CAST_TO_STRING.ordinal: {
+                ValueType fromType = (ValueType)@read_u8(vm);
+                String s;
+                switch (fromType) {
+                    case ValueType.INT:         s = string::format(mem, "%d", @pop_val(vm, int));
+                    case ValueType.FLOAT:       s = string::format(mem, "%f", @pop_val(vm, float));
+                    case ValueType.DOUBLE:      s = string::format(mem, "%f", @pop_val(vm, double));
+                    case ValueType.BOOL:        s = string::format(mem, "%b", @pop_val(vm, bool));
+                    case ValueType.NULL:        s = "null"; @pop_val(vm, bool);
+                    default:{
+                        vm.error("Unsupported cast"); 
+                        return RunResult.RUNTIME_ERR;
+                    }
+                }
+                ObjString* result = common::create_obj_string(s, false);
+                @push_string(vm, result);
+                vm.trackedHeap.track_alloc((Obj*)result);
+            }
+
+            // ---------- Comparison -----------------
+
+            case OpCode.INT_LESS.ordinal:           @compare(vm, int, OP_LESS);
+            case OpCode.INT_GREATER.ordinal:        @compare(vm, int, OP_GREATER);
+            case OpCode.INT_EQUAL.ordinal:          @compare(vm, int, OP_EQUAL);
+            
+            case OpCode.FLOAT_LESS.ordinal:         @compare(vm, float, OP_LESS);
+            case OpCode.FLOAT_GREATER.ordinal:      @compare(vm, float, OP_GREATER);
+            case OpCode.FLOAT_EQUAL.ordinal:        @compare(vm, float, OP_EQUAL);
+
+            case OpCode.DOUBLE_LESS.ordinal:        @compare(vm, double, OP_LESS);
+            case OpCode.DOUBLE_GREATER.ordinal:     @compare(vm, double, OP_GREATER);
+            case OpCode.DOUBLE_EQUAL.ordinal:       @compare(vm, double, OP_EQUAL);
+
+            case OpCode.NOT.ordinal: {
+                bool v = @pop_val(vm, bool);
+                @push_bool(vm, !v);
+            }
+            // ---------- Arithmetic ----------
+
+            case OpCode.ADD_INT.ordinal:            @math_int(vm, OP_ADD);
+            case OpCode.SUB_INT.ordinal:            @math_int(vm, OP_SUB);  
+            case OpCode.MUL_INT.ordinal:            @math_int(vm, OP_MUL); 
+            case OpCode.DIV_INT.ordinal:            @math_int(vm, OP_DIV); 
+            case OpCode.NEGATE_INT.ordinal:         @negate_int(vm);
+
+
+            case OpCode.ADD_FLOAT.ordinal:          @math_float(vm, OP_ADD);
+            case OpCode.SUB_FLOAT.ordinal:          @math_float(vm, OP_SUB);  
+            case OpCode.MUL_FLOAT.ordinal:          @math_float(vm, OP_MUL); 
+            case OpCode.DIV_FLOAT.ordinal:          @math_float(vm, OP_DIV); 
+            case OpCode.NEGATE_FLOAT.ordinal:       @negate_float(vm);
+
+
+            case OpCode.ADD_DOUBLE.ordinal:         @math_double(vm, OP_ADD);
+            case OpCode.SUB_DOUBLE.ordinal:         @math_double(vm, OP_SUB);  
+            case OpCode.MUL_DOUBLE.ordinal:         @math_double(vm, OP_MUL); 
+            case OpCode.DIV_DOUBLE.ordinal:         @math_double(vm, OP_DIV); 
+            case OpCode.NEGATE_DOUBLE.ordinal:      @negate_double(vm);
+
+            // ---------- Output ----------
+
+            case OpCode.ECHO.ordinal: {
+                double v = @pop_val(vm, double);
+                io::printfn("%f", v);
+            }
+
+            case OpCode.POP.ordinal: {
+                Byte size = @read_u8(vm);
+                vm.stackHead -= size;
+            }
+
+            // ---------- Call / Return ----------
+
+            case OpCode.CALL.ordinal: {
+                Byte argCount = @read_u8(vm);
+
+                ushort funcOffset = (ushort)(vm.stackHead - (argCount * int.sizeof) - uptr.sizeof);
+                Obj* callee = @unaligned_load(*(Obj**)&vm.stack[funcOffset], uptr.alignof);
+
+                switch (callee.type) {
+                    case ObjType.FUNCTION: {
+                        ObjFunction* func = (ObjFunction*)callee;
+
+                        if (vm.frameCount >= FRAMES_MAX) {
+                            vm.error("Stack overflow");
+                            return RunResult.RUNTIME_ERR;
+                        }
+
+                        CallFrame* newFrame = &vm.frames[vm.frameCount++];
+                        newFrame.function = func;
+                        newFrame.ip = (Byte*)&func.chunk.code[0];
+                        newFrame.base = funcOffset;
+                        vm.frame = newFrame;
+
+                        vm.stackHead = (ushort)(newFrame.base + func.totalLocalsBytes);
+                    }
+
+                    case ObjType.NATIVE_FUNCTION: {
+                        ObjNative* nativeFn = (ObjNative*)callee;
+
+                        // Example for 0-arg double native:
+                        double result = nativeFn.function();
+                        // drop the callee+args from the stack:
+                        vm.stackHead = funcOffset;
+                        @push_double(vm, result);
+                    }
+
+                    default:
+                        vm.error("Attempted to call non-callable object");
+                        return RunResult.RUNTIME_ERR;
+                }
+            }
+
+
             case OpCode.RETURN.ordinal: {
-                Value result = vm.stack.pop_val();
-                int frameBase = (int)(vm.frame.slots - &vm.stack.items[0]);
-
                 vm.frameCount--;
-
                 if (vm.frameCount == 0) {
                     return RunResult.OK;
                 }
-                vm.stack.size = frameBase;
 
+                vm.stackHead = vm.frame.base;
                 vm.frame = &vm.frames[vm.frameCount - 1];
-                vm.stack.push(result);
             }
 
-            case OpCode.POP.ordinal:           vm.stack.pop_val();
-            case OpCode.EQUAL.ordinal:         @bin_op_equal(vm);
-            case OpCode.GREATER.ordinal:       @bin_op_greater(vm);
-            case OpCode.LESS.ordinal:          @bin_op_less(vm);
-            case OpCode.INT_LESS.ordinal: {
-                Value right = vm.stack.pop_val();
-                Value left = vm.stack.pop_val();
-                vm.stack.push(@new_bool(left.as.intNum < right.as.intNum));
-            }
+            // ---------- Fallback ----------
 
-            case OpCode.NOT.ordinal:           vm.stack.push(@new_bool(!vm.stack.pop_val().as.boolean));
-
-            case OpCode.CONST_FALSE.ordinal:   vm.stack.push(@new_bool(false));
-            case OpCode.CONST_TRUE.ordinal:    vm.stack.push(@new_bool(true));
-            case OpCode.CONST_NULL.ordinal:    vm.stack.push(@null_val());
-
-            case OpCode.NEGATE_INT.ordinal:    @negate_op(vm, int.typeid,     "INT",    "intNum");
-            case OpCode.NEGATE_FLOAT.ordinal:  @negate_op(vm, float.typeid,   "FLOAT",  "floatNum");
-            case OpCode.NEGATE_DOUBLE.ordinal: @negate_op(vm, double.typeid,  "DOUBLE", "doubleNum");
-
-            case OpCode.INC_LOCAL.ordinal:    @math_inc_or_dec(vm,  "intNum",      OP_ADD);
-            case OpCode.DEC_LOCAL.ordinal:    @math_inc_or_dec(vm,  "intNum",      OP_SUB);
-           
-            case OpCode.ADD_INT.ordinal:    @math_bin_op(vm, int.typeid,       "INT",    "intNum",      OP_ADD);
-            case OpCode.ADD_FLOAT.ordinal:  @math_bin_op(vm, float.typeid,     "FLOAT",  "floatNum",    OP_ADD);
-            case OpCode.ADD_DOUBLE.ordinal: @math_bin_op(vm, double.typeid,    "DOUBLE", "doubleNum",   OP_ADD);
-        
-            case OpCode.SUB_INT.ordinal:    @math_bin_op(vm, int.typeid,       "INT",    "intNum",      OP_SUB);
-            case OpCode.SUB_FLOAT.ordinal:  @math_bin_op(vm, float.typeid,     "FLOAT",  "floatNum",    OP_SUB);
-            case OpCode.SUB_DOUBLE.ordinal: @math_bin_op(vm, double.typeid,    "DOUBLE", "doubleNum",   OP_SUB);
-                    
-            case OpCode.MUL_INT.ordinal:    @math_bin_op(vm, int.typeid,       "INT",    "intNum",      OP_MUL);
-            case OpCode.MUL_FLOAT.ordinal:  @math_bin_op(vm, float.typeid,     "FLOAT",  "floatNum",    OP_MUL);
-            case OpCode.MUL_DOUBLE.ordinal: @math_bin_op(vm, double.typeid,    "DOUBLE", "doubleNum",   OP_MUL);
-                    
-            case OpCode.DIV_INT.ordinal:    @math_bin_op(vm, int.typeid,       "INT",    "intNum",      OP_DIV);
-            case OpCode.DIV_FLOAT.ordinal:  @math_bin_op(vm, float.typeid,     "FLOAT",  "floatNum",    OP_DIV);
-            case OpCode.DIV_DOUBLE.ordinal: @math_bin_op(vm, double.typeid,    "DOUBLE", "doubleNum",   OP_DIV);
-
-            case OpCode.CONSTANT.ordinal:   vm.stack.push(@read_const(vm));
-
-            case OpCode.CAST_I_F.ordinal:   @cast_top(vm, int.typeid,    float.typeid,  "FLOAT",  "intNum",    "floatNum");
-            case OpCode.CAST_I_D.ordinal:   @cast_top(vm, int.typeid,    double.typeid, "DOUBLE", "intNum",    "doubleNum");
-            case OpCode.CAST_F_I.ordinal:   @cast_top(vm, float.typeid,  int.typeid,    "INT",    "floatNum",  "intNum");
-            case OpCode.CAST_F_D.ordinal:   @cast_top(vm, float.typeid,  double.typeid, "DOUBLE", "floatNum",  "doubleNum");
-            case OpCode.CAST_D_I.ordinal:   @cast_top(vm, double.typeid, int.typeid,    "INT",    "doubleNum", "intNum");
-            case OpCode.CAST_D_F.ordinal:   @cast_top(vm, double.typeid, float.typeid,  "FLOAT",  "doubleNum", "floatNum");
-
-            case OpCode.CAST_TO_STRING.ordinal: {
-                Value v = vm.stack.pop_val();
-                // convert v -> String representation
-                String s = common::value_to_string(&v);
-                Value result = @new_string(s); // or build directly from value_to_string
-                @push_obj(vm, result);
-            }
-            case OpCode.ECHO.ordinal:      common::print_value(vm.stack.pop_val());
-            
-            case OpCode.JMP_IF_FALSE.ordinal: {
-                ushort offset = @read_ushort(vm);
-                if (!(vm.stack.peek().as.boolean)) vm.frame.ip += offset;
-                break;
-            }
-            case OpCode.JMP.ordinal: {
-                ushort offset = @read_ushort(vm);
-                vm.frame.ip += offset;
-                break;
-            }
-            case OpCode.LOOP.ordinal: {
-                ushort offset = @read_ushort(vm);
-                vm.frame.ip -= offset;
-                break;
-            }
-
-            case OpCode.DEFINE_GLOBAL.ordinal:{
-                Value v = @read_const(vm);
-                String name = common::@as_string(&v).str;
-                vm.globals.set(name,vm.stack.pop_val());
-            }
-            case OpCode.SET_GLOBAL.ordinal:{
-                Value v = @read_const(vm);
-                String name = common::@as_string(&v).str;
-                if(!vm.globals.set(name,vm.stack.peek())){
-                    vm.globals.remove(name);
-                    vm.error("Undefined variable");
-                    return RunResult.RUNTIME_ERR;
-                }
-            }
-            case OpCode.GET_GLOBAL.ordinal:{
-                Value v = @read_const(vm);
-                String name = common::@as_string(&v).str;
-                Value? variable = vm.globals.get(name);
-                if(catch err = variable){
-                    vm.error("Undefined variable");
-                    return RunResult.RUNTIME_ERR;
-                }
-                vm.stack.push(variable);
-            }
-            case OpCode.SET_LOCAL.ordinal:{
-                Byte slot = @read_byte(vm);
-                vm.frame.slots[slot] = vm.stack.peek();
-            }
-            case OpCode.GET_LOCAL.ordinal:{
-                Byte slot = @read_byte(vm);
-                vm.stack.push(vm.frame.slots[slot]);
-            }
-            case OpCode.CONCAT_STRING.ordinal:{
-                Value rightVal = @pop_obj(vm);
-                Value leftVal= @pop_obj(vm);
-                ObjString* right = common::@as_string(&rightVal);
-                ObjString* left =  common::@as_string(&leftVal);
-                Value result = @new_string(left.str.concat(mem, right.str));
-                @push_obj(vm,result);
-            }
-            case OpCode.CALL.ordinal:{
-                Byte argCount = @read_byte(vm);
-                vm.call_value(vm.stack.peek_at(argCount), argCount);
-                vm.frame = &vm.frames[vm.frameCount -1];
+            default: {
+                vm.error("Unknown opcode");
+                return RunResult.RUNTIME_ERR;
             }
         }
         debug::@print_stack(vm);
-
     }
 }
 
-fn void Vm.call_value(Vm* vm, Value callee, int argCount){
-    if(vm.frameCount == FRAMES_MAX){
-        vm.error("Stack overflow");
-        return;
-    }
-    Obj* calleeObj = callee.get_obj();
-    switch (calleeObj.type) {
-        case ObjType.FUNCTION:{
-            ObjFunction* function = common::@as_func(&callee);
-            CallFrame* frame = &vm.frames[vm.frameCount++];
-            frame.function = function;
-            frame.ip= (Byte*)&function.chunk.code[0];
-            frame.slots = &vm.stack.items[vm.stack.size - argCount -1];
-        }
-        case ObjType.NATIVE_FUNCTION:{
-            NativeFn native = common::@as_native(&callee).function;
-            Value result = native(argCount, vm.stack.peek_at(argCount));
-            vm.stack.size -= argCount + 1;
-            vm.stack.push(result);
-        }
-        default: vm.error("invalid call operation");
-    }
-}
 
-fn void Vm.error(Vm* vm, String msg){
-    io::printfn("%s", msg);
-    for (int i = vm.frameCount - 1; i >= 0; i--) {
-        CallFrame* frame = &vm.frames[i];
+// ========== Error handling ==========
+
+fn void Vm.error(Vm* this, String msg) {
+    io::printfn("Runtime error: %s", msg);
+    for (int i = this.frameCount - 1; i >= 0; i--) {
+        CallFrame* frame = &this.frames[i];
         ObjFunction* function = frame.function;
 
-        // frame.ip points to the NEXT instruction to execute,
-        // so we subtract 1 to get the index of the last executed instruction.
         int instruction = (int)(frame.ip - &function.chunk.code[0]) - 1;
         if (instruction < 0) instruction = 0;
 
         io::printf("[line %d] in ", function.chunk.lines[instruction]);
         if (function.name == null) {
-            io::printf("script\n");
+            io::printfn("script");
         } else {
-            io::printf("%s()\n", function.name.str);
+            io::printfn("%s()", function.name.str);
         }
     }
 }
-
 fn void Vm.define_native(Vm* vm, String name, NativeFn function) {
-    vm.stack.push(common::make_string(name, true));
-    vm.stack.push(common::make_native(function));
-    int nameIndex = vm.stack.size -2;
-    int valueIndex = vm.stack.size -1;
-    ObjString* nameObj = common::@as_string(&vm.stack.items[nameIndex]);
-    vm.globals.set(nameObj.str, vm.stack.items[valueIndex]);
-    vm.stack.pop_ref();
-    vm.stack.pop_ref();
+    ObjNative* nativeFn = common::create_obj_native(function);
+    vm.globals.set(name, &nativeFn.obj);
 }

@@ -3,21 +3,21 @@ import std::collections::list;
 import std::io;
 alias Byte = char;
 
-macro ushort @read_ushort(Chunk* c,int currentOffset){
-    currentOffset+=2;
-    return (ushort)((c.currentOffset[-2] << 8) | c.currentOffset[-1]);
-}
 struct Chunk (DebugPrintable)
 {
     List{Byte} code;
-    List{Value} constants;
+    List{Byte} constants;
+    List{SlotInfo} debugConstantsSlots;
     List{int} lines;
+    ushort constantsCount;
+    ushort totalConstantsBytes;
 }
 
 fn void Chunk.init(Chunk* chunk){
     chunk.code.init(mem);
     chunk.lines.init(mem);
     chunk.constants.init(mem);
+    chunk.debugConstantsSlots.init(mem);
 }
 
 
@@ -25,6 +25,7 @@ fn void Chunk.deinit(Chunk* chunk){
     chunk.code.free();
     chunk.constants.free();
     chunk.lines.free();
+    chunk.debugConstantsSlots.free();
 }
 
 
@@ -34,6 +35,16 @@ fn void Chunk.append_to_chunk( Chunk* chunk, Byte toWrite, int line){
 }
 
 fn void Chunk.debug_print(Chunk* chunk) @dynamic{
+    io::printf("Constants: [");
+    foreach (idx, constant : chunk.debugConstantsSlots){
+        if(idx>0){
+            io::print(", ");
+        }
+        io::printf("slot %d: ",idx);
+        chunk.print_constant(constant.offset);
+    }
+    io::printf("]\n");
+
     io::printfn("======DISASSEMBLY======");
     io::printfn("BYTE|LINE |OPCODE              |EXTRA INFO");
     for (int offset = 0;offset<chunk.code.len();){
@@ -42,36 +53,136 @@ fn void Chunk.debug_print(Chunk* chunk) @dynamic{
     io::printfn("======END======");
 }
 
-fn int Chunk.add_const_int(Chunk* chunk, int v){
-    int index = (int)chunk.constants.len();
-    Value val = make_int(v);
-    chunk.constants.push(val);
-    return index;
-}
-fn int Chunk.add_const_float(Chunk* chunk, float v){
-    int index = (int)chunk.constants.len();
-    Value val = make_float(v);
-    chunk.constants.push(val);
-    return index;
-}
-fn int Chunk.add_const_double(Chunk* chunk, double v){
-    int index = (int)chunk.constants.len();
-    Value val = make_double(v);
-    chunk.constants.push(val);
-    return index;
-}
-fn int Chunk.add_const_string(Chunk* chunk, String src){
-    int index = (int)chunk.constants.len();
-    Value val = make_string(src, true);
-    chunk.constants.push(val);
-    return index;
+fn ushort Chunk.add_const_int(Chunk* chunk, int v){
+    ushort index = chunk.constantsCount;
+    ushort offset = chunk.totalConstantsBytes;
+    Byte* bytes = (Byte*)&v;
+    for(int i=0;i<int.sizeof;i++){
+        chunk.constants.push(bytes[i]);
+    }
+    SlotInfo info = {
+        .type = ValueType.INT,
+        .sizeInBytes = int.sizeof,
+        .offset = offset,
+        .index = index,
+    };
+    chunk.debugConstantsSlots.push(info);
+    chunk.totalConstantsBytes += int.sizeof;
+    chunk.constantsCount++;
+
+    return offset;
 }
 
-fn int Chunk.add_const_function(Chunk* chunk, ObjFunction* function){
-    int index = (int)chunk.constants.len();
-    Value val = {.type = ValueType.NO_GC_OBJ, .as.objRef = (Obj*)function };
-    chunk.constants.push(val);
-    return index;}
+fn ushort Chunk.add_const_float(Chunk* chunk, float f){
+    ushort index = chunk.constantsCount;
+    ushort offset = chunk.totalConstantsBytes;
+    Byte* bytes = (Byte*)&f;
+    for(int i=0;i<float.sizeof;i++){
+        chunk.constants.push(bytes[i]);
+    }
+    SlotInfo info = {
+        .type = ValueType.FLOAT,
+        .sizeInBytes = float.sizeof,
+        .offset = offset,
+        .index = index,
+    };
+    chunk.debugConstantsSlots.push(info);
+    chunk.totalConstantsBytes += float.sizeof;
+    chunk.constantsCount++;
+
+    return offset;
+}
+
+fn ushort Chunk.add_const_double(Chunk* chunk, double d){
+    ushort index = chunk.constantsCount;
+    ushort offset = chunk.totalConstantsBytes;
+    Byte* bytes = (Byte*)&d;
+    for(int i=0;i<double.sizeof;i++){
+        chunk.constants.push(bytes[i]);
+    }
+    SlotInfo info = {
+        .type = ValueType.DOUBLE,
+        .sizeInBytes = double.sizeof,
+        .offset = offset,
+        .index = index,
+    };
+    chunk.debugConstantsSlots.push(info);
+    chunk.totalConstantsBytes += double.sizeof;
+    chunk.constantsCount++;
+
+    return offset;
+}
+
+
+fn ushort Chunk.add_const_string(Chunk* chunk, String src){
+    ushort index = chunk.constantsCount;
+    ushort offset = chunk.totalConstantsBytes;
+    ObjString* str = create_obj_string(src, true);
+
+    uptr ptr = (uptr)str;
+    Byte* bytes = (Byte*)&ptr;
+    for(int i = 0; i < uptr.sizeof; i++){
+        chunk.constants.push(bytes[i]);
+    }
+        
+    SlotInfo info = {
+        .type = ValueType.GC_OBJ,
+        .sizeInBytes = uptr.sizeof,  // Pointer
+        .offset = offset,
+        .index = index,
+    };
+    chunk.debugConstantsSlots.push(info);
+    chunk.totalConstantsBytes += uptr.sizeof;
+    chunk.constantsCount++;
+
+    return offset;
+}
+
+fn ushort Chunk.add_const_function(Chunk* chunk, ObjFunction* function){
+    ushort index = chunk.constantsCount;
+    ushort offset = chunk.totalConstantsBytes;
+
+    uptr ptr = (uptr)function;
+    Byte* bytes = (Byte*)&ptr;
+    for(int i = 0; i < uptr.sizeof; i++){
+        chunk.constants.push(bytes[i]);
+    }
+
+    SlotInfo info = {
+        .type = ValueType.NO_GC_OBJ,
+        .sizeInBytes = uptr.sizeof,  // Pointer
+        .offset = offset,
+        .index = index,
+    };
+    chunk.debugConstantsSlots.push(info);
+    chunk.totalConstantsBytes += uptr.sizeof;
+    chunk.constantsCount++;
+
+    return offset;
+}
+
+fn ushort Chunk.add_const_native(Chunk* chunk, NativeFn* function){
+    ushort index = chunk.constantsCount;
+    ushort offset = chunk.totalConstantsBytes;
+
+    uptr ptr = (uptr)function;
+    Byte* bytes = (Byte*)&ptr;
+    for(int i = 0; i < uptr.sizeof; i++){
+        chunk.constants.push(bytes[i]);
+    }
+
+    SlotInfo info = {
+        .type = ValueType.NO_GC_OBJ,
+        .sizeInBytes = uptr.sizeof,  // Pointer
+        .offset = offset,
+        .index = index,
+    };
+    chunk.debugConstantsSlots.push(info);
+    chunk.totalConstantsBytes += uptr.sizeof;
+    chunk.constantsCount++;
+
+    return offset;
+}
 
 
 
@@ -81,6 +192,7 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
     Byte instruction = chunk.code[currentOffset];
 
     switch(instruction){
+        // Math
         case OpCode.ADD_INT.ordinal:        nextcase;
         case OpCode.ADD_FLOAT.ordinal:      nextcase;
         case OpCode.ADD_DOUBLE.ordinal:     nextcase;
@@ -93,19 +205,27 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.DIV_INT.ordinal:        nextcase;
         case OpCode.DIV_FLOAT.ordinal:      nextcase;
         case OpCode.DIV_DOUBLE.ordinal:     nextcase;
+
         case OpCode.NEGATE_INT.ordinal:     nextcase;
         case OpCode.NEGATE_FLOAT.ordinal:   nextcase;
         case OpCode.NEGATE_DOUBLE.ordinal:  nextcase;
         case OpCode.NOT.ordinal:            nextcase;
-        case OpCode.GREATER.ordinal:        nextcase;
-        case OpCode.EQUAL.ordinal:          nextcase;
+         // Comparison
+        case OpCode.INT_GREATER.ordinal:    nextcase;
+        case OpCode.INT_EQUAL.ordinal:    nextcase;
+        case OpCode.INT_LESS.ordinal:    nextcase;
+        case OpCode.FLOAT_GREATER.ordinal:    nextcase;
+        case OpCode.FLOAT_EQUAL.ordinal:    nextcase;
+        case OpCode.FLOAT_LESS.ordinal:    nextcase;
+        case OpCode.DOUBLE_GREATER.ordinal:    nextcase;
+        case OpCode.DOUBLE_EQUAL.ordinal:    nextcase;
+        case OpCode.DOUBLE_LESS.ordinal:    nextcase;
+
+
         case OpCode.CONST_FALSE.ordinal:    nextcase;
         case OpCode.CONST_TRUE.ordinal:     nextcase;
         case OpCode.CONST_NULL.ordinal:     nextcase;
-        case OpCode.LESS.ordinal:           nextcase;
-        case OpCode.INT_LESS.ordinal:       nextcase;
         case OpCode.CONCAT_STRING.ordinal:  nextcase;
-        case OpCode.POP.ordinal:            nextcase;
         case OpCode.ECHO.ordinal:           nextcase;
         case OpCode.CAST_F_I.ordinal:       nextcase;
         case OpCode.CAST_D_I.ordinal:       nextcase;
@@ -113,10 +233,17 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.CAST_D_F.ordinal:       nextcase;
         case OpCode.CAST_I_D.ordinal:       nextcase;
         case OpCode.CAST_F_D.ordinal:       nextcase;
-        case OpCode.CAST_TO_STRING.ordinal: nextcase;
         case OpCode.RETURN.ordinal:     
             return single_byte_instruction(OpCode.names[instruction], currentOffset);
-        case OpCode.CONSTANT.ordinal:
+        case OpCode.CAST_TO_STRING.ordinal:
+            return single_and_type_instruction(OpCode.names[instruction], chunk, currentOffset);
+        case OpCode.POP.ordinal:            
+            return pop_instruction(OpCode.names[instruction], chunk, currentOffset);
+        case OpCode.CONST_INT.ordinal:      nextcase;
+        case OpCode.CONST_FLOAT.ordinal:    nextcase;
+        case OpCode.CONST_DOUBLE.ordinal:   nextcase;
+        case OpCode.CONST_FUNC.ordinal:     nextcase;
+        case OpCode.CONST_STRING.ordinal:   
             return constant_instruction(OpCode.names[instruction], chunk, currentOffset);
         case OpCode.INC_LOCAL.ordinal:      nextcase;
         case OpCode.DEC_LOCAL.ordinal:      
@@ -125,10 +252,11 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.GET_GLOBAL.ordinal:     nextcase;
         case OpCode.SET_GLOBAL.ordinal:
             return constant_instruction(OpCode.names[instruction], chunk, currentOffset);
-        case OpCode.LOOP.ordinal:           nextcase;
         case OpCode.JMP.ordinal:            nextcase;
         case OpCode.JMP_IF_FALSE.ordinal:
             return jump_instruction(OpCode.names[instruction], chunk, 1, currentOffset);
+        case OpCode.LOOP.ordinal:
+            return jump_instruction(OpCode.names[instruction], chunk, -1, currentOffset);
         case OpCode.SET_LOCAL.ordinal:      nextcase;
         case OpCode.GET_LOCAL.ordinal:      
             return local_instruction(OpCode.names[instruction], chunk, currentOffset);
@@ -146,12 +274,18 @@ fn int single_byte_instruction(String name, int currentOffset){
     return currentOffset + 1;
 }
 
+fn int pop_instruction(String name, Chunk* chunk, int currentOffset){
+    Byte typeSize = chunk.code[(usz)currentOffset+1];
+    io::printf("%s, %s\n", name, typeSize);
+    return currentOffset + 2;
+}
 fn int constant_instruction(String name, Chunk* chunk, int currentOffset){
-    Byte constantIndex = chunk.code[(usz)currentOffset+1];
-    io::printf("%s, idx:%d      | val: ",name, constantIndex);
-    chunk.print_constant(constantIndex);
+    ushort offset = ((chunk.code[(usz)currentOffset+1] << 8) | chunk.code[(usz)currentOffset+2]);
+    io::printf("%s, offset:%d      | val: ", name, offset);
+    chunk.print_constant(offset);
     io::printf("\n");
-    return currentOffset+2;
+
+    return currentOffset + 3;
 }
 
 fn int increment_instruction(String name, Chunk* chunk, int currentOffset){
@@ -161,20 +295,23 @@ fn int increment_instruction(String name, Chunk* chunk, int currentOffset){
     return currentOffset+2;
 }
 
-
 fn int local_instruction(String name, Chunk* chunk, int currentOffset){
-    Byte constantIndex = chunk.code[(usz)currentOffset+1];
-    io::printf("%s, idx:%d",name, constantIndex);
-    io::printf("\n");
-    return currentOffset+2;
+    ushort constantIndex = ((chunk.code[(usz)currentOffset+1]<< 8) | chunk.code[(usz)currentOffset+2]);
+    io::printf("%s, idx:%d\n",name, constantIndex);
+    return currentOffset+3;
 }
 
 fn int call_instruction(String name, Chunk* chunk, int currentOffset){
-    Byte argCount = chunk.code[(usz)currentOffset + 1];
+    Byte argCount = chunk.code[(usz)currentOffset+1];
     io::printf("%s, argc:%d\n", name, argCount);
     return currentOffset + 2; // opcode + arg count
 }
 
+fn int single_and_type_instruction(String name, Chunk* chunk, int currentOffset){
+    ValueType type = (ValueType)(chunk.code[(usz)currentOffset+1]);
+    io::printf("%s, from:%s\n", name, ValueType.names[type.ordinal]);
+    return currentOffset + 2; // opcode + type
+}
 
 fn int jump_instruction(String name, Chunk* chunk, int sign, int currentOffset){
     ushort jump = (ushort)(chunk.code[(usz)currentOffset + 1] << 8);
@@ -184,7 +321,32 @@ fn int jump_instruction(String name, Chunk* chunk, int sign, int currentOffset){
 }
 
 
-fn void Chunk.print_constant(Chunk* this, int index){
-    Value* v = &this.constants[index];
-    v.debug_print();
+fn void Chunk.print_constant(Chunk* this, int offset){
+   int slotIdx = -1;
+    foreach (idx, info : this.debugConstantsSlots) {
+        if ((int)info.offset == offset) {
+            slotIdx = (int)idx;
+            break;
+        }
+    }
+    SlotInfo info = this.debugConstantsSlots[slotIdx];
+    Byte* bytes = &this.constants[info.offset];
+    
+    switch(info.type){
+        case ValueType.INT:         io::printf("%d", @as_int(bytes));  
+        case ValueType.FLOAT:       io::printf("%f", @as_float(bytes));  
+        case ValueType.DOUBLE:      io::printf("%f", @as_double(bytes));  
+        case ValueType.BOOL:        io::printf("%s", @as_bool(bytes));  
+        case ValueType.STRUCT:      io::printf("struct, change to print");
+        case ValueType.NULL:        io::printf("NULL");
+        case ValueType.GC_OBJ:      nextcase;
+        case ValueType.NO_GC_OBJ:   {
+            switch (@as_obj(bytes).type)
+            {
+                case ObjType.STRING: io::printf("\"%s\"", @as_string(bytes).str);
+                case ObjType.FUNCTION: io::printf("fn %s", @as_func(bytes).name.str);
+                case ObjType.NATIVE_FUNCTION: io::printf("<native_fn>");
+            }
+        }
+    }
 }

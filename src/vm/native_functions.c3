@@ -2,7 +2,7 @@ module vm;
 import common;
 import std::time;
 
-fn Value clock_native(int argCount, Value ... args)
+fn double clock_native()
 {
-    return common::make_double((double)std::time::os::native_clock());
+    return (double)std::time::os::native_clock();
 }

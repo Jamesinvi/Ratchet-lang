@@ -6,22 +6,6 @@ import std::collections::list;
 import libc;
 
 
-// ----------- Type helpers ----------------
-
-fn ushort get_type_size(ValueType type)
-{
-    switch (type) {
-        case ValueType.INT:         return int.sizeof;
-        case ValueType.FLOAT:       return float.sizeof;
-        case ValueType.DOUBLE:      return double.sizeof;
-        case ValueType.BOOL:        return bool.sizeof;
-        case ValueType.GC_OBJ:      return uptr.sizeof;
-        case ValueType.NO_GC_OBJ:   return uptr.sizeof;
-        case ValueType.STRUCT:      return uptr.sizeof; // WILL CHANGE TO LOOKUP
-        default:                    return 0;
-    }
-}
-
 // ---------- Basic token helpers ----------
 
 fn void Compiler.advance(Compiler* this)
@@ -142,25 +126,15 @@ fn bool strings_equal(String a, String b)
     return libc::memcmp(a, b, a.len) == 0;
 }
 
-fn int resolve_local(ScopeTracker* currentScope, Token* name)
+fn int Compiler.resolve_local(Compiler* this, Token* name)
 {
-    for (int i = currentScope.localCount - 1; i >= 0; i--) {
-        Local* local = &currentScope.locals[i];
+    for (int i = this.currentScope.localCount - 1; i >= 0; i--) {
+        Local* local = &this.currentScope.locals[i];
         if (identifiers_equal(name, &local.name)) {
             if (local.depth == -1) {
-                io::printfn("Can't read local var in its initializer");
+                this.error("Can't read local var in its initializer");
+                return -1;
             }
-            return i;
-        }
-    }
-    return -1;
-}
-
-fn int resolve_local_index(ScopeTracker* currentScope, Token* name)
-{
-    for (int i = currentScope.localCount - 1; i >= 0; i--) {
-        Local* local = &currentScope.locals[i];
-        if (identifiers_equal(name, &local.name)) {
             return i;
         }
     }
@@ -174,8 +148,7 @@ fn void Compiler.compile_program_call(Compiler* this)
     Token name = {.tokenType = TokenType.IDENTIFIER, .value = "program", .line = this.previous.line};
 
     this.named_variable(name, false);
-    this.compile_bytes((Byte)OpCode.CALL, (Byte)0, name.line);
-    this.compile_byte((Byte)OpCode.POP, name.line);
+    this.compile_op_u8(OpCode.CALL, 0, name.line);
 }
 
 // ---------- Bytecode helpers ----------
@@ -185,11 +158,31 @@ fn void Compiler.compile_byte(Compiler* this, Byte byte, int line)
     this.get_current_chunk().append_to_chunk(byte, line);
 }
 
-fn void Compiler.compile_bytes(Compiler* this, Byte byte1, Byte byte2, int line)
+fn void Compiler.compile_ops(Compiler* this, OpCode op1, OpCode op2, int line)
 {
-    this.compile_byte(byte1, line);
-    this.compile_byte(byte2, line);
+    this.compile_byte((Byte)op1, line);
+    this.compile_byte((Byte)op2, line);
 }
+
+fn void Compiler.compile_op(Compiler* this, OpCode op1, int line)
+{
+    this.compile_byte((Byte)op1, line);
+}
+
+
+fn void Compiler.compile_op_u16(Compiler* this, OpCode opCode, ushort operandIndex, int line)
+{
+    this.compile_byte((Byte)opCode, line);
+    this.compile_byte((Byte)operandIndex >> 8, line);   // High byte
+    this.compile_byte((Byte)operandIndex & 0xFF, line); // Low byte
+}
+
+fn void Compiler.compile_op_u8(Compiler* this, OpCode opCode, Byte byte, int line)
+{
+    this.compile_byte((Byte)opCode, line);
+    this.compile_byte(byte, line);
+}
+
 
 fn int Compiler.compile_jump(Compiler* this, OpCode opCode, int line)
 {
@@ -201,15 +194,12 @@ fn int Compiler.compile_jump(Compiler* this, OpCode opCode, int line)
 
 fn void Compiler.compile_loop(Compiler* this, int loopStart)
 {
-    this.compile_byte((Byte)OpCode.LOOP, this.previous.line);
 
-    int offset = (int)this.get_current_chunk().code.size - loopStart + 2;
+    int offset = (int)this.get_current_chunk().code.size +3 - loopStart;
     if (offset > ushort.max) {
         this.error("Loop body too large.");
     }
-
-    this.compile_byte((Byte)((offset >> 8) & 0xff), this.previous.line);
-    this.compile_byte((Byte)((offset) & 0xff), this.previous.line);
+    this.compile_op_u16(OpCode.LOOP, (ushort)offset, this.previous.line);
 }
 
 fn void Compiler.patch_jump(Compiler* this, int offset)
@@ -285,6 +275,7 @@ fn void Compiler.compile_cast(Compiler* this, ValueType targetType, int line)
                 case ValueType.NO_GC_OBJ:
                     // Generic "value → string" op
                     this.compile_byte((Byte)OpCode.CAST_TO_STRING, line);
+                    this.compile_byte((Byte)source, line);
                     this.typeStack.push(ValueType.GC_OBJ);
                     return;
 
@@ -307,14 +298,30 @@ fn void Compiler.compile_cast(Compiler* this, ValueType targetType, int line)
 }
 
 
-
-fn Byte Compiler.ensure_constant(Compiler* this, int constantIndex)
+fn void Compiler.compile_pop_of_type(Compiler* this, ValueType t, int line)
 {
-    if (constantIndex > 255) {
+    Byte size = 0;
+    switch (t) {
+        case ValueType.INT:         size = (Byte)int.sizeof;
+        case ValueType.FLOAT:       size = (Byte)float.sizeof;
+        case ValueType.DOUBLE:      size = (Byte)double.sizeof;
+        case ValueType.BOOL:        size = (Byte)bool.sizeof;
+        case ValueType.GC_OBJ:      nextcase;
+        case ValueType.NO_GC_OBJ:   size = (Byte)uptr.sizeof;
+        case ValueType.NULL:        size = 1;
+        default:    this.error("compile_pop_of_type: unsupported type");
+    }
+
+    this.compile_op_u8(OpCode.POP, size, line);
+}
+
+fn ushort Compiler.ensure_constant(Compiler* this, int constantIndex)
+{
+    if (constantIndex > ushort.max) {
         this.error("Too many constants in one chunk");
         return 0;
     }
-    return (Byte)constantIndex;
+    return (ushort)constantIndex;
 }
 
 // ---------- Predeclaration for functions / natives ----------
