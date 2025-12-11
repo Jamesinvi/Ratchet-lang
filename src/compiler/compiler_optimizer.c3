@@ -1,59 +1,58 @@
 module compiler;
 import common;
+import libc;
 
 
 fn void Compiler.maybe_optimize_local_inc_dec(Compiler* this, int slot, int line)
 {
-    // Chunk* chunk = this.get_current_chunk();
+    Chunk* chunk = this.get_current_chunk();
 
-    // // Pattern:
-    // //   GET_LOCAL <slot>
-    // //   CONSTANT  <cIndex>
-    // //   ADD_INT / SUB_INT
-    // //   SET_LOCAL <slot>
-    // //
-    // // bytes: [0] GET_LOCAL
-    // //        [1] slot
-    // //        [2] CONSTANT
-    // //        [3] constIndex
-    // //        [4] ADD_INT / SUB_INT
-    // //        [5] SET_LOCAL
-    // //        [6] slot
+    const int SEQ_LEN = 10; // 3 + 3 + 1 + 3
 
-    // if (chunk.code.size < 7) return;
+    if (chunk.code.size < SEQ_LEN) return;
 
-    // usz base = (usz)chunk.code.size - 7;
-    // Byte op0 = chunk.code[base + 0];
-    // Byte s0  = chunk.code[base + 1];
-    // Byte op1 = chunk.code[base + 2];
-    // Byte cIx = chunk.code[base + 3];
-    // Byte op2 = chunk.code[base + 4];
-    // Byte op3 = chunk.code[base + 5];
-    // Byte s1  = chunk.code[base + 6];
+    usz base = (usz)chunk.code.size - SEQ_LEN;
 
-    // // Check shape
-    // if (op0 != (Byte)OpCode.GET_LOCAL)   return;
-    // if (s0  != (Byte)slot)               return;
-    // if (op1 != (Byte)OpCode.CONSTANT)    return;
-    // if (op3 != (Byte)OpCode.SET_LOCAL)   return;
-    // if (s1  != (Byte)slot)               return;
+    // Decode pattern:
+    // [0] GET_LOCAL, [1..2] slot
+    // [3] CONST_INT, [4..5] constOffset
+    // [6] ADD_INT/SUB_INT
+    // [7] SET_LOCAL, [8..9] slot
 
-    // // Const must be integer 1
-    // Value constVal = chunk.constants[cIx];
-    // if (constVal.type != ValueType.INT)  return;
-    // if (constVal.as.intNum != 1)         return;
+    Byte opGet   = chunk.code.[base + 0];
+    Byte opConst = chunk.code.[base + 3];
+    Byte opMath  = chunk.code.[base + 6];
+    Byte opSet   = chunk.code.[base + 7];
 
-    // // Decide INC or DEC
-    // Byte incOp;
-    // if (op2 == (Byte)OpCode.ADD_INT) {
-    //     incOp = (Byte)OpCode.INC_LOCAL;
-    // } else if (op2 == (Byte)OpCode.SUB_INT) {
-    //     incOp = (Byte)OpCode.DEC_LOCAL;
-    // } else {
-    //     return;
-    // }
+    if (opGet   != (Byte)OpCode.GET_LOCAL)  return;
+    if (opConst != (Byte)OpCode.CONST_INT)  return;
+    if (opSet   != (Byte)OpCode.SET_LOCAL)  return;
+    if (opMath  != (Byte)OpCode.ADD_INT)    return;
 
-    // // Rewrite: nuke 7-byte sequence, replace with INC_LOCAL/DEC_LOCAL + slot
-    // chunk.code.size = base; // truncate
-    // this.compile_bytes(incOp, (Byte)slot, line);
+    ushort slotGet = (ushort) ((chunk.code.[base + 1] << 8) | chunk.code.[base + 2]);
+    ushort slotSet = (ushort) ((chunk.code.[base + 8] << 8) | chunk.code.[base + 9]);
+
+    if (slotGet != slot || slotSet != slot) return;
+
+    ushort constOffset = (ushort) ((chunk.code.[base + 4] << 8) | chunk.code[base + 5]);
+
+    // Now read the int value at chunk.constants[constOffset]
+    // assuming add_const_int stores a 4-byte int there.
+    int value;
+    libc::memcpy(&value, &chunk.constants[constOffset], int.sizeof);
+
+    if (value != 1) return;
+
+    // OK, we have "local = local +/- 1;"
+    // Truncate the original sequence
+    chunk.code.size = base;
+    OpCode newOp;
+
+    if(opMath == (Byte)OpCode.ADD_INT){
+        newOp = OpCode.INC_LOCAL;
+    }else{
+        newOp = OpCode.DEC_LOCAL;
+    }
+        
+    this.compile_op_u16(newOp, (ushort)slot, line);
 }

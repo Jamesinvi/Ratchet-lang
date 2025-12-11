@@ -403,6 +403,21 @@ fn RunResult run(Vm* vm) {
             }
             // ---------- Arithmetic ----------
 
+
+            case OpCode.INC_LOCAL.ordinal: {
+                ushort slotIndex = @read_u16(vm);
+                SlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort offset = vm.frame.base + info.offset;
+
+                // Read current int
+                int v = @read_local(vm, int, offset);
+                v += 1;
+
+                // Write it back in-place
+                Byte* dst = &vm.stack[offset];
+                @unaligned_store(*(int*)dst, v, int.alignof);
+            }
+
             case OpCode.ADD_INT.ordinal:            @math_int(vm, OP_ADD);
             case OpCode.SUB_INT.ordinal:            @math_int(vm, OP_SUB);  
             case OpCode.MUL_INT.ordinal:            @math_int(vm, OP_MUL); 
