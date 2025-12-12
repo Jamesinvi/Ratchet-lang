@@ -28,7 +28,7 @@ fn void print_function_and_children(ObjFunction* function) {
     log::log("Locals: [");
     foreach (idx, slot : function.slots) {
         if (idx > 0) log::log(", ");
-        log::log("slot %d: %s (%d bytes)", idx, ValueType.names[slot.type.ordinal], slot.sizeInBytes);
+        log::log("slot %d: %s (%d bytes)", idx, slot.type, slot.sizeInBytes);
     }
     log::log("]\n");
     function.chunk.debug_print();

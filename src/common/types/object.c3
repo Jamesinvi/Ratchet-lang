@@ -33,9 +33,18 @@ struct ObjFunction
     ObjString* name;
     ushort arity;
     Chunk chunk;
+    ushort argsSizeInBytes;
+    ValueType returnType;
 
     List{SlotInfo} slots;
     ushort totalLocalsBytes;
+}
+
+fn void ObjFunction.deinit(ObjFunction* this){
+    this.name.str.free(mem);
+    free(this.name);
+    this.chunk.deinit();
+    this.slots.free();
 }
 
 struct SlotInfo
@@ -52,9 +61,10 @@ struct ObjNative
     NativeFn function;
 }
 
-fn ObjFunction* create_obj_function(String name, bool isConstant){
+fn ObjFunction* create_obj_function(String name, bool isConstant, ValueType returnType){
     ObjFunction* object = mem::new(ObjFunction);
     ObjString* stringObj = create_obj_string(name, isConstant);
+    object.returnType = returnType;
     object.obj.allocIndex = ulong.max;
     object.obj.type = ObjType.FUNCTION;
     object.name = stringObj;
@@ -73,12 +83,12 @@ fn ObjString* create_obj_string(String source, bool isConstant){
     return object;
 }
 
-fn ObjNative* create_obj_native(NativeFn function){
+fn ObjNative* create_obj_native(NativeFn* function){
     ObjNative* object = mem::new(ObjNative);
 
     object.obj.type = ObjType.NATIVE_FUNCTION;
     object.obj.isConstant=true;
-    object.function = function;
+    object.function = *function;
     return object;
 }
 
@@ -97,6 +107,7 @@ fn ushort ObjFunction.add_slot(ObjFunction* this, ValueType type){
 
     return index;
 }
+
 
 fn void Obj.debug_print(Obj* this) @dynamic {
     io::printf("%s, ", ObjType.names[this.type.ordinal]);

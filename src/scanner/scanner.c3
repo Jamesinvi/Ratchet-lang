@@ -33,10 +33,16 @@ fn void Scanner.print_tokens(Scanner* this){
         t.debug_print();
     }
 }
-fn void Scanner.deinit(Scanner* this){
+fn void Scanner.deinit(Scanner* this)
+{
+    foreach (t : this.tokens) {
+        t.value.free(&this.allocator);
+    }
     this.tokens.free();
+    this.input.free(&this.allocator);
     this.allocator.free();
 }
+
 fn void Scanner.parse_tokens(Scanner* this) {
     while (!this.is_at_end()) {
         this.parse_token();
@@ -139,6 +145,12 @@ fn char Scanner.peek(Scanner* this) {
     return this.input[this.current];
 }
 
+fn char Scanner.peek_at(Scanner* this, int distance) {
+    if (this.is_at_end()) return '\0';
+    return this.input[this.current + distance];
+}
+
+
 fn void Scanner.add_token(Scanner* this, TokenType tokenType) {
     String lexeme = String.copy(this.input[this.start .. this.current-1], &this.allocator);
     Token token = { tokenType, this.line, lexeme };
@@ -177,11 +189,10 @@ fn void Scanner.number(Scanner* this) {
     }
 
     // If a letter immediately follows a number literal: 123abc → error
-    if (common::is_alpha_ascii(this.peek())) {
+    if (common::is_alpha_ascii(this.peek()) && this.peek()!='f') {
         error_lin(this.line, this.column, "Number literal cannot be immediately followed by letters");
         return;
     }
-
 
     if (this.is_at_end()) {
         error_lin(this.line, this.column, "Unterminated number");

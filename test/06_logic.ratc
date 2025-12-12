@@ -1,0 +1,5 @@
+fn null program() {
+    echo(true and false);
+    echo(true or false);
+    return;
+}

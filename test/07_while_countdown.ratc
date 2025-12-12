@@ -1,0 +1,8 @@
+fn null program() {
+    int i = 3;
+    while (i > 0) {
+        echo(i);
+        i = i - 1;
+    }
+    return;
+}

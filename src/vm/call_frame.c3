@@ -5,5 +5,6 @@ struct CallFrame
 {
     ObjFunction* function;
     Byte* ip;
-    ushort base;
+    ushort base;            // points to arg0
+    Obj* callee;
 }

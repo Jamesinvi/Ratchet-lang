@@ -1,0 +1,8 @@
+fn null program() {
+    echo(test(2.3));
+    return;
+}
+
+fn double test(double t) {
+    return t;
+}

@@ -13,7 +13,8 @@ struct Chunk (DebugPrintable)
     ushort totalConstantsBytes;
 }
 
-fn void Chunk.init(Chunk* chunk){
+fn void Chunk.init(Chunk* chunk){  
+    ensure_globals_init();
     chunk.code.init(mem);
     chunk.lines.init(mem);
     chunk.constants.init(mem);
@@ -24,8 +25,8 @@ fn void Chunk.init(Chunk* chunk){
 fn void Chunk.deinit(Chunk* chunk){
     chunk.code.free();
     chunk.constants.free();
-    chunk.lines.free();
     chunk.debugConstantsSlots.free();
+    chunk.lines.free();
 }
 
 
@@ -134,6 +135,7 @@ fn ushort Chunk.add_const_string(Chunk* chunk, String src){
     chunk.debugConstantsSlots.push(info);
     chunk.totalConstantsBytes += uptr.sizeof;
     chunk.constantsCount++;
+    allocatedConstants.push((Obj*)str);
 
     return offset;
 }
@@ -157,6 +159,7 @@ fn ushort Chunk.add_const_function(Chunk* chunk, ObjFunction* function){
     chunk.debugConstantsSlots.push(info);
     chunk.totalConstantsBytes += uptr.sizeof;
     chunk.constantsCount++;
+    allocatedConstants.push((Obj*)function);
 
     return offset;
 }
@@ -165,7 +168,9 @@ fn ushort Chunk.add_const_native(Chunk* chunk, NativeFn* function){
     ushort index = chunk.constantsCount;
     ushort offset = chunk.totalConstantsBytes;
 
-    uptr ptr = (uptr)function;
+    ObjNative* nativeObj = create_obj_native(function);
+
+    uptr ptr = (uptr)nativeObj;
     Byte* bytes = (Byte*)&ptr;
     for(int i = 0; i < uptr.sizeof; i++){
         chunk.constants.push(bytes[i]);
@@ -180,6 +185,7 @@ fn ushort Chunk.add_const_native(Chunk* chunk, NativeFn* function){
     chunk.debugConstantsSlots.push(info);
     chunk.totalConstantsBytes += uptr.sizeof;
     chunk.constantsCount++;
+    allocatedConstants.push((Obj*)nativeObj);
 
     return offset;
 }
@@ -301,8 +307,9 @@ fn int local_instruction(String name, Chunk* chunk, int currentOffset){
 
 fn int call_instruction(String name, Chunk* chunk, int currentOffset){
     Byte argCount = chunk.code[(usz)currentOffset+1];
-    log::log("%s, argc:%d\n", name, argCount);
-    return currentOffset + 2; // opcode + arg count
+    ushort argsLength = ((chunk.code[(usz)currentOffset+2]<< 8) | chunk.code[(usz)currentOffset+3]);
+    log::log("%s, argc:%d, arglen:%s\n", name, argCount, argsLength);
+    return currentOffset + 4; // opcode + arg count + args length
 }
 
 fn int single_and_type_instruction(String name, Chunk* chunk, int currentOffset){

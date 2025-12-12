@@ -62,8 +62,13 @@ fn void Compiler.emit_op(Compiler* this, OpCode op1, int line)
 fn void Compiler.emit_op_u16(Compiler* this, OpCode opCode, ushort operandIndex, int line)
 {
     this.emit_byte((Byte)opCode, line);
-    this.emit_byte((Byte)operandIndex >> 8, line);   // High byte
-    this.emit_byte((Byte)operandIndex & 0xFF, line); // Low byte
+    this.emit_u16(operandIndex, line);
+}
+
+fn void Compiler.emit_u16(Compiler* this, ushort val, int line)
+{
+    this.emit_byte((Byte)val >> 8, line);   // High byte
+    this.emit_byte((Byte)val & 0xFF, line); // Low byte
 }
 
 fn void Compiler.emit_op_u8(Compiler* this, OpCode opCode, Byte byte, int line)

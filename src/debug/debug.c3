@@ -3,8 +3,8 @@ import vm;
 import scanner;
 import common;
 
-const SHOW_TOKENS = true;
-const SHOW_DISASSEMBLY = true;
+const SHOW_TOKENS = false;
+const SHOW_DISASSEMBLY = false;
 const DISASSMBLE_DURING_EXECUTION = false;
 
 

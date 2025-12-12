@@ -16,7 +16,7 @@ fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, ValueType returnType,
     this.depth = 0;
     this.localCount = 0;
     this.returnType = returnType;
-    this.function   = common::create_obj_function(name, false);
+    this.function   = common::create_obj_function(name, false, returnType);
     this.nextSlot  = 0;
 
     // Dummy local 0 for this function

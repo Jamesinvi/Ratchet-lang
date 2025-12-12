@@ -164,6 +164,7 @@ fn void Compiler.emit_program_call(Compiler* this)
 
     this.named_variable(name, false);
     this.emit_op_u8(OpCode.CALL, 0, name.line);
+    this.emit_u16(0, name.line);
 }
 
 // ---------- Bytecode helpers ----------

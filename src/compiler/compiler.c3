@@ -6,11 +6,8 @@ import std::collections::map;
 alias Byte = common::Byte;
 alias TypeStack = common::stack::Stack{common::ValueType};
 
-enum CompileResult
-{
-    OK,
-    ERROR,
-}
+faultdef COMPILE_ERROR;
+
 
 enum Precedence 
 {
@@ -68,7 +65,9 @@ fn void Compiler.init(Compiler* this, List{Token} tokens)
     this.rootScope.depth = 0;
     this.rootScope.localCount = 0;
     this.rootScope.enclosing  = null;
-    this.rootScope.function = common::create_obj_function("script", true);
+    this.rootScope.function = common::create_obj_function("script", true, ValueType.NULL);
+    common::ensure_globals_init();
+    common::allocatedConstants.push((Obj*)this.rootScope.function);
 
     // Dummy local 0
     Local* local = &this.rootScope.locals[this.rootScope.localCount++];
@@ -97,7 +96,6 @@ fn Chunk* Compiler.get_current_chunk(Compiler* this)
     return &this.currentScope.function.chunk;
 }
 
-faultdef COMPILE_ERROR;
 
 // ---------- Top-level compile pipeline ----------
 
@@ -207,6 +205,14 @@ fn void Compiler.return_statement(Compiler* this)
     }
 
     this.expression();
+
+    ValueType exprType = this.typeStack.pop();
+    ValueType expected = this.currentScope.function.returnType;
+    if (exprType != expected) {
+         this.error("Return type mismatch");
+    }
+
+
     this.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
     this.emit_op(OpCode.RETURN, line);
 }
@@ -324,8 +330,12 @@ fn void Compiler.struct_definition(Compiler* this){
             fieldMetadata.typeIndex = get_type_index(fieldType, typeName);
 
             fieldInfo.metadata = fieldMetadata;
-            fieldInfo.name     = String.copy(this.previous.value, mem); // field name
-            fieldInfo.type     = fieldType;
+            fieldInfo.name = String.copy(this.previous.value, mem); // field name
+            fieldInfo.type = fieldType;
+
+            if(this.match(TokenType.EQUAL)){
+                this.error("Default field initializers are not yet supported");
+            }
 
             this.consume(TokenType.SEMICOLON, "Expected ';' after field declaration.");
 
@@ -546,6 +556,7 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
 
     // function shape => fn <name> (<arg1>, <arg2>) {   }
     this.consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
+    ushort argsSize = 0;
     // the function could have no parameters, so check
     if (!this.check(TokenType.RIGHT_PAREN)) {
         do {
@@ -558,9 +569,11 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
             }
             this.currentDeclType = paramRetType;
             ushort constant = this.parse_variable("Expect parameter name.");
-            this.define_variable(constant);
+            this.mark_initialized();
+            argsSize += common::get_type_size(paramRetType);
         } while (this.match(TokenType.COMMA));
     }
+    this.currentScope.function.argsSizeInBytes = argsSize;
     // No shorthands, both ')' and '{' must be present
     this.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters");
     this.consume(TokenType.LEFT_BRACE, "Expect '{' before body.");
@@ -589,13 +602,11 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
 
 fn void Compiler.call(Compiler* this, bool canAssign)
 {
-    Byte argCount = this.call_args_count();
-    this.emit_op_u8(OpCode.CALL, argCount, this.previous.line);
+    FuncCallInfo callInfo = this.call_args_info();
+    this.emit_op_u8(OpCode.CALL, callInfo.argCount, this.previous.line);
+    this.emit_u16(callInfo.argsSizeInBytes, this.previous.line);
     
-    // Remove all arguments from the type stack
-    for (int i = 0; i < argCount; i++) {
-        this.typeStack.pop();
-    }
+    this.typeStack.pop();
     // If type wasn't set, then error
     // If it was, push it on the stack, and reset the global state
     // "hasPengingCalleeType"
@@ -607,23 +618,32 @@ fn void Compiler.call(Compiler* this, bool canAssign)
     }
 }
 
-fn Byte Compiler.call_args_count(Compiler* this)
+
+struct FuncCallInfo
 {
-    Byte count = 0;
+    Byte argCount;
+    ushort argsSizeInBytes;
+}
+
+fn FuncCallInfo Compiler.call_args_info(Compiler* this)
+{
+    FuncCallInfo info = {};
     // We're CALLING a function, so we allow expressions as arguments
     // Consume as many as we can find.
     if (!this.check(TokenType.RIGHT_PAREN)) {
         do {
             this.expression();
-            if (count >= Byte.max) {
+            if (info.argCount >= Byte.max) {
                 this.error("Can't have more than 255 arguments");
             }
-            count++;
+            // Remove all arguments from the type stack
+            info.argsSizeInBytes += common::get_type_size(this.typeStack.pop());
+            info.argCount++;
         } while (this.match(TokenType.COMMA));
     }
 
     this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-    return count;
+    return info;
 }
 
 // ---------- Expressions & precedence ----------
@@ -770,11 +790,6 @@ fn void Compiler.literal_null(Compiler* this)
     this.emit_op(OpCode.CONST_NULL, this.previous.line);
     this.typeStack.push(ValueType.NULL);
 }
-
-// ---------- Type-aware arithmetic/logic codegen ----------
-
-// ---------- Type-aware comparison codegen ----------
-
 
 // ---------- Precedence engine ----------
 

@@ -20,6 +20,8 @@ const OP_MUL     = 5;
 const OP_DIV     = 6;
 const OP_NEGATE  = 7;
 
+faultdef RUNTIME_ERROR;
+
 enum RunResult
 {
     OK,
@@ -38,7 +40,6 @@ struct Vm
     HeapTracker trackedHeap;
     HeapTracker untrackedHeap;
     HashMap{String, Obj*} globals;
-    Stack{ValueType} typeStack;
 }
 
 fn void Vm.init(Vm* this, ObjFunction* entryPoint)
@@ -62,7 +63,21 @@ fn void Vm.deinit(Vm* this)
 {
     this.trackedHeap.free();
     this.untrackedHeap.free();
+    foreach(obj : common::allocatedConstants){
+        if(obj.type == ObjType.FUNCTION){
+            ((ObjFunction*)obj).deinit();
+            free(((ObjFunction*)obj));
+        }else if (obj.type == ObjType.STRING){
+            ((ObjString*)obj).str.free(mem);
+            free(((ObjString*)obj));
+        }else if (obj.type == ObjType.NATIVE_FUNCTION){
+            free(((ObjNative*)obj));
+        }
+    }
+    common::allocatedConstants.free();
     this.globals.free();
+
+
 }
 
 macro Byte @read_u8(Vm* vm)
@@ -355,7 +370,7 @@ fn RunResult run(Vm* vm)
                     case ValueType.NO_GC_OBJ:   nextcase;
                     case ValueType.GC_OBJ:
                     {
-                        Obj* obj     = @pop_val(vm, Obj*);
+                        Obj* obj = @pop_val(vm, Obj*);
                         ObjType kind = obj.type;
 
                         switch (kind) {
@@ -378,11 +393,11 @@ fn RunResult run(Vm* vm)
             case OpCode.CALL.ordinal:
             {
                 Byte argCount = @read_u8(vm);
+                ushort argBytesSize = @read_u16(vm);
 
-                ushort funcOffset =
-                    (ushort)(vm.stackHead - (argCount * int.sizeof) - uptr.sizeof);
+                ushort funcOffset = (ushort)(vm.stackHead - (ulong)argBytesSize - uptr.sizeof);
 
-                Obj* callee = @unaligned_load(*(Obj**)&vm.stack[funcOffset], uptr.alignof);
+                Obj* callee = common::@as(Obj*, &vm.stack[funcOffset]);
 
                 switch (callee.type) {
                     case ObjType.FUNCTION:
@@ -395,10 +410,12 @@ fn RunResult run(Vm* vm)
                         }
 
                         CallFrame* newFrame = &vm.frames[vm.frameCount++];
-                        newFrame.function   = func;
-                        newFrame.ip         = (Byte*)&func.chunk.code[0];
-                        newFrame.base       = funcOffset;
-                        vm.frame            = newFrame;
+                        newFrame.function = func;
+                        newFrame.ip = (Byte*)&func.chunk.code[0];
+                        newFrame.base = funcOffset + uptr.sizeof;
+                        newFrame.callee = callee;
+
+                        vm.frame = newFrame;
 
                         vm.stackHead = (ushort)(newFrame.base + func.totalLocalsBytes);
                     }
@@ -408,7 +425,7 @@ fn RunResult run(Vm* vm)
                         ObjNative* nativeFn = (ObjNative*)callee;
 
                         double result = nativeFn.function();
-                        vm.stackHead  = funcOffset;
+                        vm.stackHead = funcOffset;
                         @push_val(vm, double, result);
                     }
 
@@ -420,13 +437,24 @@ fn RunResult run(Vm* vm)
 
             case OpCode.RETURN.ordinal:
             {
-                vm.frameCount--;
-                if (vm.frameCount == 0) {
-                    return RunResult.OK;
-                }
+                ObjFunction* func = vm.frame.function;
+                ushort retSize = common::get_type_size(func.returnType);
 
-                vm.stackHead = vm.frame.base;
-                vm.frame     = &vm.frames[vm.frameCount - 1];
+                Byte[16] tmp; // enough for int/float/double/ptr/bool; expand later for structs
+                Byte* retSrc = &vm.stack[vm.stackHead - retSize];
+                for (int i=0; i<retSize; i++) tmp[i] = retSrc[i];
+
+                ushort calleeOffset = (ushort)(vm.frame.base - uptr.sizeof);
+
+                vm.frameCount--;
+                if (vm.frameCount == 0) return RunResult.OK;
+
+                vm.stackHead = calleeOffset;                 // pop callee + args + locals
+                vm.frame = &vm.frames[vm.frameCount - 1];
+
+                // push return value for caller
+                for (int i=0; i<retSize; i++) vm.stack[vm.stackHead + i] = tmp[i];
+                vm.stackHead += retSize;
             }
 
             // ---------- Fallback ----------
@@ -449,7 +477,7 @@ fn void Vm.error(Vm* this, String msg)
     log::errlogn("Runtime error: %s", msg);
 
     for (int i = this.frameCount - 1; i >= 0; i--) {
-        CallFrame* frame    = &this.frames[i];
+        CallFrame* frame = &this.frames[i];
         ObjFunction* function = frame.function;
 
         int instruction = (int)(frame.ip - &function.chunk.code[0]) - 1;
@@ -466,6 +494,7 @@ fn void Vm.error(Vm* this, String msg)
 
 fn void Vm.define_native(Vm* vm, String name, NativeFn function)
 {
-    ObjNative* nativeFn = common::create_obj_native(function);
+    ObjNative* nativeFn = common::create_obj_native(&function);
+    common::allocatedConstants.push((Obj*)nativeFn);
     vm.globals.set(name, &nativeFn.obj);
 }

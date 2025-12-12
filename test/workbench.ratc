@@ -1,0 +1,10 @@
+
+fn null program(){
+	float ftr = 2.5frear;
+	echo(test(2.3fact));
+	return;
+}
+
+fn float test(float t){
+	return t;
+}

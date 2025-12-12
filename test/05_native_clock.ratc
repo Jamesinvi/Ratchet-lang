@@ -1,0 +1,4 @@
+fn null program() {
+    echo(clock());
+    return;
+}
