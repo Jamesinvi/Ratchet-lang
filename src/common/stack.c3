@@ -1,5 +1,4 @@
 module common::stack {Type};
-import std::io;
 
 struct Stack
 {

@@ -1,8 +1,7 @@
-
 module compiler;
 import common;
 
-alias ParseFn = fn void(Compiler* compiler, bool canAssign);
+alias ParseFn = fn ValueType(Compiler* compiler, bool canAssign);
 
 struct CompileRule
 {

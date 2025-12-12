@@ -1,6 +1,6 @@
 module common;
-import std::io;
 import libc;
+import log;
 
 interface DebugPrintable
 {
@@ -18,7 +18,7 @@ fn bool is_alpha_ascii(char c) {
 fn int parse_int(String s) {
     int? result = String.to_int(s);
     if(catch err = result){
-        io::printfn("%s is not parsable as int", s);
+        log::logn("%s is not parsable as int", s);
         return -1;
     }
     return result;
@@ -26,7 +26,7 @@ fn int parse_int(String s) {
 fn float parse_float(String s) {
     float? result = String.to_float(s);
     if(catch err = result){
-        io::printfn("%s is not parsable as float", s);
+        log::logn("%s is not parsable as float", s);
         return -1;
     }
     return result;
@@ -35,7 +35,7 @@ fn float parse_float(String s) {
 fn double parse_double(String s) {
     double? result = String.to_double(s);
     if(catch err = result){
-        io::printfn("%s is not parsable as double", s);
+        log::logn("%s is not parsable as double", s);
         return -1;
     }
     return result;

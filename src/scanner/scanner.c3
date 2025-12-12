@@ -1,8 +1,10 @@
 module scanner;
 import common;
-import std::io;
 import std::collections;
 import libc;
+import log;
+
+faultdef INVALID_TOKEN;
 
 struct Scanner
 {
@@ -87,7 +89,7 @@ fn void Scanner.parse_token(Scanner* this) {
             } else if (common::is_alpha_ascii(character)) {
                 this.keyword();
             } else {
-                common::error_lin(this.line, this.column, "unsupported character");
+                error_lin(this.line, this.column, "unsupported character");
             }
     }
 
@@ -154,7 +156,7 @@ fn void Scanner.string(Scanner* this) {
     }
 
     if (this.is_at_end()) {
-        common::error_lin(this.line, this.column, "Unterminated string.");
+        error_lin(this.line, this.column, "Unterminated string.");
         return;
     }
 
@@ -176,13 +178,13 @@ fn void Scanner.number(Scanner* this) {
 
     // If a letter immediately follows a number literal: 123abc → error
     if (common::is_alpha_ascii(this.peek())) {
-        common::error_lin(this.line, this.column, "Number literal cannot be immediately followed by letters");
+        error_lin(this.line, this.column, "Number literal cannot be immediately followed by letters");
         return;
     }
 
 
     if (this.is_at_end()) {
-        common::error_lin(this.line, this.column, "Unterminated number");
+        error_lin(this.line, this.column, "Unterminated number");
         return;
     }
 
@@ -214,4 +216,17 @@ fn void Scanner.keyword(Scanner* this) {
 }
 
 fn void discard_token() {
+}
+
+
+fn void error_lin(int l, int c, String msg) {
+    log::errlogn("Error on line: %d:%d, %s", l, c, msg);
+}
+
+fn void error_tok(Token token, String message) {
+    if (token.tokenType == TokenType.EOF) {
+        log::errlogn("%d, at end, %s",token.line, message);
+    } else {
+        log::errlogn("%d, at '%s' %s",token.line, token.value, message);
+    }
 }

@@ -1,9 +1,9 @@
 module compiler;
-import std::io;
 import common;
 import common::stack;
 import std::collections::list;
 import libc;
+import log;
 
 
 // ---------- Basic token helpers ----------
@@ -101,9 +101,9 @@ fn void Compiler.warning_at(Compiler* this, Token* token, String msg)
 {
     if (this.panicMode) return;
 
-    io::eprintf("[line %d] Warning", token.line);
-    io::eprintf(" at '%s'", token.value);
-    io::eprintf(", %s \n", msg);
+    log::errlog("[line %d] Warning", token.line);
+    log::errlog(" at '%s'", token.value);
+    log::errlog(", %s \n", msg);
 }
 
 
@@ -116,16 +116,16 @@ fn void Compiler.error_at(Compiler* this, Token* token, String msg)
 {
     if (this.panicMode) return;
 
-    io::eprintf("[line %d] Error", token.line);
+    log::errlog("[line %d] Error", token.line);
     this.hadError  = true;
     this.panicMode = true;
 
     if (token.tokenType == TokenType.EOF) {
-        io::eprintf(" at end");
+        log::errlog(" at end");
     } else {
-        io::eprintf(" at '%s'", token.value);
+        log::errlog(" at '%s'", token.value);
     }
-    io::eprintf(", %s \n", msg);
+    log::errlog(", %s \n", msg);
 }
 
 // ---------- Identifier helpers ----------

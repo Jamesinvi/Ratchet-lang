@@ -1,11 +1,9 @@
 module vm;
-
 import common;
-import std::collections::list;
 import std::collections::map;
 import debug;
 import std::io;
-
+import log;
 alias Chunk = common::Chunk;
 alias Byte  = char;
 
@@ -31,30 +29,31 @@ enum RunResult
 struct Vm
 {
     Byte[STACK_MAX] stack;
-    ushort          stackHead;
+    ushort stackHead;
 
-    CallFrame*      frame;
+    CallFrame* frame;
     CallFrame[FRAMES_MAX] frames;
-    int             frameCount;
+    int frameCount;
 
-    HeapTracker     trackedHeap;
-    HeapTracker     untrackedHeap;
+    HeapTracker trackedHeap;
+    HeapTracker untrackedHeap;
     HashMap{String, Obj*} globals;
+    Stack{ValueType} typeStack;
 }
 
 fn void Vm.init(Vm* this, ObjFunction* entryPoint)
 {
-    this.stackHead   = 0;
-    this.frameCount  = 0;
+    this.stackHead = 0;
+    this.frameCount = 0;
     this.trackedHeap.init("TRACKED HEAP");
     this.untrackedHeap.init("UNTRACKED HEAP");
     this.globals.init(mem);
 
-    this.frame         = &this.frames[this.frameCount++];
+    this.frame = &this.frames[this.frameCount++];
     this.frame.function = entryPoint;
-    this.frame.ip       = (Byte*)&entryPoint.chunk.code[0];
-    this.frame.base     = 0;
-    this.stackHead      = entryPoint.totalLocalsBytes;
+    this.frame.ip = (Byte*)&entryPoint.chunk.code[0];
+    this.frame.base = 0;
+    this.stackHead = entryPoint.totalLocalsBytes;
 
     this.define_native("clock", &clock_native);
 }
@@ -150,6 +149,8 @@ macro @pop_val(Vm* vm, $Type)
     vm.stackHead -= $Type.sizeof;
     Byte* src = &vm.stack[vm.stackHead];
     return @unaligned_load(*($Type*)src, $Type.alignof);
+
+
 }
 
 macro @push_val(Vm* vm, $Type, value)
@@ -166,7 +167,6 @@ fn RunResult run(Vm* vm)
     while (true) {
         Byte instruction = @read_u8(vm);
         debug::@print_instruction(vm);
-
         switch (instruction) {
 
             // ---------- Constants ----------
@@ -438,7 +438,6 @@ fn RunResult run(Vm* vm)
             }
         }
 
-        debug::@print_stack(vm);
     }
 }
 
@@ -447,7 +446,7 @@ fn RunResult run(Vm* vm)
 
 fn void Vm.error(Vm* this, String msg)
 {
-    io::printfn("Runtime error: %s", msg);
+    log::errlogn("Runtime error: %s", msg);
 
     for (int i = this.frameCount - 1; i >= 0; i--) {
         CallFrame* frame    = &this.frames[i];
@@ -456,11 +455,11 @@ fn void Vm.error(Vm* this, String msg)
         int instruction = (int)(frame.ip - &function.chunk.code[0]) - 1;
         if (instruction < 0) instruction = 0;
 
-        io::printf("[line %d] in ", function.chunk.lines[instruction]);
+        log::errlogn("[line %d] in ", function.chunk.lines[instruction]);
         if (function.name == null) {
-            io::printfn("script");
+            log::errlogn("script");
         } else {
-            io::printfn("%s()", function.name.str);
+            log::errlogn("%s()", function.name.str);
         }
     }
 }

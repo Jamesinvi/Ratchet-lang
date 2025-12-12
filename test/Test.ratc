@@ -1,9 +1,16 @@
+
 fn null program(){
-	int prova = 1;
+
+	int i = 0;
+	while(i<4){
+		i = i+1;
+	}
+	echo(i);
 	return;
 }
 
 fn int test(){
 	int t = 5;
 	double gr = 31.2;
+	return;
 }

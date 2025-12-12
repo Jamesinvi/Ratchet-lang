@@ -2,9 +2,11 @@ import scanner;
 import compiler;
 import common;
 import debug;
-import std::io;
-import std::collections;
 import vm;
+import log;
+import std::collections;
+import std::io::file;
+
 alias Scanner = scanner::Scanner;
 alias Compiler = compiler::Compiler;
 alias Chunk = common::Chunk;
@@ -21,7 +23,7 @@ fn int main(String[] args)
         if (catch err = file)
         {
             // Print the error
-            io::printfn("Failed to load %s: %s", filename, err);
+            log::errlogn("Failed to load %s: %s", filename, err);
             // We return, so that below 'file' will be unwrapped.
             return 1;
         }
@@ -33,7 +35,7 @@ fn int main(String[] args)
     compiler.init(scanner.tokens);
     ObjFunction*? entryPoint = compiler::compile(&compiler);
     if(catch err = entryPoint){
-        io::printfn("Compile error");
+        log::errlogn("Compile error");
         return 1;
     }
     scanner.deinit();

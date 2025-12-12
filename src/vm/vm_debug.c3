@@ -1,35 +1,18 @@
 
 module vm;
 import common;
-import std::io;
-
-fn void Vm.print_stack(Vm* this)
-{
-    io::printf("stackHead = %d ", this.stackHead);
-
-    if (this.stackHead == 0) {
-        io::printf("  <empty>\n");
-        return;
-    }
-
-    io::printf("  bytes:\n");
-    for (int i = 0; i < this.stackHead; i++) {
-        io::printf("%02x ", (char)this.stack[i]);
-    }
-    io::printf("\n");
-
-}
+import log;
 
 fn void Vm.print_disassembly(Vm* this)
 {
-    io::printf("Globals: [");
+    log::log("Globals: [");
     foreach (idx, slot : this.frames[0].function.chunk.debugConstantsSlots){
         if(idx>0){
-            io::printf("|");
+            log::log("|");
         }
-        io::printf("%s, %s, @%s", ValueType.names[slot.type.ordinal], slot.sizeInBytes, slot.offset);
+        log::log("%s, %s, @%s", ValueType.names[slot.type.ordinal], slot.sizeInBytes, slot.offset);
     }
-    io::printf("]\n");
+    log::log("]\n");
 
     for(int i=0;i<this.frameCount;i++){
         print_function_and_children(this.frames[i].function);
@@ -38,16 +21,16 @@ fn void Vm.print_disassembly(Vm* this)
 
 fn void print_function_and_children(ObjFunction* function) {
     if(function.name != null){
-        io::printfn("\n--- Function: %s ---", function.name.str);
+        log::logn("\n--- Function: %s ---", function.name.str);
     } else {
-        io::printfn("\n--- Script ---");
+        log::logn("\n--- Script ---");
     }
-    io::printf("Locals: [");
+    log::log("Locals: [");
     foreach (idx, slot : function.slots) {
-        if (idx > 0) io::printf(", ");
-        io::printf("slot %d: %s (%d bytes)", idx, ValueType.names[slot.type.ordinal], slot.sizeInBytes);
+        if (idx > 0) log::log(", ");
+        log::log("slot %d: %s (%d bytes)", idx, ValueType.names[slot.type.ordinal], slot.sizeInBytes);
     }
-    io::printf("]\n");
+    log::log("]\n");
     function.chunk.debug_print();
 
     // Also descend into function constants

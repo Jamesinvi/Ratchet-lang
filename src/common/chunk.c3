@@ -1,6 +1,6 @@
 module common;
 import std::collections::list;
-import std::io;
+import log;
 alias Byte = char;
 
 struct Chunk (DebugPrintable)
@@ -35,22 +35,22 @@ fn void Chunk.append_to_chunk( Chunk* chunk, Byte toWrite, int line){
 }
 
 fn void Chunk.debug_print(Chunk* chunk) @dynamic{
-    io::printf("Constants: [");
+    log::log("Constants: [");
     foreach (idx, constant : chunk.debugConstantsSlots){
         if(idx>0){
-            io::print(", ");
+            log::log(", ");
         }
-        io::printf("slot %d: ",idx);
+        log::log("slot %d: ",idx);
         chunk.print_constant(constant.offset);
     }
-    io::printf("]\n");
+    log::log("]\n");
 
-    io::printfn("======DISASSEMBLY======");
-    io::printfn("BYTE|LINE |OPCODE              |EXTRA INFO");
+    log::logn("======DISASSEMBLY======");
+    log::logn("BYTE|LINE |OPCODE              |EXTRA INFO");
     for (int offset = 0;offset<chunk.code.len();){
         offset = dissassemble_instruction(chunk, offset);
     }
-    io::printfn("======END======");
+    log::logn("======END======");
 }
 
 fn ushort Chunk.add_const_int(Chunk* chunk, int v){
@@ -187,7 +187,7 @@ fn ushort Chunk.add_const_native(Chunk* chunk, NativeFn* function){
 
 
 fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
-    io::printf("%04d|%5d|", currentOffset, chunk.lines[currentOffset]);
+    log::log("%04d|%5d|", currentOffset, chunk.lines[currentOffset]);
 
     Byte instruction = chunk.code[currentOffset];
 
@@ -261,60 +261,60 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
         case OpCode.CALL.ordinal:           
             return call_instruction(OpCode.names[instruction], chunk, currentOffset);
         default:
-            io::printfn("Unknown opCode: %d", instruction);
+            log::logn("Unknown opCode: %d", instruction);
             return currentOffset+1;
     }
 
 }
 
 fn int single_byte_instruction(String name, int currentOffset){
-    io::printf("%s\n", name);
+    log::log("%s\n", name);
     return currentOffset + 1;
 }
 
 fn int pop_instruction(String name, Chunk* chunk, int currentOffset){
     Byte typeSize = chunk.code[(usz)currentOffset+1];
-    io::printf("%s, %s\n", name, typeSize);
+    log::log("%s, %s\n", name, typeSize);
     return currentOffset + 2;
 }
 fn int constant_instruction(String name, Chunk* chunk, int currentOffset){
     ushort offset = ((chunk.code[(usz)currentOffset+1] << 8) | chunk.code[(usz)currentOffset+2]);
-    io::printf("%s, offset:%d      | val: ", name, offset);
+    log::log("%s, offset:%d      | val: ", name, offset);
     chunk.print_constant(offset);
-    io::printf("\n");
+    log::log("\n");
 
     return currentOffset + 3;
 }
 
 fn int increment_instruction(String name, Chunk* chunk, int currentOffset){
     Byte constantIndex = chunk.code[(usz)currentOffset+1];
-    io::printf("%s, idx:%d",name, constantIndex);
-    io::printf("\n");
+    log::log("%s, idx:%d",name, constantIndex);
+    log::log("\n");
     return currentOffset+2;
 }
 
 fn int local_instruction(String name, Chunk* chunk, int currentOffset){
     ushort constantIndex = ((chunk.code[(usz)currentOffset+1]<< 8) | chunk.code[(usz)currentOffset+2]);
-    io::printf("%s, idx:%d\n",name, constantIndex);
+    log::log("%s, idx:%d\n",name, constantIndex);
     return currentOffset+3;
 }
 
 fn int call_instruction(String name, Chunk* chunk, int currentOffset){
     Byte argCount = chunk.code[(usz)currentOffset+1];
-    io::printf("%s, argc:%d\n", name, argCount);
+    log::log("%s, argc:%d\n", name, argCount);
     return currentOffset + 2; // opcode + arg count
 }
 
 fn int single_and_type_instruction(String name, Chunk* chunk, int currentOffset){
     ValueType type = (ValueType)(chunk.code[(usz)currentOffset+1]);
-    io::printf("%s, from:%s\n", name, ValueType.names[type.ordinal]);
+    log::log("%s, from:%s\n", name, ValueType.names[type.ordinal]);
     return currentOffset + 2; // opcode + type
 }
 
 fn int jump_instruction(String name, Chunk* chunk, int sign, int currentOffset){
     ushort jump = (ushort)(chunk.code[(usz)currentOffset + 1] << 8);
     jump |= chunk.code[(usz)currentOffset + 2];
-    io::printf("%s, from:%d    | to: %d\n", name, currentOffset,currentOffset + 3 + sign * jump);
+    log::log("%s, from:%d    | to: %d\n", name, currentOffset,currentOffset + 3 + sign * jump);
     return currentOffset + 3;
 }
 
@@ -331,19 +331,19 @@ fn void Chunk.print_constant(Chunk* this, int offset){
     Byte* bytes = &this.constants[info.offset];
     
     switch(info.type){
-        case ValueType.INT:         io::printf("%d", @as(int, bytes));  
-        case ValueType.FLOAT:       io::printf("%f", @as(float, bytes,));  
-        case ValueType.DOUBLE:      io::printf("%f", @as(double, bytes,));  
-        case ValueType.BOOL:        io::printf("%s", @as(bool, bytes,));  
-        case ValueType.STRUCT:      io::printf("struct, change to print");
-        case ValueType.NULL:        io::printf("NULL");
+        case ValueType.INT:         log::log("%d", @as(int, bytes));  
+        case ValueType.FLOAT:       log::log("%f", @as(float, bytes,));  
+        case ValueType.DOUBLE:      log::log("%f", @as(double, bytes,));  
+        case ValueType.BOOL:        log::log("%s", @as(bool, bytes,));  
+        case ValueType.STRUCT:      log::log("struct, change to print");
+        case ValueType.NULL:        log::log("NULL");
         case ValueType.GC_OBJ:      nextcase;
         case ValueType.NO_GC_OBJ:   {
             switch (@as(Obj*, bytes).type)
             {
-                case ObjType.STRING: io::printf("\"%s\"", @as(ObjString*, bytes).str);
-                case ObjType.FUNCTION: io::printf("fn %s", @as(ObjFunction*, bytes).name.str);
-                case ObjType.NATIVE_FUNCTION: io::printf("<native_fn>");
+                case ObjType.STRING: log::log("\"%s\"", @as(ObjString*, bytes).str);
+                case ObjType.FUNCTION: log::log("fn %s", @as(ObjFunction*, bytes).name.str);
+                case ObjType.NATIVE_FUNCTION: log::log("<native_fn>");
             }
         }
     }

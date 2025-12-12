@@ -1,7 +1,7 @@
 module vm::memory;
 import common;
-import std::io;
 import std::collections;
+import log;
 alias FreeSlotsStack = common::stack::Stack{ulong};
 
 struct HeapTracker (DebugPrintable)
@@ -57,12 +57,12 @@ fn void HeapTracker.retain_obj(HeapTracker* this, Obj* trackedObj){
 }
 
 fn void HeapTracker.debug_print(HeapTracker* this) @dynamic {
-    io::printfn("===========%s===========", this.name);
+    log::logn("===========%s===========", this.name);
     foreach (idx, potentialSlot : this.objects){
         if(this.usedSlots.contains(idx)){
             this.objects[idx].debug_print();
         }
     }
-    io::printfn("===========END============");
+    log::logn("===========END============");
 
 }

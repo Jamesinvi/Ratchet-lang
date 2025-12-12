@@ -5,7 +5,7 @@ struct ScopeTracker
 {
     Local[Byte.max] locals;
     int localCount;
-    int scopeDepth;
+    int depth;
     ushort nextSlot;
     ValueType returnType;
     ScopeTracker* enclosing;
@@ -13,7 +13,7 @@ struct ScopeTracker
 }
 
 fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, ValueType returnType, String name){
-    this.scopeDepth = 0;
+    this.depth = 0;
     this.localCount = 0;
     this.returnType = returnType;
     this.function   = common::create_obj_function(name, false);

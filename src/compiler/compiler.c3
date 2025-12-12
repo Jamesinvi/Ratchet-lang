@@ -1,5 +1,4 @@
 module compiler;
-import std::io;
 import common;
 import common::stack;
 import std::collections::list;
@@ -55,25 +54,25 @@ struct Compiler
 
 fn void Compiler.init(Compiler* this, List{Token} tokens)
 {
-    this.input     = tokens;
-    this.hadError  = false;
+    this.input = tokens;
+    this.hadError = false;
     this.panicMode = false;
 
-    this.current   = &this.input[0];
-    this.previous  = this.current;
+    this.current = &this.input[0];
+    this.previous = this.current;
     this.entryPoint = null;
 
     this.scopes.init(mem);
 
     // Root script function + scope
-    this.rootScope.scopeDepth = 0;
+    this.rootScope.depth = 0;
     this.rootScope.localCount = 0;
     this.rootScope.enclosing  = null;
-    this.rootScope.function   = common::create_obj_function("script", true);
+    this.rootScope.function = common::create_obj_function("script", true);
 
     // Dummy local 0
-    Local* local  = &this.rootScope.locals[this.rootScope.localCount++];
-    local.depth   = 0;
+    Local* local = &this.rootScope.locals[this.rootScope.localCount++];
+    local.depth = 0;
     local.name.value = "";
 
     this.currentScope = &this.rootScope;
@@ -277,16 +276,16 @@ fn void Compiler.block(Compiler* this)
 
 fn void Compiler.begin_scope(Compiler* this)
 {
-    this.currentScope.scopeDepth++;
+    this.currentScope.depth++;
 }
 
 fn void Compiler.end_scope(Compiler* this)
 {
-    this.currentScope.scopeDepth--;
+    this.currentScope.depth--;
 
     while (this.currentScope.localCount > 0 &&
            this.currentScope.locals[this.currentScope.localCount - 1].depth >
-           this.currentScope.scopeDepth) {
+           this.currentScope.depth) {
 
         Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
         SlotInfo slot = this.currentScope.function.slots[local.slotIdx];
@@ -362,6 +361,10 @@ fn void Compiler.var_declaration(Compiler* this)
         this.emit_op(OpCode.CONST_NULL, this.previous.line);
     }
 
+    if(this.currentScope.depth == 0) {
+        this.error("Only functions can be globally defined");
+    }
+
     this.consume(TokenType.SEMICOLON, "Expected ';' after declaration");
     this.define_variable(index);
 }
@@ -372,7 +375,7 @@ fn ushort Compiler.parse_variable(Compiler* this, String errMsg)
     Token* name = this.previous;
 
     this.declare_variable();
-    if (this.currentScope.scopeDepth > 0) {
+    if (this.currentScope.depth > 0) {
         return 0;
     }
     return this.identifier_constant(this.previous);
@@ -380,12 +383,12 @@ fn ushort Compiler.parse_variable(Compiler* this, String errMsg)
 
 fn void Compiler.declare_variable(Compiler* this)
 {
-    if (this.currentScope.scopeDepth == 0) return;
+    if (this.currentScope.depth == 0) return;
 
     Token* name = this.previous;
     for (int i = this.currentScope.localCount - 1; i >= 0; i--) {
         Local* local = &this.currentScope.locals[i];
-        if (local.depth != -1 && local.depth < this.currentScope.scopeDepth) {
+        if (local.depth != -1 && local.depth < this.currentScope.depth) {
             break; 
         }
         if (identifiers_equal(name, &local.name)) {
@@ -407,15 +410,13 @@ fn void Compiler.add_local(Compiler* this, Token name)
     local.name  = name;
     local.depth = -1;
     local.slotIdx = slotIndex;
-
-
 }
 
 fn void Compiler.mark_initialized(Compiler* this)
 {
-    if (this.currentScope.scopeDepth == 0) return;
+    if (this.currentScope.depth == 0) return;
     this.currentScope.locals[this.currentScope.localCount - 1].depth =
-        this.currentScope.scopeDepth;
+        this.currentScope.depth;
 }
 
 fn ushort Compiler.identifier_constant(Compiler* this, Token* name)
@@ -425,7 +426,7 @@ fn ushort Compiler.identifier_constant(Compiler* this, Token* name)
 
 fn void Compiler.define_variable(Compiler* this, ushort globalsIndex)
 {
-    if (this.currentScope.scopeDepth > 0) {
+    if (this.currentScope.depth > 0) {
         this.mark_initialized();
         Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
         // emit SET_LOCAL with slot index
@@ -459,6 +460,8 @@ fn void Compiler.variable(Compiler* this, bool canAssign)
 fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
 {
     OpCode getOp, setOp;
+
+    // Check if its a local or global
     int localIdx = this.resolve_local(&name);
 
     if (localIdx != -1) {
@@ -563,7 +566,7 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
     this.consume(TokenType.LEFT_BRACE, "Expect '{' before body.");
     this.block();
 
-   
+   // Return statement has to be present, for now also in the main "program" func
    if(!this.returnFoundInCurrentScope){
         this.error("No return found in function");
    }

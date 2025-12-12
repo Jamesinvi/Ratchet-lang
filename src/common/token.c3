@@ -1,5 +1,5 @@
 module common;
-import std::io;
+import log;
 
 enum TokenType : uint {
     // Single-character tokens.
@@ -34,7 +34,7 @@ struct Token (DebugPrintable) {
 }
 
 fn void Token.debug_print(Token* token) @dynamic{
-    io::printfn("Token: {type: %s, value: '%s'}",  TokenType.names[(int)token.tokenType], token.value);
+    log::logn("Token: {type: %s, value: '%s'}",  token.tokenType, token.value);
 }
 
 Keyword[*] keywords = {
