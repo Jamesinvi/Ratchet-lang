@@ -293,11 +293,11 @@ fn int constant_instruction(String name, Chunk* chunk, int currentOffset){
 }
 
 fn int increment_instruction(String name, Chunk* chunk, int currentOffset){
-    Byte constantIndex = chunk.code[(usz)currentOffset+1];
-    log::log("%s, idx:%d",name, constantIndex);
-    log::log("\n");
-    return currentOffset+2;
+    ushort idx = ((ushort)chunk.code[(usz)currentOffset+1] << 8) | (ushort)chunk.code[(usz)currentOffset+2];
+    log::log("%s, idx:%d\n", name, idx);
+    return currentOffset + 3;
 }
+
 
 fn int local_instruction(String name, Chunk* chunk, int currentOffset){
     ushort constantIndex = ((chunk.code[(usz)currentOffset+1]<< 8) | chunk.code[(usz)currentOffset+2]);

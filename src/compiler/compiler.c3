@@ -269,7 +269,7 @@ fn void Compiler.while_statement(Compiler* this)
     this.emit_loop(loopStart);
 
     this.patch_jump(exitJump);
-    this.emit_pop_of_type(condType, this.previous.line);
+    this.emit_pop_of_type(ValueType.BOOL, this.previous.line);
 }
 
 fn void Compiler.block(Compiler* this)

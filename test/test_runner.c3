@@ -51,6 +51,13 @@ fn void t_07() @test
     compile_and_run_file("./test/07_while_countdown.ratc")!!;
 }
 
+
+fn void t_08() @test
+{
+    compile_and_run_file("./test/08_fibonacci.ratc")!!;
+}
+
+
 fn void? compile_and_run_file(String filename)
 {
     Scanner scanner ={};
