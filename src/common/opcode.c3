@@ -62,4 +62,6 @@ enum OpCode: Byte
     LOOP,
     INCREMENT,
     CALL,
+    GET_PROP,
+    SET_PROP,
 }

@@ -19,7 +19,7 @@ enum TokenType : uint {
     METHOD,
 
     // Types
-    INTEGER_T, FLOAT_T, DOUBLE_T, STRING_T, STRUCT_T,
+    INTEGER_T, FLOAT_T, DOUBLE_T, STRING_T, STRUCT_T, BOOL_T,
     EOF,
 }
 
@@ -59,4 +59,6 @@ Keyword[*] keywords = {
     {.tokenType = ECHO, .value = "echo"},
     {.tokenType = STRING_T, .value = "string"},
     {.tokenType = STRUCT_T, .value = "struct"},
+    {.tokenType = BOOL_T, .value = "bool"},
+
 };

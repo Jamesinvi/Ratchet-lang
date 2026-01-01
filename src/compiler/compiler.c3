@@ -1,28 +1,14 @@
 module compiler;
 import common;
 import common::stack;
+import log;
+import debug;
 import std::collections::list;
 import std::collections::map;
 alias Byte = common::Byte;
-alias TypeStack = common::stack::Stack{common::ValueType};
+alias TypeStack = common::stack::Stack{CompTypeInfo};
 
 faultdef COMPILE_ERROR;
-
-
-enum Precedence 
-{
-    NONE,
-    ASSIGNMENT, // =
-    OR,         // ||
-    AND,        // &&
-    EQUALITY,   
-    COMPARISON, // ==
-    TERM,       
-    FACTOR,
-    UNARY,
-    CALL,
-    PRIMARY
-}
 
 struct Compiler
 {
@@ -39,10 +25,10 @@ struct Compiler
     ScopeTracker* currentScope;
     ScopeTracker rootScope;
 
-    HashMap{String,ValueType} functionReturnTypes;
+    HashMap{String, CompTypeInfo} functionReturnTypes;
     bool hasPendingCalleeType;
-    ValueType pendingCalleeReturnType;
-    ValueType currentDeclType;
+    CompTypeInfo pendingCalleeReturnType;
+    CompTypeInfo currentDeclTypeInfo;
 
     bool returnFoundInCurrentScope;
 }
@@ -65,7 +51,7 @@ fn void Compiler.init(Compiler* this, List{Token} tokens)
     this.rootScope.depth = 0;
     this.rootScope.localCount = 0;
     this.rootScope.enclosing  = null;
-    this.rootScope.function = common::create_obj_function("script", true, ValueType.NULL);
+    this.rootScope.function = common::create_obj_function("script", true, ValueType.NULL, 0);
     common::ensure_globals_init();
     common::allocatedConstants.push((Obj*)this.rootScope.function);
 
@@ -108,7 +94,7 @@ fn ObjFunction*? compile(Compiler* compiler)
     if (compiler.entryPoint != null) {
         compiler.emit_program_call();
     } else {
-        compiler.error("program function not defined. All programs must define a fn null program()");
+        compiler.error("program function not defined. All programs must define a fn bool program()");
     }
 
     ObjFunction* script = compiler.end();
@@ -130,13 +116,13 @@ fn ObjFunction* Compiler.end(Compiler* this)
 fn void Compiler.declaration(Compiler* this)
 {
     if (this.check_any_type_token()) {
-        ValueType declType = this.match_type("Expected type before variable name");
-        this.currentDeclType = declType;
+        CompTypeInfo declType = this.match_type("Expected type before variable name");
+        this.currentDeclTypeInfo = declType;
         this.var_declaration();
     } else if (this.match(TokenType.FN)) {
         this.fun_declaration();
     } else if (this.match(TokenType.STRUCT_T)) {
-        this.struct_definition();
+        this.struct_declaration();
     } else {
         this.statement();
     }
@@ -145,7 +131,7 @@ fn void Compiler.declaration(Compiler* this)
 fn void Compiler.statement(Compiler* this)
 {
     if (this.match(TokenType.ECHO)) {
-        this.debug_statment();
+        this.echo_statement();
     } else if (this.match(TokenType.LEFT_BRACE)) {
         this.begin_scope();
         this.block();
@@ -163,33 +149,35 @@ fn void Compiler.statement(Compiler* this)
 
 fn void Compiler.expression_statement(Compiler* this)
 {
+    debug::@log_compilation("expression_statement at %s", (this.previous-1).value);
     int restorePoint = this.typeStack.size;
     this.expression();
     this.consume(TokenType.SEMICOLON, "Expected ';' after expression.");
 
     if (this.typeStack.size > restorePoint) {
         // Normal case: expression left one value
-        ValueType type = this.typeStack.pop();
-        this.emit_pop_of_type(type, this.previous.line);
+        CompTypeInfo typeInfo = this.typeStack.pop();
+        this.emit_pop_of_type(typeInfo.type, this.previous.line);
 
         // If somehow more values are left (buggy rules), drop them too
         while (this.typeStack.size > restorePoint) {
-            ValueType extra = this.typeStack.pop();
-            this.emit_pop_of_type(extra, this.previous.line);
+            CompTypeInfo extra = this.typeStack.pop();
+            this.emit_pop_of_type(extra.type, this.previous.line);
         }
     }
 }
 
-fn void Compiler.debug_statment(Compiler* this)
+fn void Compiler.echo_statement(Compiler* this)
 {
     this.expression();
     this.consume(TokenType.SEMICOLON, "Expected ';' after value.");
-    ValueType type = this.typeStack.pop();
-    this.emit_op_u8(OpCode.ECHO, (Byte)type, this.previous.line);
+    CompTypeInfo typeInfo = this.typeStack.pop();
+    this.emit_op_u8(OpCode.ECHO, (Byte)typeInfo.type, this.previous.line);
 }
 
 fn void Compiler.return_statement(Compiler* this)
 {
+    debug::@log_compilation("return_statement at %s %s", this.previous.value, this.current.value);
     this.returnFoundInCurrentScope = true;
 
     int line = this.previous.line;
@@ -206,9 +194,9 @@ fn void Compiler.return_statement(Compiler* this)
 
     this.expression();
 
-    ValueType exprType = this.typeStack.pop();
+    CompTypeInfo exprTypeInfo = this.typeStack.pop();
     ValueType expected = this.currentScope.function.returnType;
-    if (exprType != expected) {
+    if (exprTypeInfo.type != expected) {
          this.error("Return type mismatch");
     }
 
@@ -219,15 +207,16 @@ fn void Compiler.return_statement(Compiler* this)
 
 fn void Compiler.if_statement(Compiler* this)
 {
+    debug::@log_compilation("if_statement at %s", this.current.value);
     this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
     this.expression();
     this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition."); 
 
     // Condition type
-    ValueType condType = this.typeStack.pop();
+    CompTypeInfo condTypeInfo = this.typeStack.pop();
 
     int thenJump = this.emit_jump(OpCode.JMP_IF_FALSE, this.previous.line);
-    this.emit_pop_of_type(condType, this.previous.line); 
+    this.emit_pop_of_type(condTypeInfo.type, this.previous.line); 
 
     this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'if' condition.");
     this.begin_scope();
@@ -238,7 +227,7 @@ fn void Compiler.if_statement(Compiler* this)
 
     this.patch_jump(thenJump);
     // If we jumped here, condition was false and is still on the stack:
-    this.emit_pop_of_type(condType, this.previous.line);
+    this.emit_pop_of_type(condTypeInfo.type, this.previous.line);
 
     if (this.match(TokenType.ELSE)) {
         this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'else'.");
@@ -253,27 +242,31 @@ fn void Compiler.if_statement(Compiler* this)
 
 fn void Compiler.while_statement(Compiler* this)
 {
+    debug::@log_compilation("while_statement at %s", this.current.value);
+
     int loopStart = (int)this.get_current_chunk().code.size;
 
     this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
     this.expression();
     this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
 
-    ValueType condType = this.typeStack.pop();
+    CompTypeInfo condType = this.typeStack.pop();
 
     int exitJump = this.emit_jump(OpCode.JMP_IF_FALSE, this.previous.line);
-    this.emit_pop_of_type(ValueType.BOOL, this.previous.line); // pop when condition is true
+    this.emit_pop_of_type(ValueType.BOOL, this.previous.line);    // pop when condition is true
 
     this.statement();
 
     this.emit_loop(loopStart);
 
     this.patch_jump(exitJump);
-    this.emit_pop_of_type(ValueType.BOOL, this.previous.line);
+    this.emit_pop_of_type(ValueType.BOOL, this.previous.line);  
 }
 
 fn void Compiler.block(Compiler* this)
 {
+    debug::@log_compilation("block_statement at %s", this.current.value);
+
     while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
         this.declaration();
     }
@@ -289,12 +282,11 @@ fn void Compiler.end_scope(Compiler* this)
 {
     this.currentScope.depth--;
 
-    while (this.currentScope.localCount > 0 &&
-           this.currentScope.locals[this.currentScope.localCount - 1].depth >
-           this.currentScope.depth) {
+    while (this.currentScope.localCount > 0 
+        && this.currentScope.locals[this.currentScope.localCount - 1].depth > this.currentScope.depth) {
 
         Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
-        SlotInfo slot = this.currentScope.function.slots[local.slotIdx];
+        FrameSlotInfo slot = this.currentScope.function.slots[local.slotIdx];
 
         this.currentScope.localCount--;
     }
@@ -302,36 +294,40 @@ fn void Compiler.end_scope(Compiler* this)
 
 // ---------- Struct declarations & access ----------
 
-fn void Compiler.struct_definition(Compiler* this){
+fn void Compiler.struct_declaration(Compiler* this){
+    debug::@log_compilation("struct_declaration at %s", this.current.value);
+
     this.consume(TokenType.IDENTIFIER, "Expected struct name after 'struct'");
     String name = this.previous.value;
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name'}");
 
-    if(common::declaredStructs.has_key(name)){
+    if(declaredStructs.has_key(name)){
         this.error("This struct has already been defined elsewhere");
         return;
     }
-    StructTypeInfo structInfo = {};
+    CompStructTypeInfo structInfo = {};
     structInfo.init();
     ushort fieldCounter = 0;
+    ushort fieldOffset = 0;
     structInfo.name = String.copy(name, mem);
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
         if (this.check_any_type_token()) {
             FieldInfo fieldInfo = {};
-            ValueType fieldType = this.match_type("Expected type before field name");
+            CompTypeInfo fieldTypeInfo = this.match_type("Expected type before field name");
 
             // If it was a struct type, `this.previous` holds the type identifier (e.g. "Vec2")
             String typeName = this.previous.value;
 
             this.consume(TokenType.IDENTIFIER, "Expected field name.");
 
-            ValueMetadata fieldMetadata = {};
-            fieldMetadata.typeIndex = get_type_index(fieldType, typeName);
+            CompTypeInfo fieldData = {};
+            fieldData.structTypeIndex = get_type_index(fieldTypeInfo.type, typeName);
 
-            fieldInfo.metadata = fieldMetadata;
+            fieldInfo.typeInfo = fieldData;
             fieldInfo.name = String.copy(this.previous.value, mem); // field name
-            fieldInfo.type = fieldType;
+            fieldInfo.typeInfo.type = fieldTypeInfo.type;
+            fieldInfo.offset = fieldOffset;
 
             if(this.match(TokenType.EQUAL)){
                 this.error("Default field initializers are not yet supported");
@@ -341,6 +337,7 @@ fn void Compiler.struct_definition(Compiler* this){
 
             structInfo.fieldInfos.push(fieldInfo);
             fieldCounter++;
+            fieldOffset += get_type_size(fieldTypeInfo);
         } else if (this.check(TokenType.METHOD)) {
             // TODO
         } else {
@@ -350,33 +347,104 @@ fn void Compiler.struct_definition(Compiler* this){
     }
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' to close struct body");
     structInfo.fieldCount = fieldCounter;
-    uint structTypesLen =(uint) common::structTypes.size;
-    common::structTypes.push(structInfo);
-    common::declaredStructs.set(structInfo.name, structTypesLen);
+    uint structTypesLen =(uint) structTypes.size;
+    structTypes.push(structInfo);
+    declaredStructs.set(structInfo.name, structTypesLen);
+}
+
+fn void Compiler.dot(Compiler* this, bool canAssign)
+{
+    debug::@log_compilation("dot at %s%s", this.previous.value, this.current.value);
+
+    String fieldName = this.current.value;
+    Token* structToken = this.current-2;
+
+    this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
+    
+    int localIdx = this.resolve_local(structToken);
+    // Check the variable actually exists
+    if (localIdx == -1) {
+        this.error("Unknown variable %s", structToken.value);
+        return; 
+    }
+
+    // localIdxSafe is the same as localIdx but it's correct (and casted to ushort)
+    Local* local = &this.currentScope.locals[localIdx];
+    ushort localIdxSafe = local.slotIdx;
+
+    this.typeStack.pop();
+
+    CompStructTypeInfo structTypeInfo = structTypes[local.typeInfo.structTypeIndex];
+
+    // We need to find the field that matches that name.
+    isz fieldIdx = -1;
+    foreach(idx, fieldInfo : structTypeInfo.fieldInfos){
+        if(fieldName == fieldInfo.name){
+            fieldIdx = idx;
+            break;
+        }
+    }
+
+    if(fieldIdx<0){
+        this.error("%s is not a field of %s", fieldName, structTypeInfo.name);
+        return;
+    }
+
+    FieldInfo fieldInfo = structTypeInfo.fieldInfos[(ushort)fieldIdx];
+    ValueType fieldRuntimeType = fieldInfo.typeInfo.type;
+
+    // If we're reading (not assining), generate the op and push on the type stack
+    // Op encoding: GET_PROP | indexInLocals | fieldOffsetInStruct | typeOfField(ValueType) = 8+16+16+8 = 48 bytes
+    if (!canAssign || !this.check(TokenType.EQUAL)) {
+        this.emit_op_u16_u16_u8(OpCode.GET_PROP, localIdxSafe, fieldInfo.offset, (Byte)fieldRuntimeType, this.previous.line);
+        this.typeStack.push(fieldInfo.typeInfo);
+        return;
+    }
+
+    // If we got here we're assigning a value, evaluate the expression first
+    this.consume(TokenType.EQUAL, "Expected '=' after field name.");
+    this.expression();
+    CompTypeInfo rightTypeInfo = this.typeStack.pop();
+
+    // Type error check!
+    if (rightTypeInfo.type != fieldRuntimeType) {
+        this.error("Field assignment type mismatch, expected %s, got %s", fieldRuntimeType, rightTypeInfo.type);
+        return;
+    }
+
+    // Same encoding to GET_PROP
+    // No need to push on the typeStack here, since assignment yields no result
+    this.emit_op_u16_u16_u8(OpCode.SET_PROP, localIdxSafe, fieldInfo.offset, (Byte)fieldRuntimeType, this.previous.line);
 }
 
 // ---------- Variable declarations & access ----------
 
 fn void Compiler.var_declaration(Compiler* this)
 {
-    ushort index = this.parse_variable("Expected variable name");
-    int restorePoint = this.typeStack.size;
+    debug::@log_compilation("var_declaration at %s", this.current.value);
+    ushort varIndex = this.parse_variable("Expected variable name");
 
+    bool hasInit = false;
     if (this.match(TokenType.EQUAL)) {
+        hasInit = true;
         this.expression();
-        if(this.typeStack.size > restorePoint){
-            this.typeStack.size = restorePoint;
-        }
-    } else {
-        this.emit_op(OpCode.CONST_NULL, this.previous.line);
     }
 
-    if(this.currentScope.depth == 0) {
+    if (this.currentScope.depth == 0) {
         this.error("Only functions can be globally defined");
     }
 
     this.consume(TokenType.SEMICOLON, "Expected ';' after declaration");
-    this.define_variable(index);
+
+    if (this.currentScope.depth > 0) {
+        // local
+        this.mark_initialized();
+        if (hasInit) {
+            Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
+            this.emit_op_u16(OpCode.SET_LOCAL, local.slotIdx, this.previous.line);
+        }
+        return;
+    }
 }
 
 fn ushort Compiler.parse_variable(Compiler* this, String errMsg)
@@ -415,18 +483,20 @@ fn void Compiler.add_local(Compiler* this, Token name)
         return;
     }
 
-    ushort slotIndex = this.currentScope.function.add_slot(this.currentDeclType);
+    ushort slotSize = get_type_size(this.currentDeclTypeInfo);
+    ushort slotIndex = this.currentScope.function.add_slot(this.currentDeclTypeInfo.type, slotSize);
     Local* local = &this.currentScope.locals[this.currentScope.localCount++];
     local.name  = name;
     local.depth = -1;
     local.slotIdx = slotIndex;
+    local.typeInfo = this.currentDeclTypeInfo;
+
 }
 
 fn void Compiler.mark_initialized(Compiler* this)
 {
     if (this.currentScope.depth == 0) return;
-    this.currentScope.locals[this.currentScope.localCount - 1].depth =
-        this.currentScope.depth;
+    this.currentScope.locals[this.currentScope.localCount - 1].depth = this.currentScope.depth;
 }
 
 fn ushort Compiler.identifier_constant(Compiler* this, Token* name)
@@ -455,13 +525,13 @@ fn void Compiler.variable(Compiler* this, bool canAssign)
 
     if (isCallSite) {
         ValueType returnType = ValueType.NULL;
-        ValueType? stored = this.functionReturnTypes.get(tokenName.value);
-        if (catch err = stored) {
+        CompTypeInfo? storedInfo = this.functionReturnTypes.get(tokenName.value);
+        if (catch err = storedInfo) {
             this.error("Error with function type");
             return;
         }
-        returnType = stored;
-        this.pendingCalleeReturnType = returnType;
+        returnType = storedInfo.type;
+        this.pendingCalleeReturnType = storedInfo;
         this.hasPendingCalleeType    = true;
         return;
     }
@@ -469,6 +539,7 @@ fn void Compiler.variable(Compiler* this, bool canAssign)
 
 fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
 {
+    debug::@log_compilation("named_variable at %s", name.value);
     OpCode getOp, setOp;
 
     // Check if its a local or global
@@ -480,17 +551,21 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
 
         Local* local = &this.currentScope.locals[localIdx];
         ushort slotIdx = local.slotIdx;
-        ValueType varType = this.currentScope.function.slots[slotIdx].type;
+
+        if(local.typeInfo.type == ValueType.STRUCT && this.check(TokenType.DOT)){
+            this.typeStack.push(local.typeInfo);
+            return;
+        }
 
         if (!canAssign || !this.check(TokenType.EQUAL)) {
             this.emit_op_u16(getOp, slotIdx, this.previous.line);
-            this.typeStack.push(varType);
+            this.typeStack.push(local.typeInfo);
             return;
         }
 
         if (this.match(TokenType.EQUAL)) {
             this.expression();
-            ValueType rhsType = this.typeStack.pop();
+            CompTypeInfo rhsType = this.typeStack.pop();
             this.emit_op_u16(setOp, slotIdx, this.previous.line);
             this.maybe_optimize_local_inc_dec(slotIdx, this.previous.line);
         }
@@ -501,11 +576,11 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
 
         if (canAssign && this.match(TokenType.EQUAL)) {
             this.expression();
-            ValueType rhsType = this.typeStack.pop();
+            CompTypeInfo rhsType = this.typeStack.pop();
             this.emit_op_u16(setOp, (ushort)arg, this.previous.line);
         } else {
             this.emit_op_u16(getOp, (ushort)arg, this.previous.line);
-            this.typeStack.push(ValueType.GC_OBJ);
+            this.typeStack.push({.type = ValueType.GC_OBJ, .structTypeIndex = uint.max}); 
         }
     }
 }
@@ -514,7 +589,8 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
 
 fn void Compiler.fun_declaration(Compiler* this)
 {
-    ValueType returnType = this.match_type("Expected return type before function name");
+    debug::@log_compilation("fun_declaration at %s", this.current.value);
+    CompTypeInfo returnType = this.match_type("Expected return type before function name");
     ushort globalsIndex    = this.parse_variable("Expect function name");
     Token* nameToken     = this.previous;
 
@@ -529,14 +605,14 @@ fn void Compiler.fun_declaration(Compiler* this)
     this.define_variable(globalsIndex);
 }
 
-fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoint)
+fn void Compiler.function(Compiler* this, CompTypeInfo returnTypeInfo, bool isEntryPoint)
 {
     ScopeTracker* prevScope = this.currentScope;
 
     // Create a new scope and get a reference to it.
     this.scopes.push({});
     ScopeTracker* newScope = &this.scopes[this.scopes.size-1];
-    newScope.init(this, returnType, this.previous.value);
+    newScope.init(this, returnTypeInfo, this.previous.value);
     // We set the enclosing scope to the current one
     newScope.enclosing  = this.currentScope;
     // Install the newly created scope as the current one
@@ -549,7 +625,7 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
         if (this.entryPoint != null){
             this.error("can only contain one \"program\" function");
         }
-        if (returnType != ValueType.NULL) {
+        if (returnTypeInfo.type != ValueType.BOOL) {
             this.error("program must have return type 'null'.");
         }
     }
@@ -563,14 +639,14 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
             // Here we are DEFINING a function, so expressions are NOT valid
             // We expect a variable shape (type + name)
             this.currentScope.function.arity++;
-            ValueType paramRetType = this.match_type("Expected parameter type");
+            CompTypeInfo paramRetTypeInfo = this.match_type("Expected parameter type");
             if (this.currentScope.function.arity > 255) {
                 this.error("Can't have more than 255 parameters.");
             }
-            this.currentDeclType = paramRetType;
+            this.currentDeclTypeInfo = paramRetTypeInfo;
             ushort constant = this.parse_variable("Expect parameter name.");
             this.mark_initialized();
-            argsSize += common::get_type_size(paramRetType);
+            argsSize += get_type_size(paramRetTypeInfo);
         } while (this.match(TokenType.COMMA));
     }
     this.currentScope.function.argsSizeInBytes = argsSize;
@@ -603,6 +679,7 @@ fn void Compiler.function(Compiler* this, ValueType returnType, bool isEntryPoin
 fn void Compiler.call(Compiler* this, bool canAssign)
 {
     FuncCallInfo callInfo = this.call_args_info();
+
     this.emit_op_u8(OpCode.CALL, callInfo.argCount, this.previous.line);
     this.emit_u16(callInfo.argsSizeInBytes, this.previous.line);
     
@@ -637,7 +714,7 @@ fn FuncCallInfo Compiler.call_args_info(Compiler* this)
                 this.error("Can't have more than 255 arguments");
             }
             // Remove all arguments from the type stack
-            info.argsSizeInBytes += common::get_type_size(this.typeStack.pop());
+            info.argsSizeInBytes += get_type_size(this.typeStack.pop());
             info.argCount++;
         } while (this.match(TokenType.COMMA));
     }
@@ -659,9 +736,9 @@ fn void Compiler.and(Compiler* this)
     int jump = this.emit_jump(OpCode.JMP_IF_FALSE, line);
 
     // left operand (bool) is on top
-    ValueType condType = this.typeStack.pop();
-    assert(condType == ValueType.BOOL);
-    this.emit_pop_of_type(condType, line);
+    CompTypeInfo condTypeInfo = this.typeStack.pop();
+    assert(condTypeInfo.type == ValueType.BOOL);
+    this.emit_pop_of_type(condTypeInfo.type, line);
 
     this.parse_precedence(Precedence.AND);
     this.patch_jump(jump);
@@ -675,8 +752,8 @@ fn void Compiler.or(Compiler* this)
 
     this.patch_jump(elseJump);
 
-    ValueType condType = this.typeStack.pop();
-    this.emit_pop_of_type(condType, line);
+    CompTypeInfo condTypeInfo = this.typeStack.pop();
+    this.emit_pop_of_type(condTypeInfo.type, line);
 
     this.parse_precedence(Precedence.OR);
     this.patch_jump(endJump);
@@ -686,7 +763,7 @@ fn void Compiler.grouping(Compiler* this, bool canAssign)
 {
     // If we see '(' and then a type, it must be a cast
     if (this.check_builtin_type_token()) {
-        ValueType targetType = this.match_type("Expected type in cast.");
+        CompTypeInfo targetTypeInfo = this.match_type("Expected type in cast.");
         // Ensure we really have closing ')'
         this.consume(TokenType.RIGHT_PAREN, "Expected ')' after cast type.");
         int line = this.previous.line;
@@ -694,7 +771,7 @@ fn void Compiler.grouping(Compiler* this, bool canAssign)
         // (int)1+2 => cast applies to 1, not (1+2)
         this.parse_precedence(Precedence.UNARY);
         // We now have operand value on stack + typeStack top = operandType
-        this.emit_cast(targetType, line);
+        this.emit_cast(targetTypeInfo.type, line);
         return;
     }
 
@@ -703,30 +780,33 @@ fn void Compiler.grouping(Compiler* this, bool canAssign)
 }
 
 
+
 fn void Compiler.number(Compiler* this, bool canAssign)
 {
+    debug::@log_compilation("number at %s", this.previous.value);
     switch (this.previous.tokenType) {
         case TokenType.INTEGER:
             int ival = common::parse_int(this.previous.value);
             ushort offset = this.get_current_chunk().add_const_int(ival);
             this.emit_op_u16(OpCode.CONST_INT, offset, this.previous.line);
-            this.typeStack.push(ValueType.INT);
+            this.typeStack.push({.type = ValueType.INT, .structTypeIndex = uint.max});
 
         case TokenType.FLOAT:
             float  fval = common::parse_float(this.previous.value);
             ushort offset = this.get_current_chunk().add_const_float(fval);
             this.emit_op_u16(OpCode.CONST_FLOAT, offset, this.previous.line);
-            this.typeStack.push(ValueType.FLOAT);
+            this.typeStack.push({.type = ValueType.FLOAT, .structTypeIndex = uint.max});
 
         case TokenType.DOUBLE:
             double dval = common::parse_double(this.previous.value);
             ushort offset = this.get_current_chunk().add_const_double(dval);
             this.emit_op_u16(OpCode.CONST_DOUBLE, offset, this.previous.line);
-            this.typeStack.push(ValueType.DOUBLE);
+            this.typeStack.push({.type = ValueType.DOUBLE, .structTypeIndex = uint.max});
 
         default:
             this.error("Unsupported type");
     }
+
 }
 
 fn void Compiler.string(Compiler* this, bool canAssign)
@@ -734,7 +814,7 @@ fn void Compiler.string(Compiler* this, bool canAssign)
     String source = this.previous.value;
     int offset = this.get_current_chunk().add_const_string(source);
     this.emit_op_u16(OpCode.CONST_STRING, this.ensure_constant(offset), this.previous.line);
-    this.typeStack.push(ValueType.GC_OBJ);
+    this.typeStack.push({.type = ValueType.GC_OBJ, .structTypeIndex = uint.max});
 }
 
 fn void Compiler.unary(Compiler* this, bool canAssign)
@@ -776,19 +856,19 @@ fn void Compiler.binary(Compiler* this)
 fn void Compiler.literal_true(Compiler* this)
 {
     this.emit_op(OpCode.CONST_TRUE, this.previous.line);
-    this.typeStack.push(ValueType.BOOL);
+    this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
 }
 
 fn void Compiler.literal_false(Compiler* this)
 {
     this.emit_op(OpCode.CONST_FALSE, this.previous.line);
-    this.typeStack.push(ValueType.BOOL);
+    this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
 }
 
 fn void Compiler.literal_null(Compiler* this)
 {
     this.emit_op(OpCode.CONST_NULL, this.previous.line);
-    this.typeStack.push(ValueType.NULL);
+    this.typeStack.push({.type = ValueType.NULL, .structTypeIndex = uint.max});
 }
 
 // ---------- Precedence engine ----------

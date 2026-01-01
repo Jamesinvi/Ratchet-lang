@@ -1,6 +1,11 @@
 module common;
 import std::io;
 import std::collections::list;
+
+alias NativeFn = fn double();
+
+// -------- ENUMS -----------
+
 enum ObjType : Byte
 {
     STRING,
@@ -8,17 +13,14 @@ enum ObjType : Byte
     NATIVE_FUNCTION
 }
 
-enum FunctionType : char
-{
-    FUNCTION,
-    SCRIPT,
-}
+// -------- STRUCTS -----------
+
 struct Obj (DebugPrintable)  @align(16)
 {
     ObjType type;
-    ulong allocIndex;
-    int refCounter;
     bool isConstant;
+    int refCounter;
+    ulong allocIndex;
 }
 
 struct ObjString
@@ -30,15 +32,32 @@ struct ObjString
 struct ObjFunction
 {
     Obj obj;
-    ObjString* name;
-    ushort arity;
-    Chunk chunk;
-    ushort argsSizeInBytes;
     ValueType returnType;
-
-    List{SlotInfo} slots;
+    ushort arity;
+    ushort argsSizeInBytes;
     ushort totalLocalsBytes;
+    ushort returnTypeSize;
+    Chunk chunk;
+    List{FrameSlotInfo} slots;
+    ObjString* name;
 }
+
+struct FrameSlotInfo
+{
+    ValueType type;
+    ushort sizeInBytes;
+    ushort offset;      // Byte offset from frame start
+    ushort index;       // slot index in the table
+}
+
+struct ObjNative
+{
+    Obj obj;
+    NativeFn function;
+}
+
+
+// -------- Functions/Methods -----------
 
 fn void ObjFunction.deinit(ObjFunction* this){
     this.name.str.free(mem);
@@ -47,24 +66,12 @@ fn void ObjFunction.deinit(ObjFunction* this){
     this.slots.free();
 }
 
-struct SlotInfo
-{
-    ValueType type;
-    ushort sizeInBytes;
-    ushort offset;      // Byte offset from frame start
-    ushort index;       // slot index in the table
-}
-alias NativeFn = fn double();
-struct ObjNative
-{
-    Obj obj;
-    NativeFn function;
-}
 
-fn ObjFunction* create_obj_function(String name, bool isConstant, ValueType returnType){
+fn ObjFunction* create_obj_function(String name, bool isConstant, ValueType returnType, ushort returnSize){
     ObjFunction* object = mem::new(ObjFunction);
     ObjString* stringObj = create_obj_string(name, isConstant);
     object.returnType = returnType;
+    object.returnTypeSize = returnSize;
     object.obj.allocIndex = ulong.max;
     object.obj.type = ObjType.FUNCTION;
     object.name = stringObj;
@@ -91,23 +98,6 @@ fn ObjNative* create_obj_native(NativeFn* function){
     object.function = *function;
     return object;
 }
-
-fn ushort ObjFunction.add_slot(ObjFunction* this, ValueType type){
-    ushort size = get_type_size(type);
-    ushort offset = this.totalLocalsBytes;
-
-    SlotInfo slotInfo = {
-        .type = type,
-        .sizeInBytes = size,
-        .offset = offset,
-    };
-    ushort index = (ushort)this.slots.len();
-    this.slots.push(slotInfo);
-    this.totalLocalsBytes += size;
-
-    return index;
-}
-
 
 fn void Obj.debug_print(Obj* this) @dynamic {
     io::printf("%s, ", ObjType.names[this.type.ordinal]);

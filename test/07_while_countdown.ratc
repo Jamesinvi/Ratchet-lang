@@ -1,4 +1,4 @@
-fn null program() {
+fn bool program() {
     int i = 3;
     while (i > 0) {
         echo(i);

@@ -3,6 +3,7 @@ import common;
 import std::collections::map;
 import debug;
 import std::io;
+import libc;
 import log;
 alias Chunk = common::Chunk;
 alias Byte  = char;
@@ -55,6 +56,10 @@ fn void Vm.init(Vm* this, ObjFunction* entryPoint)
     this.frame.ip = (Byte*)&entryPoint.chunk.code[0];
     this.frame.base = 0;
     this.stackHead = entryPoint.totalLocalsBytes;
+
+    for(int i = 0; i < this.stackHead; i++){
+        this.stack[i] = 0;
+    }
 
     this.define_native("clock", &clock_native);
 }
@@ -180,26 +185,28 @@ fn RunResult run(Vm* vm)
     debug::@print_disassembly(vm);
 
     while (true) {
-        Byte instruction = @read_u8(vm);
+        OpCode instruction = (OpCode)@read_u8(vm);
         debug::@print_instruction(vm);
-        switch (instruction) {
+        switch (instruction) @jump {
 
             // ---------- Constants ----------
 
-            case OpCode.CONST_INT.ordinal:      @read_const_and_push(vm, int);
-            case OpCode.CONST_FLOAT.ordinal:    @read_const_and_push(vm, float);        
-            case OpCode.CONST_DOUBLE.ordinal:   @read_const_and_push(vm, double);
-            case OpCode.CONST_FUNC.ordinal:     @read_const_and_push(vm, ObjFunction*);
-            case OpCode.CONST_TRUE.ordinal:     @push_val(vm, bool, true);
-            case OpCode.CONST_FALSE.ordinal:    @push_val(vm, bool, false);
-            case OpCode.CONST_NULL.ordinal:     @push_val(vm, bool, false);
+            case OpCode.CONST_INT:      @read_const_and_push(vm, int);
+            case OpCode.CONST_FLOAT:    @read_const_and_push(vm, float);        
+            case OpCode.CONST_DOUBLE:   @read_const_and_push(vm, double);
+            case OpCode.CONST_FUNC:     @read_const_and_push(vm, ObjFunction*);
+            case OpCode.CONST_STRING:   @read_const_and_push(vm, ObjString*);
+            case OpCode.CONST_TRUE:     @push_val(vm, bool, true);
+            case OpCode.CONST_FALSE:    @push_val(vm, bool, false);
+            case OpCode.CONST_NULL:     @push_val(vm, bool, false);
+
 
             // ---------- Locals ----------
 
-            case OpCode.GET_LOCAL.ordinal:
+            case OpCode.GET_LOCAL:
             {
                 ushort slotIndex = @read_u16(vm);
-                SlotInfo info    = vm.frame.function.slots[slotIndex];
+                FrameSlotInfo info    = vm.frame.function.slots[slotIndex];
                 ushort offset    = vm.frame.base + info.offset;
                 switch (info.type) {
                     case ValueType.INT:         @read_local_and_push(vm, int, offset);
@@ -209,27 +216,75 @@ fn RunResult run(Vm* vm)
                     case ValueType.GC_OBJ:      nextcase;
                     case ValueType.NO_GC_OBJ:   @read_local_and_push(vm, Obj*, offset);
                     case ValueType.NULL:        @push_val(vm, bool, false); // or special NULL handling
+                    case ValueType.STRUCT:{
+                        Byte* src = &vm.stack[offset];
+                        Byte* dst = &vm.stack[vm.stackHead];
+                        ushort size = info.sizeInBytes;
+                        // Check for overlaps. memcpy is undefined on overlaps.
+                        assert(dst + size <= src || src + size <= dst);
+                        libc::memcpy(dst, src, size);
+                        vm.stackHead += size;
+
+                    }
                     default:
                         vm.error("Unsupported local type in GET_LOCAL");
                         return RunResult.RUNTIME_ERR;
                 }
             }
 
-            case OpCode.SET_LOCAL.ordinal:
+            case OpCode.SET_LOCAL:
             {
                 ushort slotIndex = @read_u16(vm);
-                SlotInfo info = vm.frame.function.slots[slotIndex];
+                FrameSlotInfo info = vm.frame.function.slots[slotIndex];
                 ushort offset = vm.frame.base + info.offset;
 
                 vm.stackHead -= info.sizeInBytes;
-                for (int i = 0; i < info.sizeInBytes; i++) {
-                    vm.stack[offset + i] = vm.stack[vm.stackHead + i];
+                libc::memcpy(&vm.stack[offset], &vm.stack[vm.stackHead], info.sizeInBytes);
+
+            }
+
+            case OpCode.GET_PROP:
+            {
+                ushort slotIndex = @read_u16(vm);
+                ushort localOffset = @read_u16(vm);
+                ValueType fieldType = (ValueType) @read_u8(vm);
+                FrameSlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort offset = vm.frame.base + info.offset + localOffset;
+
+                assert(localOffset + get_type_size(fieldType) <= info.sizeInBytes);
+
+                switch (fieldType) {
+                    case ValueType.INT:         @read_local_and_push(vm, int, offset);
+                    case ValueType.FLOAT:       @read_local_and_push(vm, float, offset);
+                    case ValueType.DOUBLE:      @read_local_and_push(vm, double, offset);
+                    case ValueType.BOOL:        @read_local_and_push(vm, bool, offset);
+                    case ValueType.GC_OBJ:      nextcase;
+                    case ValueType.NO_GC_OBJ:   @read_local_and_push(vm, Obj*, offset);
+                    case ValueType.NULL:        @push_val(vm, bool, false); // or special NULL handling
+                    default:
+                        vm.error("Handle some loading of structs and primitives");
+                        return RunResult.RUNTIME_ERR;
                 }
             }
 
+            case OpCode.SET_PROP:
+            {
+                ushort slotIndex = @read_u16(vm);
+                ushort localOffset = @read_u16(vm);
+                ValueType fieldType = (ValueType) @read_u8(vm);
+                FrameSlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort offset = vm.frame.base + info.offset + localOffset;
+
+                ushort fieldSize = get_type_size(fieldType);
+                vm.stackHead -= fieldSize;
+                libc::memcpy(&vm.stack[offset], &vm.stack[vm.stackHead], fieldSize);
+
+            }
+
+
             // ---------- Globals: function-only ----------
 
-            case OpCode.DEFINE_GLOBAL.ordinal:
+            case OpCode.DEFINE_GLOBAL:
             {
                 ushort nameOffset = @read_u16(vm);
                 ObjString* nameObj = @read_const(vm, ObjString*, nameOffset);
@@ -239,7 +294,7 @@ fn RunResult run(Vm* vm)
                 vm.globals.set(name, obj);
             }
 
-            case OpCode.GET_GLOBAL.ordinal:
+            case OpCode.GET_GLOBAL:
             {
                 ushort nameOffset  = @read_u16(vm);
                 ObjString* nameObj = @read_const(vm, ObjString*, nameOffset);
@@ -255,13 +310,13 @@ fn RunResult run(Vm* vm)
 
             // ---------- Control flow -----------------
 
-            case OpCode.JMP.ordinal:
+            case OpCode.JMP:
             {
                 ushort offset = @read_u16(vm);
                 vm.frame.ip += offset;
             }
 
-            case OpCode.JMP_IF_FALSE.ordinal:
+            case OpCode.JMP_IF_FALSE:
             {
                 ushort offset = @read_u16(vm);
                 if (!@peek_val(vm, bool)) {
@@ -269,7 +324,7 @@ fn RunResult run(Vm* vm)
                 }
             }
 
-            case OpCode.LOOP.ordinal:
+            case OpCode.LOOP:
             {
                 ushort offset = @read_u16(vm);
                 vm.frame.ip -= offset;
@@ -277,17 +332,17 @@ fn RunResult run(Vm* vm)
 
             // ----------- Casts ---------------------
 
-            case OpCode.CAST_TO_STRING.ordinal:
+            case OpCode.CAST_TO_STRING:
             {
                 ValueType fromType = (ValueType)@read_u8(vm);
                 String s;
 
                 switch (fromType) {
-                    case ValueType.INT:    s = string::format(mem, "%d", @pop_val(vm, int));
-                    case ValueType.FLOAT:  s = string::format(mem, "%f", @pop_val(vm, float));
-                    case ValueType.DOUBLE: s = string::format(mem, "%f", @pop_val(vm, double));
-                    case ValueType.BOOL:   s = string::format(mem, "%b", @pop_val(vm, bool));
-                    case ValueType.NULL:   s = "null"; @pop_val(vm, bool);
+                    case ValueType.INT:    s = string::tformat("%d", @pop_val(vm, int));
+                    case ValueType.FLOAT:  s = string::tformat("%f", @pop_val(vm, float));
+                    case ValueType.DOUBLE: s = string::tformat("%f", @pop_val(vm, double));
+                    case ValueType.BOOL:   s = string::tformat("%b", @pop_val(vm, bool));
+                    case ValueType.NULL:   s = "null"; 
 
                     default:
                     {
@@ -303,19 +358,19 @@ fn RunResult run(Vm* vm)
 
             // ---------- Comparison -----------------
 
-            case OpCode.INT_LESS.ordinal:        @compare(vm, int,    OP_LESS);
-            case OpCode.INT_GREATER.ordinal:     @compare(vm, int,    OP_GREATER);
-            case OpCode.INT_EQUAL.ordinal:       @compare(vm, int,    OP_EQUAL);
+            case OpCode.INT_LESS:        @compare(vm, int,    OP_LESS);
+            case OpCode.INT_GREATER:     @compare(vm, int,    OP_GREATER);
+            case OpCode.INT_EQUAL:       @compare(vm, int,    OP_EQUAL);
 
-            case OpCode.FLOAT_LESS.ordinal:      @compare(vm, float,  OP_LESS);
-            case OpCode.FLOAT_GREATER.ordinal:   @compare(vm, float,  OP_GREATER);
-            case OpCode.FLOAT_EQUAL.ordinal:     @compare(vm, float,  OP_EQUAL);
+            case OpCode.FLOAT_LESS:      @compare(vm, float,  OP_LESS);
+            case OpCode.FLOAT_GREATER:   @compare(vm, float,  OP_GREATER);
+            case OpCode.FLOAT_EQUAL:     @compare(vm, float,  OP_EQUAL);
 
-            case OpCode.DOUBLE_LESS.ordinal:     @compare(vm, double, OP_LESS);
-            case OpCode.DOUBLE_GREATER.ordinal:  @compare(vm, double, OP_GREATER);
-            case OpCode.DOUBLE_EQUAL.ordinal:    @compare(vm, double, OP_EQUAL);
+            case OpCode.DOUBLE_LESS:     @compare(vm, double, OP_LESS);
+            case OpCode.DOUBLE_GREATER:  @compare(vm, double, OP_GREATER);
+            case OpCode.DOUBLE_EQUAL:    @compare(vm, double, OP_EQUAL);
 
-            case OpCode.NOT.ordinal:
+            case OpCode.NOT:
             {
                 bool v = @pop_val(vm, bool);
                 @push_val(vm, bool, !v);
@@ -323,10 +378,10 @@ fn RunResult run(Vm* vm)
 
             // ---------- Arithmetic ----------
 
-            case OpCode.INC_LOCAL.ordinal:
+            case OpCode.INC_LOCAL:
             {
                 ushort slotIndex = @read_u16(vm);
-                SlotInfo info    = vm.frame.function.slots[slotIndex];
+                FrameSlotInfo info    = vm.frame.function.slots[slotIndex];
                 ushort offset    = vm.frame.base + info.offset;
 
                 int v = @read_local(vm, int, offset);
@@ -336,27 +391,27 @@ fn RunResult run(Vm* vm)
                 @unaligned_store(*(int*)dst, v, int.alignof);
             }
 
-            case OpCode.ADD_INT.ordinal:       @math(vm, int,    OP_ADD);
-            case OpCode.SUB_INT.ordinal:       @math(vm, int,    OP_SUB);
-            case OpCode.MUL_INT.ordinal:       @math(vm, int,    OP_MUL);
-            case OpCode.DIV_INT.ordinal:       @math(vm, int,    OP_DIV);
-            case OpCode.NEGATE_INT.ordinal:    @negate(vm, int);
+            case OpCode.ADD_INT:       @math(vm, int,    OP_ADD);
+            case OpCode.SUB_INT:       @math(vm, int,    OP_SUB);
+            case OpCode.MUL_INT:       @math(vm, int,    OP_MUL);
+            case OpCode.DIV_INT:       @math(vm, int,    OP_DIV);
+            case OpCode.NEGATE_INT:    @negate(vm, int);
 
-            case OpCode.ADD_FLOAT.ordinal:     @math(vm, float,  OP_ADD);
-            case OpCode.SUB_FLOAT.ordinal:     @math(vm, float,  OP_SUB);
-            case OpCode.MUL_FLOAT.ordinal:     @math(vm, float,  OP_MUL);
-            case OpCode.DIV_FLOAT.ordinal:     @math(vm, float,  OP_DIV);
-            case OpCode.NEGATE_FLOAT.ordinal:  @negate(vm, float);
+            case OpCode.ADD_FLOAT:     @math(vm, float,  OP_ADD);
+            case OpCode.SUB_FLOAT:     @math(vm, float,  OP_SUB);
+            case OpCode.MUL_FLOAT:     @math(vm, float,  OP_MUL);
+            case OpCode.DIV_FLOAT:     @math(vm, float,  OP_DIV);
+            case OpCode.NEGATE_FLOAT:  @negate(vm, float);
 
-            case OpCode.ADD_DOUBLE.ordinal:    @math(vm, double, OP_ADD);
-            case OpCode.SUB_DOUBLE.ordinal:    @math(vm, double, OP_SUB);
-            case OpCode.MUL_DOUBLE.ordinal:    @math(vm, double, OP_MUL);
-            case OpCode.DIV_DOUBLE.ordinal:    @math(vm, double, OP_DIV);
-            case OpCode.NEGATE_DOUBLE.ordinal: @negate(vm, double);
+            case OpCode.ADD_DOUBLE:    @math(vm, double, OP_ADD);
+            case OpCode.SUB_DOUBLE:    @math(vm, double, OP_SUB);
+            case OpCode.MUL_DOUBLE:    @math(vm, double, OP_MUL);
+            case OpCode.DIV_DOUBLE:    @math(vm, double, OP_DIV);
+            case OpCode.NEGATE_DOUBLE: @negate(vm, double);
 
             // ---------- Output ----------
 
-            case OpCode.ECHO.ordinal:
+            case OpCode.ECHO:
             {
                 ValueType type = (ValueType)@read_u8(vm);
 
@@ -382,7 +437,7 @@ fn RunResult run(Vm* vm)
                 }
             }
 
-            case OpCode.POP.ordinal:
+            case OpCode.POP:
             {
                 Byte size = @read_u8(vm);
                 vm.stackHead -= size;
@@ -390,7 +445,7 @@ fn RunResult run(Vm* vm)
 
             // ---------- Call / Return ----------
 
-            case OpCode.CALL.ordinal:
+            case OpCode.CALL:
             {
                 Byte argCount = @read_u8(vm);
                 ushort argBytesSize = @read_u16(vm);
@@ -415,6 +470,11 @@ fn RunResult run(Vm* vm)
                         newFrame.base = funcOffset + uptr.sizeof;
                         newFrame.callee = callee;
 
+                        // Zero initialization on locals
+                        ushort localsStart = newFrame.base + func.argsSizeInBytes;
+                        ushort localsEnd   = newFrame.base + func.totalLocalsBytes;
+                        libc::memset(&vm.stack[localsStart], 0, (usz)localsEnd - localsStart);
+
                         vm.frame = newFrame;
 
                         vm.stackHead = (ushort)(newFrame.base + func.totalLocalsBytes);
@@ -433,17 +493,15 @@ fn RunResult run(Vm* vm)
                         vm.error("Attempted to call non-callable object");
                         return RunResult.RUNTIME_ERR;
                 }
+
             }
 
-            case OpCode.RETURN.ordinal:
+            case OpCode.RETURN:
             {
                 ObjFunction* func = vm.frame.function;
-                ushort retSize = common::get_type_size(func.returnType);
+                ushort retSize = func.returnTypeSize;
 
-                Byte[16] tmp; // enough for int/float/double/ptr/bool; expand later for structs
                 Byte* retSrc = &vm.stack[vm.stackHead - retSize];
-                for (int i=0; i<retSize; i++) tmp[i] = retSrc[i];
-
                 ushort calleeOffset = (ushort)(vm.frame.base - uptr.sizeof);
 
                 vm.frameCount--;
@@ -453,7 +511,7 @@ fn RunResult run(Vm* vm)
                 vm.frame = &vm.frames[vm.frameCount - 1];
 
                 // push return value for caller
-                for (int i=0; i<retSize; i++) vm.stack[vm.stackHead + i] = tmp[i];
+                libc::memcpy(&vm.stack[vm.stackHead],retSrc, retSize);
                 vm.stackHead += retSize;
             }
 

@@ -1,4 +1,4 @@
-fn null program() {
+fn bool program() {
     int res = fib(14);
     echo(res);
     return;

@@ -4,15 +4,15 @@ import common;
 
 fn void Compiler.emit_numeric_binary(Compiler* this, OpCode intOp, OpCode floatOp, OpCode doubleOp, int line)
 {
-    ValueType right = this.typeStack.pop();
-    ValueType left  = this.typeStack.pop();
+    CompTypeInfo right = this.typeStack.pop();
+    CompTypeInfo left  = this.typeStack.pop();
 
-    if (left != right) {
+    if (left.type != right.type) {
         this.error("Type mismatch in numeric operator.");
         return;
     }
 
-    switch (left) {
+    switch (left.type) {
         case ValueType.INT:         this.emit_op(intOp, line);
         case ValueType.FLOAT:       this.emit_op(floatOp, line);
         case ValueType.DOUBLE:      this.emit_op(doubleOp, line);
@@ -26,21 +26,21 @@ fn void Compiler.emit_not_equal(Compiler* this, int line)
 {
     this.emit_numeric_binary(OpCode.INT_EQUAL, OpCode.FLOAT_EQUAL, OpCode.DOUBLE_EQUAL, line);
     this.emit_op(OpCode.NOT, line);
-    this.typeStack.push(ValueType.BOOL);
+    this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
 }
 
 fn void Compiler.emit_less_equal(Compiler* this, int line)
 {
     this.emit_numeric_binary(OpCode.INT_GREATER, OpCode.FLOAT_GREATER, OpCode.DOUBLE_GREATER, line);
     this.emit_op(OpCode.NOT, line);
-    this.typeStack.push(ValueType.BOOL);
+    this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
 }
 
 fn void Compiler.emit_greater_equal(Compiler* this, int line)
 {
     this.emit_numeric_binary(OpCode.INT_LESS, OpCode.FLOAT_LESS, OpCode.DOUBLE_LESS, line);
     this.emit_op(OpCode.NOT, line);
-    this.typeStack.push(ValueType.BOOL);
+    this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
 }
 
 fn void Compiler.emit_byte(Compiler* this, Byte byte, int line)
@@ -59,11 +59,20 @@ fn void Compiler.emit_op(Compiler* this, OpCode op1, int line)
     this.emit_byte((Byte)op1, line);
 }
 
-fn void Compiler.emit_op_u16(Compiler* this, OpCode opCode, ushort operandIndex, int line)
+fn void Compiler.emit_op_u16(Compiler* this, OpCode opCode, ushort opData1, int line)
 {
     this.emit_byte((Byte)opCode, line);
-    this.emit_u16(operandIndex, line);
+    this.emit_u16(opData1, line);
 }
+
+fn void Compiler.emit_op_u16_u16_u8(Compiler* this, OpCode opCode, ushort opData1, ushort opData2, Byte data3, int line)
+{
+    this.emit_byte((Byte)opCode, line);
+    this.emit_u16(opData1, line);
+    this.emit_u16(opData2, line);
+    this.emit_byte(data3, line);
+}
+
 
 fn void Compiler.emit_u16(Compiler* this, ushort val, int line)
 {
@@ -115,10 +124,10 @@ fn void Compiler.patch_jump(Compiler* this, int offset)
 
 fn void Compiler.emit_cast(Compiler* this, ValueType targetType, int line)
 {
-    ValueType source = this.typeStack.pop();
+    CompTypeInfo source = this.typeStack.pop();
 
     // No-op cast
-    if (source == targetType) {
+    if (source.type == targetType) {
         this.warning("Specified cast is between two identical types.");
         this.typeStack.push(source);
         return;
@@ -126,34 +135,34 @@ fn void Compiler.emit_cast(Compiler* this, ValueType targetType, int line)
 
     switch (targetType) {
         case ValueType.INT:
-            switch (source) {
+            switch (source.type) {
                 case ValueType.FLOAT:       this.emit_byte((Byte)OpCode.CAST_F_I, line);
                 case ValueType.DOUBLE:      this.emit_byte((Byte)OpCode.CAST_D_I, line);
                 default:                    this.error("Unsupported cast to int.");
             }
-            this.typeStack.push(ValueType.INT);
+            this.typeStack.push({.type = ValueType.INT, .structTypeIndex = uint.max});
             return;
 
         case ValueType.FLOAT:
-            switch (source) {
+            switch (source.type) {
                 case ValueType.INT:         this.emit_byte((Byte)OpCode.CAST_I_F, line);
                 case ValueType.DOUBLE:      this.emit_byte((Byte)OpCode.CAST_D_F, line);
                 default:                    this.error("Unsupported cast to float.");
             }
-            this.typeStack.push(ValueType.FLOAT);
+            this.typeStack.push({.type = ValueType.FLOAT, .structTypeIndex = uint.max});
             return;
 
         case ValueType.DOUBLE:
-            switch (source) {
+            switch (source.type) {
                 case ValueType.INT:         this.emit_byte((Byte)OpCode.CAST_I_D, line);
                 case ValueType.FLOAT:       this.emit_byte((Byte)OpCode.CAST_F_D, line);
                 default:                    this.error("Unsupported cast to double.");
             }
-            this.typeStack.push(ValueType.DOUBLE);
+            this.typeStack.push({.type = ValueType.DOUBLE, .structTypeIndex = uint.max});
             return;
 
         case ValueType.GC_OBJ:
-            switch (source) {
+            switch (source.type) {
                 case ValueType.INT:         nextcase;
                 case ValueType.FLOAT:       nextcase;
                 case ValueType.DOUBLE:      nextcase;
@@ -161,24 +170,24 @@ fn void Compiler.emit_cast(Compiler* this, ValueType targetType, int line)
                 case ValueType.BOOL:        nextcase;
                 case ValueType.NO_GC_OBJ:
                     this.emit_byte((Byte)OpCode.CAST_TO_STRING, line);
-                    this.emit_byte((Byte)source, line);
-                    this.typeStack.push(ValueType.GC_OBJ);
+                    this.emit_byte((Byte)source.type, line);
+                    this.typeStack.push({.type = ValueType.GC_OBJ, .structTypeIndex = uint.max});
                     return;
 
                 case ValueType.GC_OBJ:
                     // string -> string is handled above as no-op
-                    this.typeStack.push(ValueType.GC_OBJ);
+                    this.typeStack.push({.type = ValueType.GC_OBJ, .structTypeIndex = uint.max});
                     return;
 
                 default:
                     this.error("Unsupported cast to string.");
-                    this.typeStack.push(targetType); // keep stack balanced after error
+                    this.typeStack.push({.type = targetType, .structTypeIndex = uint.max}); // keep stack balanced after error
                     return;
             }
 
         default:
             this.error("Unsupported cast target type.");
-            this.typeStack.push(targetType);
+            this.typeStack.push({.type = targetType, .structTypeIndex = uint.max}); 
             return;
     }
 }
@@ -194,7 +203,7 @@ fn void Compiler.emit_pop_of_type(Compiler* this, ValueType t, int line)
         case ValueType.BOOL:        size = (Byte)bool.sizeof;
         case ValueType.GC_OBJ:      nextcase;
         case ValueType.NO_GC_OBJ:   size = (Byte)uptr.sizeof;
-        case ValueType.NULL:        size = 1;
+        case ValueType.NULL:        size = 0;
         default:    this.error("emit_pop_of_type: unsupported type");
     }
 

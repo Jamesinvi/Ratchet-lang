@@ -3,6 +3,22 @@ import common;
 
 alias ParseFn = fn ValueType(Compiler* compiler, bool canAssign);
 
+enum Precedence 
+{
+    NONE,
+    ASSIGNMENT, // =
+    OR,         // ||
+    AND,        // &&
+    EQUALITY,   
+    COMPARISON, // ==
+    TERM,       
+    FACTOR,
+    UNARY,
+    CALL,
+    PRIMARY
+}
+
+
 struct CompileRule
 {
     ParseFn prefix;
@@ -20,7 +36,7 @@ CompileRule[]rules = {
   [TokenType.LEFT_BRACE.ordinal]    = {null,                    null,             Precedence.NONE}, 
   [TokenType.RIGHT_BRACE.ordinal]   = {null,                    null,             Precedence.NONE},
   [TokenType.COMMA.ordinal]         = {null,                    null,             Precedence.NONE},
-  [TokenType.DOT.ordinal]           = {null,                    null,             Precedence.NONE},
+  [TokenType.DOT.ordinal]           = {null,                    &Compiler.dot,    Precedence.CALL},
   [TokenType.MINUS.ordinal]         = {&Compiler.unary,         &Compiler.binary, Precedence.TERM},
   [TokenType.PLUS.ordinal]          = {null,                    &Compiler.binary, Precedence.TERM},
   [TokenType.SEMICOLON.ordinal]     = {null,                    null,             Precedence.NONE},

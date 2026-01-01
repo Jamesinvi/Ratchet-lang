@@ -2,9 +2,11 @@ module debug;
 import vm;
 import scanner;
 import common;
+import log;
 
+const TRACE_COMPILATION = false;
 const SHOW_TOKENS = false;
-const SHOW_DISASSEMBLY = false;
+const SHOW_DISASSEMBLY = true;
 const DISASSMBLE_DURING_EXECUTION = false;
 
 
@@ -27,3 +29,10 @@ macro @print_tokens(scanner::Scanner* sc){
         sc.print_tokens();
     $endif
 }
+
+macro @log_compilation(String msg, args ...){
+    $if (TRACE_COMPILATION):
+        log::logn(msg,...args);
+    $endif
+}
+

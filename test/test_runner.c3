@@ -57,6 +57,11 @@ fn void t_08() @test
     compile_and_run_file("./test/08_fibonacci.ratc")!!;
 }
 
+fn void t_09() @test
+{
+    compile_and_run_file("./test/09_cast_string.ratc")!!;
+}
+
 
 fn void? compile_and_run_file(String filename)
 {

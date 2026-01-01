@@ -3,6 +3,7 @@ import common;
 import common::stack;
 import std::collections::list;
 import libc;
+import debug;
 import log;
 
 
@@ -41,7 +42,7 @@ fn bool Compiler.check(Compiler* this, TokenType tokenType)
 
 fn bool Compiler.check_struct_type_token(Compiler* this)
 {
-    bool typeAlreadyDeclared = common::declaredStructs.has_key(this.current.value);
+    bool typeAlreadyDeclared = declaredStructs.has_key(this.current.value);
     return this.check(TokenType.IDENTIFIER) && typeAlreadyDeclared;
 }
 
@@ -56,36 +57,48 @@ fn bool Compiler.check_builtin_type_token(Compiler* this)
     return this.check(TokenType.NULL)      ||
            this.check(TokenType.INTEGER_T) ||
            this.check(TokenType.FLOAT_T)   ||
-           this.check(TokenType.STRING_T)  ||
-           this.check(TokenType.DOUBLE_T);
+           this.check(TokenType.DOUBLE_T)  ||
+           this.check(TokenType.BOOL_T)    ||
+           this.check(TokenType.STRING_T);
 }
 
-fn ValueType Compiler.match_type(Compiler* this, String errMsg)
+fn CompTypeInfo Compiler.match_type(Compiler* this, String errMsg)
 {
-    if (this.match(TokenType.NULL)) {
-        return ValueType.NULL;
-    } else if (this.match(TokenType.INTEGER_T)) {
-        return ValueType.INT;
-    } else if (this.match(TokenType.FLOAT_T)) {
-        return ValueType.FLOAT;
-    } else if (this.match(TokenType.DOUBLE_T)) {
-        return ValueType.DOUBLE;
-    } else if (this.match(TokenType.STRING_T)) {
-        return ValueType.GC_OBJ;
-    } else if (this.check_struct_type_token()) {
+    CompTypeInfo result = {};
+    result.structTypeIndex = uint.max;
+    if (this.match(TokenType.NULL))             { result.type = ValueType.NULL;}
+    else if (this.match(TokenType.INTEGER_T))   { result.type = ValueType.INT;}
+    else if (this.match(TokenType.FLOAT_T))     { result.type = ValueType.FLOAT;}
+    else if (this.match(TokenType.DOUBLE_T))    { result.type = ValueType.DOUBLE;}
+    else if (this.match(TokenType.BOOL_T))      { result.type = ValueType.BOOL;}
+    else if (this.match(TokenType.STRING_T))    { result.type = ValueType.GC_OBJ;}
+    else if (this.check_struct_type_token()) {
         this.advance();
-        return ValueType.STRUCT;
+        result.type = ValueType.STRUCT;
+        result.structTypeIndex = declaredStructs[this.previous.value]!!;
     } else {
         this.error(errMsg);
-        return ValueType.NULL;
+        result.type = ValueType.NULL;
     }
+    return result;
+}
+
+fn CompTypeInfo cmptimeinfo_from_value (ValueType type, String name){
+    CompTypeInfo result = {};
+    result.type = type;
+    result.structTypeIndex = uint.max;
+
+    if(type == ValueType.STRUCT){
+        result.structTypeIndex = declaredStructs[name]!!;
+    }
+    return result;
 }
 
 fn uint get_type_index(ValueType type, String name){
     if(type != ValueType.STRUCT){
-        return common::NOT_STRUCT;
+        return NOT_STRUCT;
     }else{
-        return common::declaredStructs.get(name)!!;
+        return declaredStructs.get(name)!!;
     }
 
 }
@@ -106,13 +119,12 @@ fn void Compiler.warning_at(Compiler* this, Token* token, String msg)
     log::errlog(", %s \n", msg);
 }
 
-
-fn void Compiler.error(Compiler* this, String msg)
+fn void Compiler.error(Compiler* this, String msg, args ...)
 {
-    this.error_at(this.previous, msg);
+    this.error_at(this.previous, msg, ...args);
 }
 
-fn void Compiler.error_at(Compiler* this, Token* token, String msg)
+fn void Compiler.error_at(Compiler* this, Token* token, String msg, args ...)
 {
     if (this.panicMode) return;
 
@@ -121,11 +133,13 @@ fn void Compiler.error_at(Compiler* this, Token* token, String msg)
     this.panicMode = true;
 
     if (token.tokenType == TokenType.EOF) {
-        log::errlog(" at end");
+        log::errlog(" at end, ");
     } else {
-        log::errlog(" at '%s'", token.value);
+        log::errlog(" at '%s', ", token.value);
     }
-    log::errlog(", %s \n", msg);
+
+    log::errlogn(msg, ...args);
+
 }
 
 // ---------- Identifier helpers ----------
@@ -180,15 +194,18 @@ fn ushort Compiler.ensure_constant(Compiler* this, int constantIndex)
 
 // ---------- Predeclaration for functions / natives ----------
 
-fn ValueType token_type_to_value_type(TokenType t)
+fn CompTypeInfo token_type_to_value_type_info(TokenType t)
 {
+    CompTypeInfo result = {};
+    result.structTypeIndex = uint.max;
     switch (t) {
-        case TokenType.NULL:      return ValueType.NULL;
-        case TokenType.INTEGER_T: return ValueType.INT;
-        case TokenType.FLOAT_T:   return ValueType.FLOAT;
-        case TokenType.DOUBLE_T:  return ValueType.DOUBLE;
-        default:                  return ValueType.NULL;
+        case TokenType.NULL:      result.type = ValueType.NULL;
+        case TokenType.INTEGER_T: result.type = ValueType.INT;
+        case TokenType.FLOAT_T:   result.type = ValueType.FLOAT;
+        case TokenType.DOUBLE_T:  result.type = ValueType.DOUBLE;
+        default:                  result.type = ValueType.NULL;
     }
+    return result;
 }
 
 fn void Compiler.predeclare_functions(Compiler* this)
@@ -202,7 +219,7 @@ fn void Compiler.predeclare_functions(Compiler* this)
             Token* typeTok = &this.input[(usz)i + 1];
             Token* nameTok = &this.input[(usz)i + 2];
 
-            ValueType ret = token_type_to_value_type(typeTok.tokenType);
+            CompTypeInfo ret = token_type_to_value_type_info(typeTok.tokenType);
             this.functionReturnTypes.set(nameTok.value, ret);
         }
     }
@@ -211,5 +228,5 @@ fn void Compiler.predeclare_functions(Compiler* this)
 fn void Compiler.predeclare_natives(Compiler* this)
 {
     // Keep this in sync with VM native registrations
-    this.functionReturnTypes.set("clock", ValueType.DOUBLE);
+    this.functionReturnTypes.set("clock", {.type = ValueType.DOUBLE, .structTypeIndex = uint.max});
 }

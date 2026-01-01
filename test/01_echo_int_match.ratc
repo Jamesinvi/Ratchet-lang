@@ -1,4 +1,4 @@
-fn null program() {
+fn bool program() {
     echo(1 + 2 * 3);
     return;
 }

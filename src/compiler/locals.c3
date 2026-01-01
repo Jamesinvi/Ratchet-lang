@@ -7,4 +7,5 @@ struct Local
     Token name;
     int depth;
     ushort slotIdx;
+    CompTypeInfo typeInfo;
 }

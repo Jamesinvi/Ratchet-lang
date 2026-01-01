@@ -1,8 +1,8 @@
-fn null program() {
-    echo(test(2.3));
+fn bool program() {
+    echo(test(2.3f));
     return;
 }
 
-fn double test(double t) {
+fn float test(float t) {
     return t;
 }

@@ -1,4 +1,4 @@
-fn null program() {
+fn bool program() {
     if (true) { echo(1); }
     else { echo(2); }
     return;

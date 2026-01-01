@@ -1,4 +1,4 @@
-fn null program(){
+fn bool program(){
 	double start = clock();
 	int i = 0;
 	while(i<100000000){

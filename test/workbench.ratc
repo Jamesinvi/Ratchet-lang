@@ -1,10 +1,28 @@
 
-fn null program(){
-	float ftr = 2.5frear;
-	echo(test(2.3fact));
+struct vec3 {
+	float x;
+	float y;
+	float z;
+}
+struct vec2 {
+	float x;
+	float y;
+}
+fn bool program(){
+	vec2 prova;
+	prova.y = 5.0f;
+	prova.x = 3.0f;
+	vec3 result = isGreaterThan(prova, prova);
+	echo(result.x);
+	echo(result.y);
+	echo(result.z);
 	return;
 }
 
-fn float test(float t){
-	return t;
+fn vec3 isGreaterThan(vec2 test1){
+	vec3 r;
+	r.x = test1.x;
+	r.y = test1.y;
+	r.z = 35.1f;
+	return r;
 }

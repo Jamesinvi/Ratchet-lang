@@ -13,6 +13,11 @@ alias Chunk = common::Chunk;
 
 fn int main(String[] args)
 {
+    if(args.len < 2)
+    {
+        log::errlogn("You need to specify a file to compile");
+        return 1;
+    }
 	String filename = args[1];
     Scanner scanner ={};
     Compiler compiler ={};
@@ -45,7 +50,7 @@ fn int main(String[] args)
     vm::run(&vm);
     vm.trackedHeap.debug_print();
     //vm.untrackedHeap.debug_print();
-    common::print_all_struct_types();
+    compiler::print_all_struct_types();
     vm.deinit();
     return 0;
 }

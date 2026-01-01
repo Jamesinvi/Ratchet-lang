@@ -20,6 +20,17 @@ fn void HeapTracker.init(HeapTracker* this, String name){
 }
 
 fn void HeapTracker.free(HeapTracker* this){
+    foreach(obj : this.objects){
+        if(obj.type == ObjType.FUNCTION){
+            ((ObjFunction*)obj).deinit();
+            free(((ObjFunction*)obj));
+        }else if (obj.type == ObjType.STRING){
+            ((ObjString*)obj).str.free(mem);
+            free(((ObjString*)obj));
+        }else if (obj.type == ObjType.NATIVE_FUNCTION){
+            free(((ObjNative*)obj));
+        }
+    }
     this.objects.free();
     this.usedSlots.free();
 }
