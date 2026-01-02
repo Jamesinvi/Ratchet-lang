@@ -7,7 +7,8 @@ is currently implemented***
 
 ## 🎯 Design Goals
 
-* **Simple** imperative language.
+* **Simple, Statically typed** imperative language.
+* Interpreted in a bytecode **VM** with (maybe) optional JIT or AOT compilation to binary.
 * **Struct-only** type system  
   * No classes  
   * No inheritance
@@ -45,6 +46,7 @@ Please not **ALL** of these will be heavily changed. The following list simply s
 * ❌ More optimization passes (planned)
 * ❌ GC tracing (planned)
 * ❌ Interfaces (planned)
+* ❌ JIT (planned)
 * ❌ LLVM IR or binary generation (maybe)
 
 ## 🧱 Types
