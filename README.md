@@ -27,6 +27,8 @@ is currently implemented***
 
 
 ## ⏳ Current State
+***Skip this section to see the language features***.
+
 Please not **ALL** of these will be heavily changed. The following list simply states what has been done, even if only in as a temporary implementation.
 
 * ✅ Lexer/parser basics (custom-made, no yacc/lex)
@@ -36,9 +38,11 @@ Please not **ALL** of these will be heavily changed. The following list simply s
 * ✅ Basic stack frame setup
 * ✅ Basic primitive operations (math, assignment and logic)
 * ✅ Struct field set/get
+* ❌ Constructors (planned)
+* ❌ Methods (planned)
 * ❌ Arrays (planned)
 * ❌ Reference types (T& and T*, planned)
-* ❌ Optimization passes (planned)
+* ❌ More optimization passes (planned)
 * ❌ GC tracing (planned)
 * ❌ Interfaces (planned)
 * ❌ LLVM IR or binary generation (maybe)
@@ -163,7 +167,7 @@ struct Foo {
         return b;
     }
 
-    method void set(bool v) {
+    method null set(bool v) {
         b = v;
     }
 }
@@ -172,7 +176,8 @@ struct Foo {
 Lowered form:
 
 ```ratchet
-fn Foo_bar(Foo& this)
+fn bool Foo_bar(Foo& this)
+fn null Foo_set(Foo& this)
 ```
 
 Calls:
@@ -213,7 +218,7 @@ struct Player : HasPosition {
 Usage:
 
 ```ratchet
-fn printDistance(HasPosition& p) {
+fn null printDistance(HasPosition& p) {
     print(p.length2D());
 }
 ```
@@ -294,20 +299,19 @@ interface HasPosition {
 }
 
 struct Player : HasPosition {
-    float x;
-    float y;
+    Vec3 position;
     string name;
 }
 
 fn Player& makeHero() {
     Player& p = new Player();
-    p.x = 1.0;
-    p.y = 2.0;
+    p.position.x = 1.0;
+    p.position.y = 2.0;
     p.name = "Hero";
     return p;
 }
 
-fn demo() {
+fn bool program() {
     Player& p = makeHero();
     print(p.length2D());
 
