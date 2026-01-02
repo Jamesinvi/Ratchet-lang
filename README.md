@@ -1,24 +1,47 @@
-# 🔧 Ratchet Language – Core Type & Memory Model (Draft)
+# 🔧 Ratchet Language
+
+***Still working on a v0.1, only some of the functionality
+is currently implemented***
 
 ---
 
 ## 🎯 Design Goals
 
+* **Simple** imperative language.
 * **Struct-only** type system  
   * No classes  
   * No inheritance
 * **Value semantics**
   * All types are value types by default
+* **Reference types** are distinct from value types (T != T&)
 * **Optional explicit memory control**
   * `T&` = GC tracked reference (managed)
   * `T*` = non-GC reference (unmanaged)
-* **No raw pointers or pointer arithmetic**
-* **Optional debug leak detection for manual allocations**
+* No pointer arithmetic
+* **Optional** debug leak detection for manual allocations
 * **Interfaces as compile-time contracts** (no runtime dispatch in v1)
 * **Methods on structs**
   * With implicit `this` / `self`
 
 ---
+
+
+## ⏳ Current State
+Please not **ALL** of these will be heavily changed. The following list simply states what has been done, even if only in as a temporary implementation.
+
+* ✅ Lexer/parser basics (custom-made, no yacc/lex)
+* 🚧 Basic types (partially done, more to come)
+* ✅ Bytecode VM basics 
+* ✅ Struct and function definitions
+* ✅ Basic stack frame setup
+* ✅ Basic primitive operations (math, assignment and logic)
+* ✅ Struct field set/get
+* ❌ Arrays (planned)
+* ❌ Reference types (T& and T*, planned)
+* ❌ Optimization passes (planned)
+* ❌ GC tracing (planned)
+* ❌ Interfaces (planned)
+* ❌ LLVM IR or binary generation (maybe)
 
 ## 🧱 Types
 
@@ -31,6 +54,14 @@ Built-in primitives all follow **value semantics**:
 * `float`
 * `double`
 * `string` (value semantics, uses GC-tracked reference internally)
+
+More will come in the future such as:
+
+* `char`
+* `long`
+* `ulong`
+* `uint`
+* `byte`
 
 ---
 
