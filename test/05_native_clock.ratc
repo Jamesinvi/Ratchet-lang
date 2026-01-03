@@ -1,4 +1,0 @@
-fn bool program() {
-    echo(clock());
-    return;
-}

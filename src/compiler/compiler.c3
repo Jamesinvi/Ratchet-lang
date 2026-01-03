@@ -75,6 +75,7 @@ fn void Compiler.deinit(Compiler* this)
     this.typeStack.free();
     this.functionReturnTypes.free();
     this.scopes.free();
+    clean_up_struct_globals();
 }
 
 fn Chunk* Compiler.get_current_chunk(Compiler* this)

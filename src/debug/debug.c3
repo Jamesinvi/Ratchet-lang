@@ -4,34 +4,27 @@ import scanner;
 import common;
 import log;
 
-const TRACE_COMPILATION = false;
-const SHOW_TOKENS = false;
-const SHOW_DISASSEMBLY = true;
-const DISASSMBLE_DURING_EXECUTION = false;
-
-
-
 macro @print_instruction(Vm* vm){
-    $if (DISASSMBLE_DURING_EXECUTION):
+    $if ($feature(DISASSMBLE_DURING_EXECUTION)):
         int offset = (int)(vm.frame.ip - &vm.frame.function.chunk.code[0]) - 1;
         common::dissassemble_instruction(&vm.frame.function.chunk, offset);  
   $endif
 }
 
 macro @print_disassembly(Vm* vm){
-    $if (SHOW_DISASSEMBLY):
+    $if ($feature(SHOW_DISASSEMBLY)):
         vm.print_disassembly();
     $endif
 }
 
 macro @print_tokens(scanner::Scanner* sc){
-    $if (SHOW_TOKENS):
+    $if ($feature(SHOW_TOKENS)):
         sc.print_tokens();
     $endif
 }
 
 macro @log_compilation(String msg, args ...){
-    $if (TRACE_COMPILATION):
+    $if ($feature(TRACE_COMPILATION)):
         log::logn(msg,...args);
     $endif
 }

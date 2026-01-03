@@ -41,9 +41,11 @@ struct Vm
     HeapTracker trackedHeap;
     HeapTracker untrackedHeap;
     HashMap{String, Obj*} globals;
+    OutStream output;
+
 }
 
-fn void Vm.init(Vm* this, ObjFunction* entryPoint)
+fn void Vm.init(Vm* this, ObjFunction* entryPoint, OutStream output)
 {
     this.stackHead = 0;
     this.frameCount = 0;
@@ -56,6 +58,7 @@ fn void Vm.init(Vm* this, ObjFunction* entryPoint)
     this.frame.ip = (Byte*)&entryPoint.chunk.code[0];
     this.frame.base = 0;
     this.stackHead = entryPoint.totalLocalsBytes;
+    this.output = output;
 
     for(int i = 0; i < this.stackHead; i++){
         this.stack[i] = 0;
@@ -416,12 +419,12 @@ fn RunResult run(Vm* vm)
                 ValueType type = (ValueType)@read_u8(vm);
 
                 switch (type) {
-                    case ValueType.INT:         io::printfn("%d", @pop_val(vm, int));
-                    case ValueType.FLOAT:       io::printfn("%f", @pop_val(vm, float));
-                    case ValueType.DOUBLE:      io::printfn("%f", @pop_val(vm, double));
-                    case ValueType.BOOL:        io::printfn("%s", @pop_val(vm, bool));
-                    case ValueType.NULL:        io::printfn("null"); @pop_val(vm, bool);
-                    case ValueType.STRUCT:      io::printfn("Struct"); @pop_val(vm, int);
+                    case ValueType.INT:         io::fprintfn(vm.output, "%d", @pop_val(vm, int));
+                    case ValueType.FLOAT:       io::fprintfn(vm.output, "%f", @pop_val(vm, float));
+                    case ValueType.DOUBLE:      io::fprintfn(vm.output, "%f", @pop_val(vm, double));
+                    case ValueType.BOOL:        io::fprintfn(vm.output, "%s", @pop_val(vm, bool));
+                    case ValueType.NULL:        io::fprintfn(vm.output, "null"); @pop_val(vm, bool);
+                    case ValueType.STRUCT:      io::fprintfn(vm.output, "Struct"); @pop_val(vm, int);
                     case ValueType.NO_GC_OBJ:   nextcase;
                     case ValueType.GC_OBJ:
                     {
@@ -429,9 +432,9 @@ fn RunResult run(Vm* vm)
                         ObjType kind = obj.type;
 
                         switch (kind) {
-                            case ObjType.STRING:            io::printfn("%s", ((ObjString*)obj).str);
-                            case ObjType.FUNCTION:          io::printfn("fn: %s", ((ObjFunction*)obj).name.str);
-                            case ObjType.NATIVE_FUNCTION:   io::printfn("native fn");
+                            case ObjType.STRING:            io::fprintfn(vm.output, "%s", ((ObjString*)obj).str);
+                            case ObjType.FUNCTION:          io::fprintfn(vm.output, "fn: %s", ((ObjFunction*)obj).name.str);
+                            case ObjType.NATIVE_FUNCTION:   io::fprintfn(vm.output, "native fn");
                         }
                     }
                 }

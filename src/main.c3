@@ -4,6 +4,7 @@ import common;
 import debug;
 import vm;
 import log;
+import libc;
 import std::collections;
 import std::io::file;
 
@@ -44,13 +45,14 @@ fn int main(String[] args)
         return 1;
     }
     scanner.deinit();
+
     vm::Vm vm ={};
 
-    vm.init(entryPoint);
+    vm.init(entryPoint, io::stdout());
     vm::run(&vm);
-    vm.trackedHeap.debug_print();
+    //vm.trackedHeap.debug_print();
     //vm.untrackedHeap.debug_print();
-    compiler::print_all_struct_types();
+    //compiler::print_all_struct_types();
     vm.deinit();
     return 0;
 }

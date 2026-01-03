@@ -1,0 +1,27 @@
+struct Vec3 {
+    float x;
+    float y;
+    float z;
+}
+
+fn bool program() {
+    Vec3 a;
+    a.x = 14.0f;
+    echo(a.x);
+    echo(a.y);
+    echo(a.z);
+    Vec3 b = cloneVec3(a);
+    echo(b.x);
+    a.z = 33.0f;
+    echo(b.z);
+    echo(a.z);
+    return;
+}
+
+fn Vec3 cloneVec3(Vec3 toClone){
+    Vec3 toReturn;
+    toReturn.x = toClone.x;
+    toReturn.y = toClone.y;
+    toReturn.z = toClone.z;
+    return toReturn;
+}

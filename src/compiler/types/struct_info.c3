@@ -35,6 +35,17 @@ HashMap{String, uint} declaredStructs;
 
 List{CompStructTypeInfo} structTypes;
 
+fn void clean_up_struct_globals(){
+    foreach(structTypeInfo : structTypes){
+        foreach(fieldInfo : structTypeInfo.fieldInfos){
+            fieldInfo.name.free(mem);
+        }
+        structTypeInfo.fieldInfos.free();
+        structTypeInfo.name.free(mem);
+    }
+    structTypes.free();
+}
+
 fn void print_all_struct_types(){
     foreach (typeInfo : structTypes){
         io::printf("[name: %s, fieldCount: %s]{\n", typeInfo.name, typeInfo.fieldCount);
