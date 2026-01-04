@@ -7,6 +7,8 @@ import std::io;
 struct CompStructTypeInfo
 {
     String name;
+    bool isDefined;
+    ushort sizeInBytes;
     ushort fieldCount;
     uint typeIndex;                 //index in structTypes
     List{FieldInfo} fieldInfos;
@@ -44,6 +46,7 @@ fn void clean_up_struct_globals(){
         structTypeInfo.name.free(mem);
     }
     structTypes.free();
+    declaredStructs.clear();
 }
 
 fn void print_all_struct_types(){

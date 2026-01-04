@@ -246,15 +246,16 @@ fn RunResult run(Vm* vm)
 
             }
 
-            case OpCode.GET_PROP:
+            case OpCode.GET_PROP_LOC:
             {
                 ushort slotIndex = @read_u16(vm);
                 ushort localOffset = @read_u16(vm);
+                ushort fieldSize = @read_u16(vm);
                 ValueType fieldType = (ValueType) @read_u8(vm);
                 FrameSlotInfo info = vm.frame.function.slots[slotIndex];
                 ushort offset = vm.frame.base + info.offset + localOffset;
 
-                assert(localOffset + get_type_size(fieldType) <= info.sizeInBytes);
+                assert(localOffset + fieldSize <= info.sizeInBytes);
 
                 switch (fieldType) {
                     case ValueType.INT:         @read_local_and_push(vm, int, offset);
@@ -270,18 +271,98 @@ fn RunResult run(Vm* vm)
                 }
             }
 
-            case OpCode.SET_PROP:
+            case OpCode.SET_PROP_LOC:
             {
                 ushort slotIndex = @read_u16(vm);
                 ushort localOffset = @read_u16(vm);
+                ushort fieldSize = @read_u16(vm);
                 ValueType fieldType = (ValueType) @read_u8(vm);
                 FrameSlotInfo info = vm.frame.function.slots[slotIndex];
                 ushort offset = vm.frame.base + info.offset + localOffset;
 
-                ushort fieldSize = get_type_size(fieldType);
                 vm.stackHead -= fieldSize;
                 libc::memcpy(&vm.stack[offset], &vm.stack[vm.stackHead], fieldSize);
 
+            }
+
+            case OpCode.GET_PROP_REF:
+            {
+                ushort slotIndex   = @read_u16(vm);
+                ushort localOffset = @read_u16(vm);
+                ushort fieldSize = @read_u16(vm);
+
+                ValueType fieldType = (ValueType)@read_u8(vm);
+
+                FrameSlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort slotAddr = vm.frame.base + info.offset;
+
+                ObjRef* r = @read_local(vm, ObjRef*, slotAddr);
+                if (r == null || r.data == null) { vm.error("Null reference"); return RunResult.RUNTIME_ERR; }
+
+                Byte* fieldAddr = (Byte*)r.data + localOffset;
+                assert(localOffset + fieldSize <= r.sizeInBytes);
+
+                switch (fieldType) {
+                    case ValueType.INT:    { int v = @unaligned_load(*(int*)fieldAddr, int.alignof); @push_val(vm, int, v); }
+                    case ValueType.FLOAT:  { float v = @unaligned_load(*(float*)fieldAddr, float.alignof); @push_val(vm, float, v); }
+                    case ValueType.DOUBLE: { double v = @unaligned_load(*(double*)fieldAddr, double.alignof); @push_val(vm, double, v); }
+                    case ValueType.BOOL:   { bool v = @unaligned_load(*(bool*)fieldAddr, bool.alignof); @push_val(vm, bool, v); }
+                    case ValueType.GC_OBJ: nextcase;
+                    case ValueType.NO_GC_OBJ:
+                    {
+                        Obj* v = @unaligned_load(*(Obj**)fieldAddr, uptr.alignof);
+                        @push_val(vm, Obj*, v);
+                    }
+                    default: { vm.error("Unsupported field type in GET_PROP_REF"); return RunResult.RUNTIME_ERR; }
+                }
+            }
+
+            case OpCode.SET_PROP_REF:
+            {
+                ushort slotIndex = @read_u16(vm);
+                ushort localOffset = @read_u16(vm);
+                ushort fieldSize = @read_u16(vm);
+                ValueType fieldType = (ValueType)@read_u8(vm);
+
+                FrameSlotInfo info = vm.frame.function.slots[slotIndex];
+                ushort slotAddr = vm.frame.base + info.offset;
+
+                // Local slot stores an ObjRef* (as pointer bytes)
+                ObjRef* r = @read_local(vm, ObjRef*, slotAddr);
+                if (r == null || r.data == null) { vm.error("Null reference"); return RunResult.RUNTIME_ERR; }
+
+                // Optional bounds check
+                if (localOffset + fieldSize > r.sizeInBytes) {
+                    vm.error("Field write out of bounds");
+                    return RunResult.RUNTIME_ERR;
+                }
+
+                Byte* fieldAddr = (Byte*)r.data + localOffset;
+
+                // Pop RHS and store into referenced memory
+                vm.stackHead -= fieldSize;
+                libc::memcpy(fieldAddr, &vm.stack[vm.stackHead], fieldSize);
+            }
+
+
+            case OpCode.NEW_REF:
+            {
+                Byte tracked = @read_u8(vm);
+                ValueType refTo  = (ValueType)@read_u8(vm);
+                ushort sizeBytes = @read_u16(vm);
+
+                // one allocation: [ObjRef header][payload bytes...]
+                usz total = ObjRef.sizeof + sizeBytes;
+
+                void* memBlock = tracked ? vm.trackedHeap.alloc(total) : vm.untrackedHeap.alloc(total); 
+                ObjRef* r = common::create_obj_ref(false, refTo, sizeBytes, memBlock);
+                if (tracked>0) {
+                    vm.trackedHeap.track_alloc((Obj*)r);
+                }else{
+                    vm.untrackedHeap.track_alloc((Obj*)r);
+                }
+
+                @push_val(vm, ObjRef*, r);
             }
 
 
@@ -434,6 +515,7 @@ fn RunResult run(Vm* vm)
                         switch (kind) {
                             case ObjType.STRING:            io::fprintfn(vm.output, "%s", ((ObjString*)obj).str);
                             case ObjType.FUNCTION:          io::fprintfn(vm.output, "fn: %s", ((ObjFunction*)obj).name.str);
+                            case ObjType.REF:               io::fprintfn(vm.output, "ref: %s", ((ObjRef*)obj).refTo);
                             case ObjType.NATIVE_FUNCTION:   io::fprintfn(vm.output, "native fn");
                         }
                     }

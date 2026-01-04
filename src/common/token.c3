@@ -16,10 +16,12 @@ enum TokenType : uint {
     // Keywords.
     AND, CLASS, ELSE, FALSE, FN, FOR, IF, NULL, OR,
     PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE, ECHO,
-    METHOD,
+    METHOD, NEW,
 
     // Types
     INTEGER_T, FLOAT_T, DOUBLE_T, STRING_T, STRUCT_T, BOOL_T,
+    INT_REF_GC, FLOAT_REF_GC, DOUBLE_REF_GC, BOOL_REF_GC,
+    INT_REF_NOGC, FLOAT_REF_NOGC, DOUBLE_REF_NOGC, BOOL_REF_NOGC,
     EOF,
 }
 
@@ -39,7 +41,6 @@ fn void Token.debug_print(Token* token) @dynamic{
 
 Keyword[*] keywords = {
     {.tokenType = AND, .value = "and"},
-    {.tokenType = CLASS, .value = "class"},
     {.tokenType = ELSE, .value = "else"},
     {.tokenType = FALSE, .value = "false"},
     {.tokenType = FN, .value = "fn"},
@@ -49,10 +50,13 @@ Keyword[*] keywords = {
     {.tokenType = OR, .value = "or"},
     {.tokenType = PRINT, .value = "print"},
     {.tokenType = RETURN, .value = "return"},
-    {.tokenType = SUPER, .value = "super"},
     {.tokenType = THIS, .value = "this"},
     {.tokenType = TRUE, .value = "true"},
     {.tokenType = WHILE, .value = "while"},
+    {.tokenType = INT_REF_GC, .value = "int&"},
+    {.tokenType = FLOAT_REF_GC, .value = "float&"},
+    {.tokenType = DOUBLE_REF_GC, .value = "double&"},
+    {.tokenType = BOOL_REF_GC, .value = "bool&"},
     {.tokenType = INTEGER_T, .value = "int"},
     {.tokenType = FLOAT_T, .value = "float"},
     {.tokenType = DOUBLE_T, .value = "double"},
@@ -60,5 +64,7 @@ Keyword[*] keywords = {
     {.tokenType = STRING_T, .value = "string"},
     {.tokenType = STRUCT_T, .value = "struct"},
     {.tokenType = BOOL_T, .value = "bool"},
+    {.tokenType = NEW, .value = "new"},
+    {.tokenType = ECHO, .value = "echo"},
 
 };

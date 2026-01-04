@@ -1,0 +1,10 @@
+fn bool program(){
+    int a = 35;
+    int b = 10;
+    int c = a * b;
+    c = c + a - b;
+    int d = 50 / b;
+    echo(d);
+    echo(c);
+    return false;
+}

@@ -1,0 +1,111 @@
+struct Vec3 {
+    float x;
+    float y;
+    float z;
+}
+
+fn Vec3 mkVec3(float x, float y, float z) {
+    Vec3 v;
+    v.x = x;
+    v.y = y;
+    v.z = z;
+    return v;
+}
+
+fn Vec3 stepVec3(Vec3 v, float s) {
+    v.x = v.x + s;
+    v.y = v.y - s;
+    v.z = v.z + (s * s);
+    return v;
+}
+
+fn int stressint(int x) {
+    int a = 3;
+    int b = 7;
+    int c = 11;
+
+    x = x + a;  x = x * b;  x = x - c;  x = x + 17;  x = x / 2;
+    x = x + 5;  x = x * 3;  x = x - 9;  x = x + 21;  x = x / 3;
+    x = x + 8;  x = x * 2;  x = x - 6;  x = x + 19;  x = x / 2;
+
+    if (x > 1000) { x = x - 333; } else { x = x + 111; }
+    if (x < 0)    { x = 0; }
+
+    x = x + 13; x = x * 5;  x = x - 27; x = x + 41; x = x / 2;
+    x = x + 29; x = x * 2;  x = x - 14; x = x + 9;  x = x / 3;
+    x = x + 31; x = x * 3;  x = x - 22; x = x + 7;  x = x / 2;
+
+    if (x > 5000) { x = x / 4; } else { x = x + 123; }
+    if (x > 2000) { x = x - 999; }
+
+    x = x + 1;  x = x * 2;  x = x - 3;  x = x + 4;  x = x / 2;
+    x = x + 6;  x = x * 3;  x = x - 7;  x = x + 8;  x = x / 3;
+    x = x + 9;  x = x * 2;  x = x - 5;  x = x + 12; x = x / 2;
+
+    if (x > 100) { x = x - 10; }
+    if (x > 200) { x = x - 20; }
+    if (x > 300) { x = x - 30; }
+    if (x > 400) { x = x - 40; }
+    if (x > 500) { x = x - 50; }
+
+    x = x + 17; x = x * 7;  x = x - 19; x = x + 23; x = x / 2;
+    x = x + 31; x = x * 5;  x = x - 29; x = x + 37; x = x / 3;
+    x = x + 41; x = x * 3;  x = x - 43; x = x + 47; x = x / 2;
+
+    if (x > 10000) { x = x / 5; }
+    if (x > 5000)  { x = x - 1234; } else { x = x + 4321; }
+
+    x = x + a; x = x * b; x = x - c;
+    x = x + 101; x = x / 2;
+    x = x + 103; x = x * 2; x = x - 97;
+    x = x + 109; x = x / 3;
+    x = x + 113; x = x * 3; x = x - 107;
+    x = x + 127; x = x / 2;
+
+    if (x > 2500) { x = x - 250; } else { x = x + 250; }
+    if (x > 1500) { x = x - 150; } else { x = x + 150; }
+    if (x >  500) { x = x -  50; } else { x = x +  50; }
+
+    x = x + 7;  x = x * 2; x = x - 5;
+    x = x + 11; x = x * 3; x = x - 9;
+    x = x + 13; x = x * 5; x = x - 17;
+
+    return x;
+}
+
+fn bool program() {
+    int r0 = stressint(12345);
+    int r1 = stressint(r0 + 77);
+    int r2 = stressint(r1 - 33);
+    echo(r0);
+    echo(r1);
+    echo(r2);
+
+    Vec3 v = mkVec3(1.0f, 2.0f, 3.0f);
+    v = stepVec3(v, 0.25f);
+    v = stepVec3(v, 0.50f);
+    v = stepVec3(v, 0.75f);
+    v = stepVec3(v, 1.00f);
+    v = stepVec3(v, 0.10f);
+    v = stepVec3(v, 0.20f);
+    v = stepVec3(v, 0.30f);
+    v = stepVec3(v, 0.40f);
+    v = stepVec3(v, 0.60f);
+    v = stepVec3(v, 0.80f);
+    v = stepVec3(v, 1.20f);
+    v = stepVec3(v, 1.40f);
+    v = stepVec3(v, 1.60f);
+    v = stepVec3(v, 1.80f);
+    v = stepVec3(v, 2.00f);
+    v = stepVec3(v, 0.33f);
+    v = stepVec3(v, 0.66f);
+    v = stepVec3(v, 0.99f);
+    v = stepVec3(v, 1.33f);
+    v = stepVec3(v, 1.66f);
+
+    echo(v.x);
+    echo(v.y);
+    echo(v.z);
+
+    return;
+}

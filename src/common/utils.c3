@@ -15,6 +15,10 @@ fn bool is_alpha_ascii(char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
+fn bool is_ref_char(char c){
+    return (c == '&' || c == '*');
+}
+
 fn int parse_int(String s) {
     int? result = String.to_int(s);
     if(catch err = result){

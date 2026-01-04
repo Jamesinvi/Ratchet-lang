@@ -42,7 +42,7 @@ Please not **ALL** of these will be heavily changed. The following list simply s
 * ❌ Constructors (planned)
 * ❌ Methods (planned)
 * ❌ Arrays (planned)
-* ❌ Reference types (T& and T*, planned)
+* ✅ Reference types (T& and T*)
 * ❌ More optimization passes (planned)
 * ❌ GC tracing (planned)
 * ❌ Interfaces (planned)

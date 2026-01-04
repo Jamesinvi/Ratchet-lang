@@ -65,19 +65,35 @@ fn void Compiler.emit_op_u16(Compiler* this, OpCode opCode, ushort opData1, int 
     this.emit_u16(opData1, line);
 }
 
-fn void Compiler.emit_op_u16_u16_u8(Compiler* this, OpCode opCode, ushort opData1, ushort opData2, Byte data3, int line)
+fn void Compiler.emit_op_u8_u8_u16(Compiler* this, OpCode opCode, Byte data1, Byte data2, ushort data3, int line)
 {
     this.emit_byte((Byte)opCode, line);
-    this.emit_u16(opData1, line);
-    this.emit_u16(opData2, line);
+    this.emit_byte(data1, line);
+    this.emit_byte(data2, line);
+    this.emit_u16(data3, line);
+}
+fn void Compiler.emit_op_u16_u16_u8(Compiler* this, OpCode opCode, ushort data1, ushort data2, Byte data3, int line)
+{
+    this.emit_byte((Byte)opCode, line);
+    this.emit_u16(data1, line);
+    this.emit_u16(data2, line);
     this.emit_byte(data3, line);
+}
+
+fn void Compiler.emit_op_u16_u16_u16_u8(Compiler* this, OpCode opCode, ushort data1, ushort data2, ushort data3, Byte data4, int line)
+{
+    this.emit_byte((Byte)opCode, line);
+    this.emit_u16(data1, line);
+    this.emit_u16(data2, line);
+    this.emit_u16(data3, line);
+    this.emit_byte(data4, line);
 }
 
 
 fn void Compiler.emit_u16(Compiler* this, ushort val, int line)
 {
-    this.emit_byte((Byte)val >> 8, line);   // High byte
-    this.emit_byte((Byte)val & 0xFF, line); // Low byte
+    this.emit_byte((Byte)(val >> 8), line);   // High byte
+    this.emit_byte((Byte)(val & 0xFF), line); // Low byte
 }
 
 fn void Compiler.emit_op_u8(Compiler* this, OpCode opCode, Byte byte, int line)

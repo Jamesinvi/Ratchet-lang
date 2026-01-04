@@ -10,6 +10,7 @@ struct HeapTracker (DebugPrintable)
     HashSet{ulong} usedSlots;
     FreeSlotsStack freeSlots;
     String name;
+    TrackingAllocator allocator;
 }
 
 fn void HeapTracker.init(HeapTracker* this, String name){
@@ -17,6 +18,8 @@ fn void HeapTracker.init(HeapTracker* this, String name){
     this.usedSlots.init(mem);
     this.freeSlots={};
     this.name = name;
+    this.allocator = {};
+    this.allocator.init(mem);
 }
 
 fn void HeapTracker.free(HeapTracker* this){
@@ -33,6 +36,7 @@ fn void HeapTracker.free(HeapTracker* this){
     }
     this.objects.free();
     this.usedSlots.free();
+    this.allocator.free();
 }
 
 fn void HeapTracker.track_alloc(HeapTracker* this, Obj* trackedObj){
@@ -52,6 +56,11 @@ fn void HeapTracker.track_alloc(HeapTracker* this, Obj* trackedObj){
     }
     trackedObj.allocIndex = index;
 }
+
+fn void* HeapTracker.alloc(HeapTracker* this, usz size){
+    return allocator::calloc(&this.allocator, size);
+}
+
 
 fn void HeapTracker.release_obj(HeapTracker* this, Obj* trackedObj){
     if(trackedObj.isConstant){

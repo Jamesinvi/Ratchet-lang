@@ -62,6 +62,16 @@ fn void t_09() @test
     compile_and_run_file("./test/09_cast_string.ratc","hello\n15\n")!!;
 }
 
+fn void t_10() @test
+{
+    compile_and_run_file("./test/10_simple_math.ratc","5\n375\n")!!;
+}
+
+fn void t_11() @test
+{
+    compile_and_run_file("./test/11_long_file.ratc","4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
+}
+
 
 fn void? compile_and_run_file(String filename, String expectedResult)
 {

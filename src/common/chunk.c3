@@ -48,13 +48,26 @@ fn void Chunk.debug_print(Chunk* chunk) @dynamic{
 
     log::logn("======DISASSEMBLY======");
     log::logn("BYTE|LINE |OPCODE              |EXTRA INFO");
-    for (int offset = 0;offset<chunk.code.len();){
+    for (usz offset = 0;offset<chunk.code.len();){
         offset = dissassemble_instruction(chunk, offset);
     }
     log::logn("======END======");
 }
 
-fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
+
+fn Byte read_u8(Chunk* chunk, usz currentOffset)
+{
+    return chunk.code[currentOffset+1];
+}
+
+fn ushort read_u16(Chunk* chunk, usz currentOffset)
+{
+    ushort hi = (ushort)chunk.code[currentOffset+1];
+    ushort lo = (ushort)chunk.code[currentOffset+2];
+    return (ushort)((hi << 8) | lo);
+}
+
+fn usz dissassemble_instruction (Chunk* chunk, usz currentOffset){
     log::log("%04d|%5d|", currentOffset, chunk.lines[currentOffset]);
 
     OpCode instruction = (OpCode)chunk.code[currentOffset];
@@ -128,8 +141,12 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
             return local_instruction(instruction, chunk, currentOffset);
         case OpCode.CALL:           
             return call_instruction(instruction, chunk, currentOffset);
-        case OpCode.GET_PROP:               nextcase;
-        case OpCode.SET_PROP:
+        case OpCode.NEW_REF:        
+            return alloc_ref_instruction(instruction, chunk, currentOffset);
+        case OpCode.GET_PROP_REF:   nextcase;
+        case OpCode.SET_PROP_REF:   nextcase;
+        case OpCode.GET_PROP_LOC:   nextcase;
+        case OpCode.SET_PROP_LOC:
             return property_instruction(instruction, chunk, currentOffset);
         default:
             log::logn("Unknown opCode: %d", instruction);
@@ -138,65 +155,74 @@ fn int dissassemble_instruction (Chunk* chunk, int currentOffset){
 
 }
 
-fn int single_byte_instruction(OpCode instruction, int currentOffset){
+fn usz single_byte_instruction(OpCode instruction, usz currentOffset){
     log::log("%s\n", instruction);
     return currentOffset + 1;
 }
 
-fn int pop_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    Byte typeSize = chunk.code[(usz)currentOffset+1];
+fn usz pop_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    Byte typeSize = read_u8(chunk,currentOffset);
     log::log("%s, %s\n", instruction, typeSize);
-    return currentOffset + 2;
+    return currentOffset + 2; // opcode + type
 }
 
-fn int constant_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    ushort offset = ((chunk.code[(usz)currentOffset+1] << 8) | chunk.code[(usz)currentOffset+2]);
+fn usz constant_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    ushort offset = read_u16(chunk, currentOffset);
     log::log("%s, offset:%d      | val: ", instruction, offset);
     chunk.print_constant(offset);
     log::log("\n");
 
-    return currentOffset + 3;
+    return currentOffset + 3; // opcode + offset
 }
 
-fn int increment_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    ushort idx = ((ushort)chunk.code[(usz)currentOffset+1] << 8) | (ushort)chunk.code[(usz)currentOffset+2];
+fn usz increment_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    ushort idx = read_u16(chunk, currentOffset);
     log::log("%s, idx:%d\n", instruction, idx);
-    return currentOffset + 3;
+    return currentOffset + 3; // opcode + index
 }
 
-
-fn int local_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    ushort constantIndex = ((chunk.code[(usz)currentOffset+1]<< 8) | chunk.code[(usz)currentOffset+2]);
+fn usz local_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    ushort constantIndex = read_u16(chunk, currentOffset);
     log::log("%s, idx:%d\n",instruction, constantIndex);
-    return currentOffset+3;
+    return currentOffset+3; //opcode + index
 }
 
-fn int call_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    Byte argCount = chunk.code[(usz)currentOffset+1];
-    ushort argsLength = ((chunk.code[(usz)currentOffset+2]<< 8) | chunk.code[(usz)currentOffset+3]);
+fn usz call_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    Byte argCount = read_u8(chunk, currentOffset);
+    ushort argsLength = read_u16(chunk, currentOffset + 1);
     log::log("%s, argc:%d, arglen:%s\n", instruction, argCount, argsLength);
     return currentOffset + 4; // opcode + arg count + args length
 }
 
-fn int single_and_type_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    ValueType type = (ValueType)(chunk.code[(usz)currentOffset+1]);
+fn usz single_and_type_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    ValueType type = (ValueType) read_u8(chunk, currentOffset);
     log::log("%s, from:%s\n", instruction, type);
     return currentOffset + 2; // opcode + type
 }
 
-fn int jump_instruction(OpCode instruction, Chunk* chunk, int sign, int currentOffset){
-    ushort jump = (ushort)(chunk.code[(usz)currentOffset + 1] << 8);
-    jump |= chunk.code[(usz)currentOffset + 2];
-    log::log("%s, from:%d    | to: %d\n", instruction, currentOffset,currentOffset + 3 + sign * jump);
-    return currentOffset + 3;
+fn usz jump_instruction(OpCode instruction, Chunk* chunk, int sign, usz currentOffset){
+    ushort jump = read_u16(chunk, currentOffset);
+    log::log("%s, from:%d    | to: %d\n", instruction, currentOffset,currentOffset + 3 + (long)sign * jump);
+    return currentOffset + 3;  // opcode + jumplen
 }
 
-fn int property_instruction(OpCode instruction, Chunk* chunk, int currentOffset){
-    ushort structIndex = ((chunk.code[(usz)currentOffset+1]<< 8) | chunk.code[(usz)currentOffset+2]);
-    ushort localOffset = ((chunk.code[(usz)currentOffset+3]<< 8) | chunk.code[(usz)currentOffset+4]);
-    log::log("%s, edx:%d    | localOff: %d\n", instruction, structIndex,localOffset);
-    return currentOffset + 6;
+fn usz property_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    ushort structIndex = read_u16(chunk, currentOffset);
+    ushort localOffset = read_u16(chunk, currentOffset + 2);
+    ushort fieldSize = read_u16(chunk, currentOffset+ 4);
+    ValueType type = (ValueType) read_u8(chunk, currentOffset +6);
+    log::log("%s, idx:%d    | localOff: %d, fieldSize: %s, type: %s\n", instruction, structIndex,localOffset, fieldSize, type);
+    return currentOffset + 8; // opcode + indx + offset + fieldsize + type
 }
+
+fn usz alloc_ref_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+    Byte tracked = read_u8(chunk, currentOffset);
+    ValueType type = (ValueType) read_u8(chunk, currentOffset + 1);
+    ushort size = read_u16(chunk, currentOffset +2);
+    log::log("%s,     | tracked?: %d, allocSize: %s, type: %s\n", instruction, tracked,size, type);
+    return currentOffset + 5; // opcode + fieldsize + tracked? + type
+}
+
 
 
 fn void Chunk.print_constant(Chunk* this, int offset){
@@ -221,9 +247,10 @@ fn void Chunk.print_constant(Chunk* this, int offset){
         case ValueType.NO_GC_OBJ:   {
             switch (@as(Obj*, bytes).type)
             {
-                case ObjType.STRING: log::log("\"%s\"", @as(ObjString*, bytes).str);
-                case ObjType.FUNCTION: log::log("fn %s", @as(ObjFunction*, bytes).name.str);
-                case ObjType.NATIVE_FUNCTION: log::log("<native_fn>");
+                case ObjType.STRING:            log::log("\"%s\"", @as(ObjString*, bytes).str);
+                case ObjType.FUNCTION:          log::log("fn %s", @as(ObjFunction*, bytes).name.str);
+                case ObjType.REF:               log::log("ref %s", @as(ObjRef*, bytes).refTo);
+                case ObjType.NATIVE_FUNCTION:   log::log("<native_fn>");
             }
         }
     }

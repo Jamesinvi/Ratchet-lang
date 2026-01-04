@@ -2,6 +2,7 @@ module debug;
 import vm;
 import scanner;
 import common;
+import compiler;
 import log;
 
 macro @print_instruction(Vm* vm){
@@ -28,4 +29,21 @@ macro @log_compilation(String msg, args ...){
         log::logn(msg,...args);
     $endif
 }
+
+
+macro @print_type_stack(Stack{CompTypeInfo}* typeStack)
+{
+    $if ($feature(TRACE_COMPILATION)):
+        log::logn("------Compilation type stack-----");
+        if(typeStack.size == 0){
+            log::logn("empty!\n---------------------");
+        } else{
+            for(usz i = (usz)typeStack.size-1; i == 0; i--){
+                log::log("[%s, refTo: %s]", typeStack.items[i].type, typeStack.items[i].refToType);
+            }
+            log::logn("\n----------------");
+        }
+    $endif
+}
+
 

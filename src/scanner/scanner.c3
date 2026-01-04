@@ -92,7 +92,7 @@ fn void Scanner.parse_token(Scanner* this) {
         default:
             if (common::is_digit(character)) {
                 this.number();
-            } else if (common::is_alpha_ascii(character)) {
+            } else if (common::is_alpha_ascii(character) || common::is_ref_char(character)) {
                 this.keyword();
             } else {
                 error_lin(this.line, this.column, "unsupported character");
@@ -130,6 +130,7 @@ fn bool Scanner.match_s(Scanner* this, String str) {
         }
         this.advance();
     }
+
 
     char nextChar = this.peek();
     if (nextChar != '\0' && common::is_alpha_ascii(nextChar)) {
@@ -220,7 +221,7 @@ fn void Scanner.keyword(Scanner* this) {
         }
     }
 
-    while (common::is_alpha_ascii(this.peek()) || common::is_digit(this.peek())) {
+    while (common::is_alpha_ascii(this.peek()) || common::is_digit(this.peek()) || common::is_ref_char(this.peek())) {
         this.advance();
     }
     this.add_token(TokenType.IDENTIFIER);

@@ -9,8 +9,9 @@ alias NativeFn = fn double();
 enum ObjType : Byte
 {
     STRING,
+    REF,
     FUNCTION,
-    NATIVE_FUNCTION
+    NATIVE_FUNCTION,
 }
 
 // -------- STRUCTS -----------
@@ -29,6 +30,14 @@ struct ObjString
     String str;
 }
 
+struct ObjRef
+{
+    Obj obj;
+    ushort sizeInBytes;
+    ValueType refTo;
+    void* data;
+}
+
 struct ObjFunction
 {
     Obj obj;
@@ -42,6 +51,13 @@ struct ObjFunction
     ObjString* name;
 }
 
+struct ObjNative
+{
+    Obj obj;
+    NativeFn function;
+}
+
+
 struct FrameSlotInfo
 {
     ValueType type;
@@ -49,13 +65,6 @@ struct FrameSlotInfo
     ushort offset;      // Byte offset from frame start
     ushort index;       // slot index in the table
 }
-
-struct ObjNative
-{
-    Obj obj;
-    NativeFn function;
-}
-
 
 // -------- Functions/Methods -----------
 
@@ -89,6 +98,21 @@ fn ObjString* create_obj_string(String source, bool isConstant){
     object.obj.isConstant=isConstant;
     return object;
 }
+
+
+fn ObjRef* create_obj_ref(bool isConstant, ValueType refTo, ushort sizeInBytes, void* data){
+    ObjRef* object = mem::new(ObjRef);
+
+    Obj obj;
+    object.obj.type = ObjType.REF;
+    object.sizeInBytes =  sizeInBytes;
+    object.refTo = refTo;
+    object.data = data;
+    object.obj.allocIndex = ulong.max;
+    object.obj.isConstant=isConstant;
+    return object;
+}
+
 
 fn ObjNative* create_obj_native(NativeFn* function){
     ObjNative* object = mem::new(ObjNative);

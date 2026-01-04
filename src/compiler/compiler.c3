@@ -27,8 +27,11 @@ struct Compiler
 
     HashMap{String, CompTypeInfo} functionReturnTypes;
     bool hasPendingCalleeType;
+    bool hasPendingNewAlloc;
+    CompTypeInfo pendingNewAllocType;
     CompTypeInfo pendingCalleeReturnType;
     CompTypeInfo currentDeclTypeInfo;
+    bool allowRefValue;
 
     bool returnFoundInCurrentScope;
 }
@@ -64,8 +67,10 @@ fn void Compiler.init(Compiler* this, List{Token} tokens)
 
     this.functionReturnTypes.init(mem);
     this.hasPendingCalleeType = false;
+    this.allowRefValue = false;
 
-    // First pass: discover all functions + return types
+    // First pass: discover all structs and functions 
+    this.predeclare_struct_names();
     this.predeclare_functions();
     this.predeclare_natives();
 }
@@ -193,12 +198,17 @@ fn void Compiler.return_statement(Compiler* this)
         return;
     }
 
+    CompTypeInfo expectedTypeInfo = this.currentScope.returnTypeInfo;
+    bool prevAllowRefValue = this.allowRefValue;
+    if (is_ref(expectedTypeInfo)) {
+        this.allowRefValue = true;
+    }
     this.expression();
+    this.allowRefValue = prevAllowRefValue;
 
     CompTypeInfo exprTypeInfo = this.typeStack.pop();
-    ValueType expected = this.currentScope.function.returnType;
-    if (exprTypeInfo.type != expected) {
-         this.error("Return type mismatch");
+    if (!type_info_matches(exprTypeInfo, expectedTypeInfo)) {
+        this.error("Return type mismatch");
     }
 
 
@@ -217,7 +227,7 @@ fn void Compiler.if_statement(Compiler* this)
     CompTypeInfo condTypeInfo = this.typeStack.pop();
 
     int thenJump = this.emit_jump(OpCode.JMP_IF_FALSE, this.previous.line);
-    this.emit_pop_of_type(condTypeInfo.type, this.previous.line); 
+    this.emit_pop_of_type(ValueType.BOOL, this.previous.line); 
 
     this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'if' condition.");
     this.begin_scope();
@@ -228,7 +238,7 @@ fn void Compiler.if_statement(Compiler* this)
 
     this.patch_jump(thenJump);
     // If we jumped here, condition was false and is still on the stack:
-    this.emit_pop_of_type(condTypeInfo.type, this.previous.line);
+    this.emit_pop_of_type(ValueType.BOOL, this.previous.line);
 
     if (this.match(TokenType.ELSE)) {
         this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'else'.");
@@ -302,15 +312,16 @@ fn void Compiler.struct_declaration(Compiler* this){
     String name = this.previous.value;
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name'}");
 
-    if(declaredStructs.has_key(name)){
-        this.error("This struct has already been defined elsewhere");
+    uint? structTypeIndex = declaredStructs.get(name);
+    if(catch notFound = structTypeIndex){
+        this.error("Undefined struct %s", name);
         return;
     }
-    CompStructTypeInfo structInfo = {};
-    structInfo.init();
+
+    CompStructTypeInfo* structInfo = &structTypes[structTypeIndex];
     ushort fieldCounter = 0;
     ushort fieldOffset = 0;
-    structInfo.name = String.copy(name, mem);
+    ushort structSizeInBytes = 0;
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
         if (this.check_any_type_token()) {
@@ -338,7 +349,9 @@ fn void Compiler.struct_declaration(Compiler* this){
 
             structInfo.fieldInfos.push(fieldInfo);
             fieldCounter++;
-            fieldOffset += get_type_size(fieldTypeInfo);
+            ushort fieldSize = get_type_size(fieldTypeInfo);
+            fieldOffset += fieldSize;
+            structSizeInBytes += fieldSize;
         } else if (this.check(TokenType.METHOD)) {
             // TODO
         } else {
@@ -348,9 +361,7 @@ fn void Compiler.struct_declaration(Compiler* this){
     }
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' to close struct body");
     structInfo.fieldCount = fieldCounter;
-    uint structTypesLen =(uint) structTypes.size;
-    structTypes.push(structInfo);
-    declaredStructs.set(structInfo.name, structTypesLen);
+    structInfo.sizeInBytes = structSizeInBytes;
 }
 
 fn void Compiler.dot(Compiler* this, bool canAssign)
@@ -375,6 +386,11 @@ fn void Compiler.dot(Compiler* this, bool canAssign)
 
     this.typeStack.pop();
 
+    // If we're dealing with a reference (& or *) we emit a different opcode, but everything else is the same.
+    ValueType localType = local.typeInfo.type;
+    OpCode getOpCode = is_ref(local.typeInfo) ? OpCode.GET_PROP_REF : OpCode.GET_PROP_LOC;
+    OpCode setOpCode = is_ref(local.typeInfo) ? OpCode.SET_PROP_REF : OpCode.SET_PROP_LOC;
+
     CompStructTypeInfo structTypeInfo = structTypes[local.typeInfo.structTypeIndex];
 
     // We need to find the field that matches that name.
@@ -395,9 +411,10 @@ fn void Compiler.dot(Compiler* this, bool canAssign)
     ValueType fieldRuntimeType = fieldInfo.typeInfo.type;
 
     // If we're reading (not assining), generate the op and push on the type stack
-    // Op encoding: GET_PROP | indexInLocals | fieldOffsetInStruct | typeOfField(ValueType) = 8+16+16+8 = 48 bytes
+    // Op encoding: OpCode | indexInLocals | fieldOffsetInStruct | fieldSize | typeOfField(ValueType) = 8+16+16+16+8 = 64 bytes
     if (!canAssign || !this.check(TokenType.EQUAL)) {
-        this.emit_op_u16_u16_u8(OpCode.GET_PROP, localIdxSafe, fieldInfo.offset, (Byte)fieldRuntimeType, this.previous.line);
+        ushort fieldSize = get_type_size(fieldInfo.typeInfo);
+        this.emit_op_u16_u16_u16_u8(getOpCode, localIdxSafe, fieldInfo.offset, fieldSize, (Byte)fieldRuntimeType, this.previous.line);
         this.typeStack.push(fieldInfo.typeInfo);
         return;
     }
@@ -415,7 +432,8 @@ fn void Compiler.dot(Compiler* this, bool canAssign)
 
     // Same encoding to GET_PROP
     // No need to push on the typeStack here, since assignment yields no result
-    this.emit_op_u16_u16_u8(OpCode.SET_PROP, localIdxSafe, fieldInfo.offset, (Byte)fieldRuntimeType, this.previous.line);
+    ushort fieldSize = get_type_size(fieldInfo.typeInfo);
+    this.emit_op_u16_u16_u16_u8(setOpCode, localIdxSafe, fieldInfo.offset, fieldSize, (Byte)fieldRuntimeType, this.previous.line);
 }
 
 // ---------- Variable declarations & access ----------
@@ -427,9 +445,25 @@ fn void Compiler.var_declaration(Compiler* this)
 
     bool hasInit = false;
     if (this.match(TokenType.EQUAL)) {
+        Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
+        bool localIsRef = is_ref(local.typeInfo);
         hasInit = true;
-        this.expression();
+
+        if (localIsRef) {
+            bool prevAllowRefValue = this.allowRefValue;
+            this.hasPendingNewAlloc = true;
+            this.pendingNewAllocType = local.typeInfo;
+            this.allowRefValue = true;
+
+            this.expression();
+
+            this.allowRefValue = prevAllowRefValue;
+            this.hasPendingNewAlloc = false;
+        } else {
+            this.expression();
+        }
     }
+
 
     if (this.currentScope.depth == 0) {
         this.error("Only functions can be globally defined");
@@ -442,6 +476,13 @@ fn void Compiler.var_declaration(Compiler* this)
         this.mark_initialized();
         if (hasInit) {
             Local* local = &this.currentScope.locals[this.currentScope.localCount - 1];
+
+            // IMPORTANT: keep typeStack balanced + validate init type
+            CompTypeInfo initType = this.typeStack.pop();
+            if (!type_info_matches(initType, local.typeInfo)) {
+                this.error("Initializer type mismatch.");
+            }
+
             this.emit_op_u16(OpCode.SET_LOCAL, local.slotIdx, this.previous.line);
         }
         return;
@@ -519,12 +560,14 @@ fn void Compiler.define_variable(Compiler* this, ushort globalsIndex)
 
 fn void Compiler.variable(Compiler* this, bool canAssign)
 {
+    debug::@log_compilation("variable at %s", this.previous.value);
     Token* tokenName = this.previous;
 
     bool isCallSite = (this.current.tokenType == TokenType.LEFT_PAREN);
     this.named_variable(*this.previous, canAssign);
 
     if (isCallSite) {
+        debug::@log_compilation("call site variable at %s", this.previous.value);
         ValueType returnType = ValueType.NULL;
         CompTypeInfo? storedInfo = this.functionReturnTypes.get(tokenName.value);
         if (catch err = storedInfo) {
@@ -553,35 +596,101 @@ fn void Compiler.named_variable(Compiler* this, Token name, bool canAssign)
         Local* local = &this.currentScope.locals[localIdx];
         ushort slotIdx = local.slotIdx;
 
-        if(local.typeInfo.type == ValueType.STRUCT && this.check(TokenType.DOT)){
+        // If it's a struct and we're about to use ".field", let dot() handle it
+        if (local.typeInfo.structTypeIndex != uint.max && this.check(TokenType.DOT)) {
             this.typeStack.push(local.typeInfo);
+            debug::@print_type_stack(&this.typeStack);
             return;
         }
 
         if (!canAssign || !this.check(TokenType.EQUAL)) {
-            this.emit_op_u16(getOp, slotIdx, this.previous.line);
-            this.typeStack.push(local.typeInfo);
-            return;
+            if (this.allowRefValue && is_ref(local.typeInfo) && this.check(TokenType.SEMICOLON)) {
+                this.emit_op_u16(OpCode.GET_LOCAL, slotIdx, this.previous.line);
+                this.typeStack.push(local.typeInfo);
+                debug::@print_type_stack(&this.typeStack);
+                return;
+            }
+            if (is_ref(local.typeInfo)) {
+                ushort size = get_obj_pointee_size(local.typeInfo);
+                ValueType t = local.typeInfo.refToType;
+                // load-through: value = *ref (auto-deref)
+                this.emit_op_u16_u16_u16_u8(OpCode.GET_PROP_REF, slotIdx, 0, size, (Byte)t, this.previous.line);
+                // push pointee type
+                this.typeStack.push(pointee_from_ref(local.typeInfo));
+                debug::@print_type_stack(&this.typeStack);
+                return;
+            } else {
+                // non-ref normal
+                this.emit_op_u16(OpCode.GET_LOCAL, slotIdx, this.previous.line);  
+                this.typeStack.push(local.typeInfo);
+                debug::@print_type_stack(&this.typeStack);
+                return;
+            }
         }
 
         if (this.match(TokenType.EQUAL)) {
-            this.expression();
+            bool localIsRef = is_ref(local.typeInfo);
+
+            // allow `x = new;`
+            if (localIsRef) {
+                bool prevAllowRefValue = this.allowRefValue;
+                this.hasPendingNewAlloc = true;
+                this.pendingNewAllocType = local.typeInfo;
+                this.allowRefValue = true;
+
+                this.expression();
+
+                this.hasPendingNewAlloc = false;
+                this.allowRefValue = prevAllowRefValue;
+            } else {
+                this.expression();
+            }
+
             CompTypeInfo rhsType = this.typeStack.pop();
-            this.emit_op_u16(setOp, slotIdx, this.previous.line);
-            this.maybe_optimize_local_inc_dec(slotIdx, this.previous.line);
+
+            if (localIsRef) {
+                bool rhsIsRef = is_ref(rhsType);
+
+                if (rhsIsRef) {
+                    // rebind
+                    if (rhsType.refToType != local.typeInfo.refToType || rhsType.structTypeIndex != local.typeInfo.structTypeIndex) {
+                        this.error("Cannot assign reference of different type");
+                        return;
+                    }
+                    this.emit_op_u16(OpCode.SET_LOCAL, slotIdx, this.previous.line);
+                    return;
+                }
+
+                // store-through
+                CompTypeInfo expected = pointee_from_ref(local.typeInfo);
+                if (rhsType.type != expected.type || rhsType.structTypeIndex != expected.structTypeIndex) {
+                    this.error("Pointee assignment type mismatch");
+                    return;
+                }
+
+                ushort size = get_obj_pointee_size(local.typeInfo);
+                this.emit_op_u16_u16_u16_u8(OpCode.SET_PROP_REF, slotIdx, 0, size, (Byte)expected.type, this.previous.line);
+                return;
+            }else{
+                // non-ref assignment
+                this.emit_op_u16(OpCode.SET_LOCAL, slotIdx, this.previous.line);
+                this.maybe_optimize_local_inc_dec(slotIdx, this.previous.line);
+            }
+
         }
     } else {
         ushort arg = this.identifier_constant(&name);
         getOp = OpCode.GET_GLOBAL;
         setOp = OpCode.SET_GLOBAL;
-
+ 
         if (canAssign && this.match(TokenType.EQUAL)) {
-            this.expression();
-            CompTypeInfo rhsType = this.typeStack.pop();
-            this.emit_op_u16(setOp, (ushort)arg, this.previous.line);
+            this.error("Globals are functions only (no assignment).");
+            return;
         } else {
             this.emit_op_u16(getOp, (ushort)arg, this.previous.line);
-            this.typeStack.push({.type = ValueType.GC_OBJ, .structTypeIndex = uint.max}); 
+            CompTypeInfo t = {.type = ValueType.GC_OBJ, .structTypeIndex = uint.max};
+            this.typeStack.push(t); 
+            debug::@print_type_stack(&this.typeStack);
         }
     }
 }
@@ -690,6 +799,7 @@ fn void Compiler.call(Compiler* this, bool canAssign)
     // "hasPengingCalleeType"
     if (this.hasPendingCalleeType) {
         this.typeStack.push(this.pendingCalleeReturnType);
+        debug::@print_type_stack(&this.typeStack);
         this.hasPendingCalleeType = false;
     } else {
         this.error("unknown type for function call");
@@ -730,6 +840,31 @@ fn void Compiler.expression(Compiler* this)
 {
     this.parse_precedence(Precedence.ASSIGNMENT);
 }
+
+fn void Compiler.new_expr(Compiler* this, bool canAssign)
+{
+    if (!this.hasPendingNewAlloc) {
+        this.error("'new' can only be used when assigning to a reference type (e.g. T& x; x = new;)");
+        return;
+    }
+
+    debug::@log_compilation("new_expr at %s", this.previous.value);
+    CompTypeInfo t = this.pendingNewAllocType;
+
+    Byte tracked = (t.type == ValueType.GC_OBJ) ? (Byte)true : (Byte)false;
+    // IMPORTANT: size must be the pointee size, NOT the slot size.
+    ushort sizeBytes = get_obj_pointee_size(t);
+    Byte encodedType = (Byte)t.refToType;
+    // Op encoding: OpCode | tracked? | refToType| size = 8+8+8+16 = 5 bytes
+    this.emit_op_u8_u8_u16(OpCode.NEW_REF, tracked, encodedType, sizeBytes, this.previous.line);
+
+
+    // new produces a value of the reference type itself
+    this.typeStack.push(t);
+    debug::@print_type_stack(&this.typeStack);
+}
+
+
 
 fn void Compiler.and(Compiler* this)
 {
@@ -807,7 +942,7 @@ fn void Compiler.number(Compiler* this, bool canAssign)
         default:
             this.error("Unsupported type");
     }
-
+    debug::@print_type_stack(&this.typeStack);
 }
 
 fn void Compiler.string(Compiler* this, bool canAssign)
@@ -816,6 +951,7 @@ fn void Compiler.string(Compiler* this, bool canAssign)
     int offset = this.get_current_chunk().add_const_string(source);
     this.emit_op_u16(OpCode.CONST_STRING, this.ensure_constant(offset), this.previous.line);
     this.typeStack.push({.type = ValueType.GC_OBJ, .structTypeIndex = uint.max});
+    debug::@print_type_stack(&this.typeStack);
 }
 
 fn void Compiler.unary(Compiler* this, bool canAssign)
@@ -858,18 +994,24 @@ fn void Compiler.literal_true(Compiler* this)
 {
     this.emit_op(OpCode.CONST_TRUE, this.previous.line);
     this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
+    debug::@print_type_stack(&this.typeStack);
+
 }
 
 fn void Compiler.literal_false(Compiler* this)
 {
     this.emit_op(OpCode.CONST_FALSE, this.previous.line);
     this.typeStack.push({.type = ValueType.BOOL, .structTypeIndex = uint.max});
+    debug::@print_type_stack(&this.typeStack);
+    
 }
 
 fn void Compiler.literal_null(Compiler* this)
 {
     this.emit_op(OpCode.CONST_NULL, this.previous.line);
     this.typeStack.push({.type = ValueType.NULL, .structTypeIndex = uint.max});
+    debug::@print_type_stack(&this.typeStack);
+
 }
 
 // ---------- Precedence engine ----------

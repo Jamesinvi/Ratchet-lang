@@ -1,28 +1,22 @@
 
+
 struct vec3 {
-	float x;
-	float y;
-	float z;
-}
-struct vec2 {
-	float x;
-	float y;
+	int x;
+	int y;
+	int z;
 }
 fn bool program(){
-	vec2 prova;
-	prova.y = 5.0f;
-	prova.x = 3.0f;
-	vec3 result = createVec3FromVec2(prova, prova);
-	echo(result.x);
-	echo(result.y);
-	echo(result.z);
-	return;
+	vec3 prova;
+	vec3& trpv = createVec3Heap();
+	echo(trpv.x);
+	return false;
 }
 
-fn vec3 createVec3FromVec2(vec2 test1){
-	vec3 r;
-	r.x = test1.x;
-	r.y = test1.y;
-	r.z = 35.1f;
-	return r;
+fn vec3& createVec3Heap(){
+	vec3& res = new;
+
+	res.x = 35;
+	return res;
 }
+
+

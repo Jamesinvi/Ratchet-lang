@@ -2,11 +2,11 @@ module common;
 
 enum ValueType : char
 {
+    NULL,
     INT,
     FLOAT,
     DOUBLE,
     BOOL,
-    NULL,
     STRUCT,
     GC_OBJ,
     NO_GC_OBJ,

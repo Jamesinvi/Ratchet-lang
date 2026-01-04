@@ -72,4 +72,5 @@ CompileRule[]rules = {
   [TokenType.VAR.ordinal]           = {null,                    null,             Precedence.NONE},
   [TokenType.WHILE.ordinal]         = {null,                    null,             Precedence.NONE},
   [TokenType.EOF.ordinal]           = {null,                    null,             Precedence.NONE},
+  [TokenType.NEW.ordinal]           = {&Compiler.new_expr,      null,             Precedence.NONE},
 };
