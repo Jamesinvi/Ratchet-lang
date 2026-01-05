@@ -10,7 +10,7 @@
   // Authors, optionally with email.
   "authors": ["James Karran <james.invi@gmail.com>"],
   // Version using semantic versioning.
-  "version": "0.1.0",
+  "version": "0.0.5",
   // Sources compiled for all targets.
   "sources": ["src/**"],
   // Test sources compiled for all targets.
