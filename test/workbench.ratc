@@ -7,13 +7,13 @@ struct vec3 {
 }
 fn bool program(){
 	vec3 prova;
-	vec3& trpv = createVec3Heap();
+	vec3* trpv = createVec3Heap();
 	echo(trpv.x);
 	return false;
 }
 
-fn vec3& createVec3Heap(){
-	vec3& res = new;
+fn vec3* createVec3Heap(){
+	vec3* res = new;
 
 	res.x = 35;
 	return res;

@@ -301,7 +301,6 @@ fn CompTypeInfo token_to_value_type_info(Token* t)
             }
             result.type = ValueType.STRUCT;
             result.structTypeIndex = index;
-            print_all_struct_types();
         }
     }
     return result;

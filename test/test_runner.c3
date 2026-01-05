@@ -91,7 +91,6 @@ fn void? compile_and_run_file(String filename, String expectedResult)
         scanner.parse_tokens();
     };
 
-    debug::@print_tokens(&scanner);
     compiler.init(scanner.tokens);
     ObjFunction*? entryPoint = compiler::compile(&compiler);
     if(catch err = entryPoint){
