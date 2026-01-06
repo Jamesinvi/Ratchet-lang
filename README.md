@@ -30,7 +30,7 @@ is currently implemented***
 ## ⏳ Current State
 ***Skip this section to see the language features***.
 
-Please not **ALL** of these will be heavily changed. The following list simply states what has been done, even if only in as a temporary implementation.
+Please note **ALL** of these will be heavily changed. The following list simply states what has been done, even if only in as a temporary implementation.
 
 * ✅ Lexer/parser basics (custom-made, no yacc/lex)
 * 🚧 Basic types (partially done, more to come)
