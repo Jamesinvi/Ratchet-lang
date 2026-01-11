@@ -1,5 +1,5 @@
-import scanner;
-import compiler;
+import tokenizer;
+import parser;
 import common;
 import debug;
 import vm;
@@ -8,8 +8,8 @@ import libc;
 import std::collections;
 import std::io::file;
 
-alias Scanner = scanner::Scanner;
-alias Compiler = compiler::Compiler;
+alias Tokenizer = tokenizer::Tokenizer;
+alias Parser = parser::Parser;
 alias Chunk = common::Chunk;
 
 fn int main(String[] args)
@@ -20,8 +20,8 @@ fn int main(String[] args)
         return 1;
     }
 	String filename = args[1];
-    Scanner scanner ={};
-    Compiler compiler ={};
+    Tokenizer tokenizer ={};
+    Parser parser ={};
 
     @pool()
     {
@@ -33,26 +33,25 @@ fn int main(String[] args)
             // We return, so that below 'file' will be unwrapped.
             return 1;
         }
-        scanner.init(file);
-        scanner.parse_tokens();
+        tokenizer.init(file);
+        tokenizer.parse_tokens();
     };
 
-    debug::@print_tokens(&scanner);
-    compiler.init(scanner.tokens);
-    ObjFunction*? entryPoint = compiler::compile(&compiler);
-    if(catch err = entryPoint){
+    debug::@print_tokens(&tokenizer);
+    parser.init(tokenizer.tokens);
+    if(catch err = parser.parse()){
         log::errlogn("Compile error");
         return 1;
     }
-    scanner.deinit();
+    tokenizer.deinit();
+    parser.outputAst.print();
 
-    vm::Vm vm ={};
-
-    vm.init(entryPoint, io::stdout());
-    vm::run(&vm);
+    // vm::Vm vm ={};
+    // vm.init(entryPoint, io::stdout());
+    // vm::run(&vm);
     //vm.trackedHeap.debug_print();
     //vm.untrackedHeap.debug_print();
-    //compiler::print_all_struct_types();
-    vm.deinit();
+    //parser::print_all_struct_types();
+    // vm.deinit();
     return 0;
 }

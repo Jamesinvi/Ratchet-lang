@@ -1,0 +1,306 @@
+module parser;
+import common;
+import common::stack;
+import std::collections::list;
+import libc;
+import debug;
+import log;
+
+
+// ---------- Basic token helpers ----------
+
+fn void Parser.advance(Parser* this)
+{
+    this.previous = this.current;
+    this.current++;
+}
+
+fn void Parser.consume(Parser* this, TokenType type, String msg)
+{
+    if (this.current.tokenType == type) {
+        this.advance();
+        return;
+    }
+    this.error(msg);
+}
+
+fn bool Parser.match(Parser* this, TokenType... tokenTypes)
+{
+    foreach (type : tokenTypes) {
+        if (this.current.tokenType == type) {
+            this.advance();
+            return true;
+        }
+    }
+    return false;
+}
+
+fn bool Parser.check(Parser* this, TokenType tokenType)
+{
+    return token_matches(this.current ,tokenType);
+}
+
+fn bool token_matches(Token* t1, TokenType toCheck) @inline
+{
+    return t1.tokenType == toCheck;
+}
+
+fn bool Parser.match_any_type_token(Parser* this)
+{
+    if(this.check_any_type_token()){
+        this.advance();
+        return true;
+    }
+    return false;
+}
+
+fn bool Parser.check_any_type_token(Parser* this)
+{
+    return  this.check_builtin_type_token()         ||
+            this.check_struct_type_token()          ||
+            this.check_builtin_type_tracked_refs()  ||
+            this.check_builtin_type_untracked_refs()||
+            this.check_struct_type_refs('&')        ||
+            this.check_struct_type_refs('*');
+    }
+
+fn bool Parser.check_builtin_type_token(Parser* this)
+{
+    return this.check(TokenType.NULL)      ||
+           this.check(TokenType.INTEGER_T) ||
+           this.check(TokenType.FLOAT_T)   ||
+           this.check(TokenType.DOUBLE_T)  ||
+           this.check(TokenType.BOOL_T)    ||
+           this.check(TokenType.STRING_T);
+}
+
+fn bool Parser.check_builtin_type_tracked_refs(Parser* this)
+{
+    return this.check(TokenType.INT_REF_GC)     ||
+           this.check(TokenType.FLOAT_REF_GC)   ||
+           this.check(TokenType.DOUBLE_REF_GC)  ||
+           this.check(TokenType.BOOL_REF_GC);
+}
+
+fn bool Parser.check_builtin_type_untracked_refs(Parser* this)
+{
+    return this.check(TokenType.INT_REF_NOGC)     ||
+           this.check(TokenType.FLOAT_REF_NOGC)   ||
+           this.check(TokenType.DOUBLE_REF_NOGC)  ||
+           this.check(TokenType.BOOL_REF_NOGC);
+}
+
+fn bool Parser.check_struct_type_token(Parser* this)
+{
+    bool typeAlreadyDeclared = declaredStructs.has_key(this.current.value);
+    return this.check(TokenType.IDENTIFIER) && typeAlreadyDeclared;
+}
+
+fn bool Parser.check_struct_type_refs(Parser* this, char trailingChar)
+{
+    if (!this.check(TokenType.IDENTIFIER)) return false;
+
+    // If the identifier already includes the trailing char (e.g., "vec3*"), strip it and check.
+    String value = this.current.value;
+    if (value.len > 1 && value[value.len - 1] == trailingChar) {
+        String base = value[0 .. value.len - 1];
+        if (declaredStructs.has_key(base)) {
+            return true;
+        }
+    }
+
+    // Otherwise, append the trailing char and check.
+    @pool() {
+        char[] trailingString = {trailingChar};
+        String refStructName = value.tconcat((String)trailingString);
+        if (declaredStructs.has_key(refStructName)) {
+            return true;
+        }
+    };
+    return false;
+}
+
+// ---------- Errors / Debug ----------
+
+fn void Parser.warning(Parser* this, String msg)
+{
+    this.warning_at(this.previous, msg);
+}
+
+fn void Parser.warning_at(Parser* this, Token* token, String msg)
+{
+    if (this.panicMode) return;
+
+    log::errlog("[line %d] Warning", token.line);
+    log::errlog(" at '%s'", token.value);
+    log::errlog(", %s \n", msg);
+}
+
+fn void Parser.error(Parser* this, String msg, args ...)
+{
+    this.error_at(this.previous, msg, ...args);
+}
+
+fn void Parser.error_at(Parser* this, Token* token, String msg, args ...)
+{
+    if (this.panicMode) return;
+
+    log::errlog("[line %d] Error", token.line);
+    this.hadError  = true;
+    this.panicMode = true;
+
+    if (token.tokenType == TokenType.EOF) {
+        log::errlog(" at end, ");
+    } else {
+        log::errlog(" at '%s', ", token.value);
+    }
+
+    log::errlogn(msg, ...args);
+
+}
+
+// ---------- Identifier helpers ----------
+
+fn bool identifiers_equal(Token* a, Token* b) @inline
+{
+    return strings_equal(a.value, b.value);
+}
+
+fn bool strings_equal(String a, String b)
+{
+    if (a.len != b.len) return false;
+    return libc::memcmp(a, b, a.len) == 0;
+}
+
+
+// ---------- Program entry ----------
+
+fn void Parser.emit_program_call(Parser* this)
+{
+}
+
+// ---------- Bytecode helpers ----------
+
+fn ushort Parser.ensure_constant(Parser* this, int constantIndex)
+{
+    if (constantIndex > ushort.max) {
+        this.error("Too many constants in one chunk");
+        return 0;
+    }
+    return (ushort)constantIndex;
+}
+
+// ---------- Predeclaration for functions / structs / natives ----------
+
+fn void Parser.predeclare_struct_names(Parser* this)
+{
+    // Look for patterns: STRUCT <identifier>
+    for (usz i = 0; i < this.input.len(); i++) {
+        if (this.input[i].tokenType != TokenType.STRUCT_T) {
+            continue;
+        }
+        if (i + 1 >= this.input.size){
+            break;
+        } 
+
+        Token nameTok = this.input[i + 1];
+        if (nameTok.tokenType != TokenType.IDENTIFIER) {
+            continue;
+        }
+
+        String name = nameTok.value;
+
+        if (!declaredStructs.has_key(name)) {
+            // reserve an index so function signatures can refer to it
+            uint idx = (uint)structTypes.size;
+
+            CompStructTypeInfo placeholder = {};
+            placeholder.init();
+            placeholder.name = String.copy(name, mem);
+            placeholder.sizeInBytes = 0;
+            placeholder.fieldCount = 0;
+
+            structTypes.push(placeholder);
+            declaredStructs.set(name, idx);
+        }
+    }
+}
+
+fn void Parser.predeclare_structs(Parser* this)
+{
+    // Look for patterns: struct <name>
+    for (usz i = 0; i < this.input.len() - 2; i++) {
+        Token* t = &this.input[i];
+        if (t.tokenType == TokenType.STRUCT_T) {
+            Token* nameTok = &this.input[i + 1];
+            debug::@log_compilation("pre-declaring struct with name '%s'", nameTok.value);
+            // We push a temporary declaration that will have to be filled in later
+            Decl decl = {.kind = DeclKind.STRUCT};
+            decl.structDecl = {};
+            NameIdx nameIdx = this.push_name_get_idx(nameTok.value);
+            decl.structDecl.nameIdx = nameIdx;
+            DeclIdx declIdx = this.push_decl_get_idx(&decl);
+            declaredStructs.set(nameTok.value, declIdx);
+            // Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
+            String starName = nameTok.value.concat(&this.allocator, "*");
+            declaredStructs.set(starName, declIdx);
+            String ampName = nameTok.value.concat(&this.allocator, "&");
+            declaredStructs.set(ampName, declIdx);
+        }
+    }
+}
+
+fn void Parser.predeclare_functions(Parser* this)
+{
+    // Look for patterns: fn <type> <identifier>
+    for (usz i = 0; i < this.input.len() - 2; i++) {
+        Token* t = &this.input[i];
+        if (t.tokenType == TokenType.FN) {
+            Token* typeTok = &this.input[i + 1];
+            Token* nameTok = &this.input[i + 2];
+            debug::@log_compilation("pre-declaring function '%s' with return type {%s}", nameTok.value, typeTok.value);
+            // We push a temporary declaration that will have to be filled in later
+            Decl decl = {.kind = DeclKind.FUNCTION};
+            decl.fnDecl = {};
+            NameIdx returnTypeNameIdx = this.push_name_get_idx(typeTok.value);
+            TypeAst returnTypeAst = {.tokenType = typeTok.tokenType, .nameIdx = returnTypeNameIdx};
+            NameIdx nameIdx = this.push_name_get_idx(nameTok.value);
+            decl.fnDecl.returnType = returnTypeAst;
+            decl.fnDecl.nameIdx = nameIdx;
+            DeclIdx declIdx = this.push_decl_get_idx(&decl);
+            declaredFunctions.set(nameTok.value, declIdx);
+        }
+    }
+}
+
+
+
+fn void Parser.predeclare_natives(Parser* this)
+{
+}
+
+fn ExprIdx Parser.push_expr_get_idx(Parser* this, Expr* expr){
+    ExprIdx index = this.outputAst.expressions.len();
+    this.outputAst.expressions.push(*expr);
+    return index;
+}
+
+fn DeclIdx Parser.push_decl_get_idx(Parser* this, Decl* decl){
+    DeclIdx index = this.outputAst.declarations.len();
+    this.outputAst.declarations.push(*decl);
+    return index;
+}
+
+fn NameIdx Parser.push_name_get_idx(Parser* this, String toCopy){
+    NameIdx index = this.outputAst.names.len();
+    String copy = String.copy(toCopy, &this.allocator);
+    this.outputAst.names.push(copy);
+    return index;
+}
+
+fn StmtIdx Parser.push_stmt_get_idx(Parser* this, Stmt* stmt)
+{
+    StmtIdx idx = this.outputAst.statements.len();
+    this.outputAst.statements.push(*stmt);
+    return idx;
+}

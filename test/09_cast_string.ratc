@@ -1,6 +1,6 @@
 fn bool program() {
     int k = 15;
     echo("hello");
-    echo((string)k);
+    echo((k as string));
     return;
 }

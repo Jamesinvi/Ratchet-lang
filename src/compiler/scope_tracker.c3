@@ -1,4 +1,4 @@
-module compiler;
+module parser;
 import common;
 import debug;
 
@@ -13,7 +13,7 @@ struct ScopeTracker
     ObjFunction* function;
 }
 
-fn void ScopeTracker.init(ScopeTracker* this, Compiler* c, CompTypeInfo returnTypeInfo, String name){
+fn void ScopeTracker.init(ScopeTracker* this, Parser* c, CompTypeInfo returnTypeInfo, String name){
     debug::@log_compilation("initializing new scope for function %s", name);
     this.depth = 0;
     this.localCount = 0;

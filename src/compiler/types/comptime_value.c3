@@ -1,4 +1,4 @@
-module compiler;
+module parser;
 import common;
 import std::io;
 
@@ -26,17 +26,6 @@ fn ushort get_type_size(CompTypeInfo info)
         case ValueType.STRUCT:      return structTypes[info.structTypeIndex].sizeInBytes;
         default:                    return 0;
     }
-}
-
-fn CompTypeInfo cmptimeinfo_from_value (ValueType type, String name){
-    CompTypeInfo result = {};
-    result.type = type;
-    result.structTypeIndex = uint.max;
-
-    if(type == ValueType.STRUCT){
-        result.structTypeIndex = declaredStructs[name]!!;
-    }
-    return result;
 }
 
 fn CompTypeInfo pointee_from_ref(CompTypeInfo r)

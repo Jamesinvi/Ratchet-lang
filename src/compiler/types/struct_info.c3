@@ -1,4 +1,4 @@
-module compiler;
+module parser;
 import common;
 import std::collections::list;
 import std::collections::map;
@@ -32,8 +32,9 @@ struct FieldInfo
     ushort offset;
 }
 
-// This map is used by the compiler so the user can't define the same struct twice
-HashMap{String, uint} declaredStructs;
+// This map is used by the parser so the user can't define the same struct twice
+HashMap{String, DeclIdx} declaredStructs;
+HashMap{String, DeclIdx} declaredFunctions;
 
 List{CompStructTypeInfo} structTypes;
 
@@ -47,18 +48,4 @@ fn void clean_up_struct_globals(){
     }
     structTypes.free();
     declaredStructs.clear();
-}
-
-fn void print_all_struct_types(){
-    foreach (typeInfo : structTypes){
-        io::printf("[name: %s, fieldCount: %s]{\n", typeInfo.name, typeInfo.fieldCount);
-        foreach(field : typeInfo.fieldInfos){
-            if(field.typeInfo.structTypeIndex == NOT_STRUCT){
-                io::printfn("   %s, %s, idx: NOT STRUCT", field.typeInfo.type, field.name);
-            }else{
-                io::printfn("   %s, %s, idx: %d", field.typeInfo.type, field.name,  field.typeInfo.structTypeIndex);
-            }
-        }
-        io::printf("}\n");
-    }
 }

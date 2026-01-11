@@ -1,8 +1,8 @@
 module debug;
 import vm;
-import scanner;
+import tokenizer;
 import common;
-import compiler;
+import parser;
 import log;
 
 macro @print_instruction(Vm* vm){
@@ -18,7 +18,7 @@ macro @print_disassembly(Vm* vm){
     $endif
 }
 
-macro @print_tokens(scanner::Scanner* sc){
+macro @print_tokens(tokenizer::Tokenizer* sc){
     $if ($feature(SHOW_TOKENS)):
         sc.print_tokens();
     $endif

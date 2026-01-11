@@ -1,5 +1,5 @@
-import scanner;
-import compiler;
+import tokenizer;
+import parser;
 import common;
 import debug;
 import vm;
@@ -8,8 +8,8 @@ import libc;
 import std::collections;
 import std::io::file;
 
-alias Scanner = scanner::Scanner;
-alias Compiler = compiler::Compiler;
+alias Tokenizer = tokenizer::Tokenizer;
+alias Parser = parser::Parser;
 
 
 fn void t_00() @test
@@ -75,8 +75,8 @@ fn void t_11() @test
 
 fn void? compile_and_run_file(String filename, String expectedResult)
 {
-    Scanner scanner ={};
-    Compiler compiler ={};
+    Tokenizer tokenizer ={};
+    Parser parser ={};
     @pool()
     {
         String? file = (String)file::load_temp(filename);
@@ -87,17 +87,17 @@ fn void? compile_and_run_file(String filename, String expectedResult)
             // We return, so that below 'file' will be unwrapped.
             return io::FILE_NOT_FOUND?;
         }
-        scanner.init(file);
-        scanner.parse_tokens();
+        tokenizer.init(file);
+        tokenizer.parse_tokens();
     };
 
-    compiler.init(scanner.tokens);
-    ObjFunction*? entryPoint = compiler::compile(&compiler);
+    parser.init(tokenizer.tokens);
+    ObjFunction*? entryPoint = parser::parse(&parser);
     if(catch err = entryPoint){
-        scanner.deinit();
-        return compiler::COMPILE_ERROR?;
+        tokenizer.deinit();
+        return parser::PARSE_ERROR?;
     }
-    scanner.deinit();
+    tokenizer.deinit();
 
     vm::Vm vm ={};
     DString output;
@@ -107,6 +107,6 @@ fn void? compile_and_run_file(String filename, String expectedResult)
     assert(res == RunResult.OK);
     assert(output.str_view() == expectedResult);
     vm.deinit();
-    compiler.deinit();
+    parser.deinit();
     output.free();
 }

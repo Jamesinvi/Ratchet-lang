@@ -1,4 +1,4 @@
-module compiler;
+module parser;
 import common;
 import std::io;
 import std::collections::list;
@@ -27,7 +27,7 @@ fn ushort get_obj_pointee_size(CompTypeInfo info)
     if(info.refToType == ValueType.STRUCT){
         return structTypes[info.structTypeIndex].sizeInBytes;
     }
-    return get_type_size(cmptimeinfo_from_value(info.refToType, ""));
+    return 0;
 }
 
 fn bool is_ref(CompTypeInfo info) @inline {

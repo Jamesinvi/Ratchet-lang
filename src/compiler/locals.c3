@@ -1,4 +1,4 @@
-module compiler;
+module parser;
 import common;
 alias Token = common::Token;
 

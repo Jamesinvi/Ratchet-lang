@@ -1,4 +1,4 @@
-module scanner;
+module tokenizer;
 import common;
 import std::collections;
 import libc;
@@ -6,7 +6,7 @@ import log;
 
 faultdef INVALID_TOKEN;
 
-struct Scanner
+struct Tokenizer
 {
     String input;
     int line;
@@ -18,7 +18,7 @@ struct Scanner
     TrackingAllocator allocator;
 }
 
-fn void Scanner.init(Scanner* this, String inputString) {
+fn void Tokenizer.init(Tokenizer* this, String inputString) {
     this.allocator.init(mem);
     this.input = String.copy(inputString, &this.allocator);
     this.line = 1;
@@ -28,12 +28,12 @@ fn void Scanner.init(Scanner* this, String inputString) {
     this.tokens.init(&this.allocator);
 }
 
-fn void Scanner.print_tokens(Scanner* this){
+fn void Tokenizer.print_tokens(Tokenizer* this){
     foreach (t : this.tokens){
         t.debug_print();
     }
 }
-fn void Scanner.deinit(Scanner* this)
+fn void Tokenizer.deinit(Tokenizer* this)
 {
     foreach (t : this.tokens) {
         t.value.free(&this.allocator);
@@ -43,14 +43,14 @@ fn void Scanner.deinit(Scanner* this)
     this.allocator.free();
 }
 
-fn void Scanner.parse_tokens(Scanner* this) {
+fn void Tokenizer.parse_tokens(Tokenizer* this) {
     while (!this.is_at_end()) {
         this.parse_token();
     }
     this.add_token(TokenType.EOF);
 }
 
-fn void Scanner.parse_token(Scanner* this) {
+fn void Tokenizer.parse_token(Tokenizer* this) {
     this.start = this.current;
     char character = this.advance();
     this.column += 1;
@@ -101,15 +101,15 @@ fn void Scanner.parse_token(Scanner* this) {
 
 }
 
-fn char Scanner.advance(Scanner* this) {
+fn char Tokenizer.advance(Tokenizer* this) {
     return this.input[this.current++];
 }
 
-fn bool Scanner.is_at_end(Scanner* this) {
+fn bool Tokenizer.is_at_end(Tokenizer* this) {
     return this.current >= this.input.len;
 }
 
-fn bool Scanner.match_c(Scanner* this, char c) {
+fn bool Tokenizer.match_c(Tokenizer* this, char c) {
     if (this.is_at_end()) return false;
     if (this.peek() == c) {
         this.advance();
@@ -118,7 +118,7 @@ fn bool Scanner.match_c(Scanner* this, char c) {
     return false;
 }
 
-fn bool Scanner.match_s(Scanner* this, String str) {
+fn bool Tokenizer.match_s(Tokenizer* this, String str) {
     if (this.is_at_end()) return false;
 
     int indexBeforeMatch = this.current;
@@ -141,25 +141,25 @@ fn bool Scanner.match_s(Scanner* this, String str) {
     return true;
 }
 
-fn char Scanner.peek(Scanner* this) {
+fn char Tokenizer.peek(Tokenizer* this) {
     if (this.is_at_end()) return '\0';
     return this.input[this.current];
 }
 
-fn char Scanner.peek_at(Scanner* this, int distance) {
+fn char Tokenizer.peek_at(Tokenizer* this, int distance) {
     if (this.is_at_end()) return '\0';
     return this.input[this.current + distance];
 }
 
 
-fn void Scanner.add_token(Scanner* this, TokenType tokenType) {
+fn void Tokenizer.add_token(Tokenizer* this, TokenType tokenType) {
     String lexeme = String.copy(this.input[this.start .. this.current-1], &this.allocator);
     Token token = { tokenType, this.line, lexeme };
     this.tokens.push(token);
 }
 
 
-fn void Scanner.string(Scanner* this) {
+fn void Tokenizer.string(Tokenizer* this) {
     this.start=this.current;
     while (this.peek() != '"' && !this.is_at_end()) {
         if (this.peek() == '\n') {
@@ -178,7 +178,7 @@ fn void Scanner.string(Scanner* this) {
 
 }
 
-fn void Scanner.number(Scanner* this) {
+fn void Tokenizer.number(Tokenizer* this) {
     bool isDecimal = false;
     bool isFloat   = false;
 
@@ -213,7 +213,7 @@ fn void Scanner.number(Scanner* this) {
     }
 }
 
-fn void Scanner.keyword(Scanner* this) {
+fn void Tokenizer.keyword(Tokenizer* this) {
     foreach (k : common::keywords) {
         if (this.match_s(k.value)) {
             this.add_token(k.tokenType);

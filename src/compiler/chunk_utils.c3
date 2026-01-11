@@ -1,4 +1,4 @@
-module compiler;
+module parser;
 import common;
 
 fn ushort Chunk.add_const_int(Chunk* chunk, int v){
