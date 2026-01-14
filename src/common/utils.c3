@@ -19,32 +19,6 @@ fn bool is_ref_char(char c){
     return (c == '&' || c == '*');
 }
 
-fn int parse_int(String s) {
-    int? result = String.to_int(s);
-    if(catch err = result){
-        log::logn("%s is not parsable as int", s);
-        return -1;
-    }
-    return result;
-}
-fn float parse_float(String s) {
-    float? result = String.to_float(s);
-    if(catch err = result){
-        log::logn("%s is not parsable as float", s);
-        return -1;
-    }
-    return result;
-}
-
-fn double parse_double(String s) {
-    double? result = String.to_double(s);
-    if(catch err = result){
-        log::logn("%s is not parsable as double", s);
-        return -1;
-    }
-    return result;
-}
-
 
 fn bool string_equals(String s1, String s2){
     return s1.len == s2.len && libc::memcmp(s1, s2, s1.len) == 0;

@@ -25,17 +25,19 @@ enum TokenType : uint {
     EOF,
 }
 
-struct Keyword {
+struct Keyword
+{
     TokenType tokenType;
     String value;
 }
-struct Token (DebugPrintable) {
+struct Token 
+{
     TokenType tokenType;
     int line;
     String value;
 }
 
-fn void Token.debug_print(Token* token) @dynamic{
+fn void Token.debug_print(Token* token) {
     log::logn("Token: {type: %s, value: '%s'}",  token.tokenType, token.value);
 }
 

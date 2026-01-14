@@ -7,10 +7,8 @@ const NOT_STRUCT = uint.max;
 struct CompTypeInfo
 {
     ValueType type;
-    uint structTypeIndex;       // uint.max is reserved for non-structs
     ValueType refToType;        // Will be ValueType.NULL when not it's not a reference
-    char flags;
-    char flags2;
+    uint structTypeIndex;       // uint.max is reserved for non-structs
 }
 
 
@@ -21,8 +19,8 @@ fn ushort get_type_size(CompTypeInfo info)
         case ValueType.FLOAT:       return float.sizeof;
         case ValueType.DOUBLE:      return double.sizeof;
         case ValueType.BOOL:        return bool.sizeof;
-        case ValueType.GC_OBJ:      nextcase;
-        case ValueType.NO_GC_OBJ:   return uptr.sizeof;
+        case ValueType.REF:      nextcase;
+        case ValueType.PTR:   return uptr.sizeof;
         case ValueType.STRUCT:      return structTypes[info.structTypeIndex].sizeInBytes;
         default:                    return 0;
     }

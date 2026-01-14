@@ -37,12 +37,7 @@ fn bool Parser.match(Parser* this, TokenType... tokenTypes)
 
 fn bool Parser.check(Parser* this, TokenType tokenType)
 {
-    return token_matches(this.current ,tokenType);
-}
-
-fn bool token_matches(Token* t1, TokenType toCheck) @inline
-{
-    return t1.tokenType == toCheck;
+    return this.current.matches_type(tokenType);
 }
 
 fn bool Parser.match_any_type_token(Parser* this)
@@ -54,70 +49,9 @@ fn bool Parser.match_any_type_token(Parser* this)
     return false;
 }
 
-fn bool Parser.check_any_type_token(Parser* this)
+fn bool Parser.check_any_type_token(Parser* this) @inline
 {
-    return  this.check_builtin_type_token()         ||
-            this.check_struct_type_token()          ||
-            this.check_builtin_type_tracked_refs()  ||
-            this.check_builtin_type_untracked_refs()||
-            this.check_struct_type_refs('&')        ||
-            this.check_struct_type_refs('*');
-    }
-
-fn bool Parser.check_builtin_type_token(Parser* this)
-{
-    return this.check(TokenType.NULL)      ||
-           this.check(TokenType.INTEGER_T) ||
-           this.check(TokenType.FLOAT_T)   ||
-           this.check(TokenType.DOUBLE_T)  ||
-           this.check(TokenType.BOOL_T)    ||
-           this.check(TokenType.STRING_T);
-}
-
-fn bool Parser.check_builtin_type_tracked_refs(Parser* this)
-{
-    return this.check(TokenType.INT_REF_GC)     ||
-           this.check(TokenType.FLOAT_REF_GC)   ||
-           this.check(TokenType.DOUBLE_REF_GC)  ||
-           this.check(TokenType.BOOL_REF_GC);
-}
-
-fn bool Parser.check_builtin_type_untracked_refs(Parser* this)
-{
-    return this.check(TokenType.INT_REF_NOGC)     ||
-           this.check(TokenType.FLOAT_REF_NOGC)   ||
-           this.check(TokenType.DOUBLE_REF_NOGC)  ||
-           this.check(TokenType.BOOL_REF_NOGC);
-}
-
-fn bool Parser.check_struct_type_token(Parser* this)
-{
-    bool typeAlreadyDeclared = declaredStructs.has_key(this.current.value);
-    return this.check(TokenType.IDENTIFIER) && typeAlreadyDeclared;
-}
-
-fn bool Parser.check_struct_type_refs(Parser* this, char trailingChar)
-{
-    if (!this.check(TokenType.IDENTIFIER)) return false;
-
-    // If the identifier already includes the trailing char (e.g., "vec3*"), strip it and check.
-    String value = this.current.value;
-    if (value.len > 1 && value[value.len - 1] == trailingChar) {
-        String base = value[0 .. value.len - 1];
-        if (declaredStructs.has_key(base)) {
-            return true;
-        }
-    }
-
-    // Otherwise, append the trailing char and check.
-    @pool() {
-        char[] trailingString = {trailingChar};
-        String refStructName = value.tconcat((String)trailingString);
-        if (declaredStructs.has_key(refStructName)) {
-            return true;
-        }
-    };
-    return false;
+    return  this.current.is_any_type();
 }
 
 // ---------- Errors / Debug ----------

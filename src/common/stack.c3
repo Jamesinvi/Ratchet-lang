@@ -49,7 +49,6 @@ fn Type Stack.peek_at(Stack* this, int distance) @inline
     return this.items[this.size-1-distance];
 }
 
-
 fn bool Stack.is_empty(Stack* this)
 {
     return !this.size;

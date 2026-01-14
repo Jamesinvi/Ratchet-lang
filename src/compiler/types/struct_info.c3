@@ -36,6 +36,8 @@ struct FieldInfo
 HashMap{String, DeclIdx} declaredStructs;
 HashMap{String, DeclIdx} declaredFunctions;
 
+// This map maps a struct name to its index in structTypes
+HashMap{String, usz} structNamesToIdx;
 List{CompStructTypeInfo} structTypes;
 
 fn void clean_up_struct_globals(){

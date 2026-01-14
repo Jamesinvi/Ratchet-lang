@@ -480,8 +480,10 @@ fn ExprIdx Parser.expression(Parser* this)
 fn ExprIdx Parser.new_expr(Parser* this)
 {
     debug::@log_compilation("new_expr at %s", this.previous.value);
+	TypeAst targetType = this.parse_type_ast();
     Expr expr = { .kind = ExprKind.NEW};
     expr.span = {.line = this.previous.line};
+	expr.new = {.type = targetType};
     ExprIdx index = this.push_expr_get_idx(&expr);
     return index;
 
@@ -537,13 +539,25 @@ fn ExprIdx Parser.number(Parser* this)
     Expr expr;
     switch (this.previous.tokenType) {
         case TokenType.INTEGER:
-            int ival = common::parse_int(this.previous.value);
+            int? ival = String.to_int(this.previous.value);
+			if(catch notParsable = ival) {
+				this.error("%s is not an valid int", this.previous.value);
+				return NO_IDX;
+			}
             expr = {.kind = ExprKind.INT, .intLiteral = ival};
         case TokenType.FLOAT:
-            float  fval = common::parse_float(this.previous.value);
+            float? fval = String.to_float(this.previous.value);
+			if(catch notParsable = fval) {
+				this.error("%s is not an valid float", this.previous.value);
+				return NO_IDX;
+			}
             expr = {.kind = ExprKind.FLOAT, .floatLiteral = fval};
         case TokenType.DOUBLE:
-            double dval = common::parse_double(this.previous.value);
+            double? dval = String.to_double(this.previous.value);
+			if(catch notParsable = dval) {
+				this.error("%s is not an valid double", this.previous.value);
+				return NO_IDX;
+			}
             expr = {.kind = ExprKind.DOUBLE, .doubleLiteral = dval};
         default:
             this.error("Unknown type at %s", this.previous.value);

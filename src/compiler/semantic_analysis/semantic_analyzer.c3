@@ -1,0 +1,329 @@
+module parser::analyzer;
+import common;
+import debug;
+import std::collections::list;
+import common::stack;
+struct SemanticAnalyzer
+{
+	ProgramAst* ast;
+	Expr* currentExpr;
+	SymbolTable symbolTable;
+	CompTypeInfo currentReturnType;
+	List{TypeResult} errors;
+	Stack{Scope} scopes;
+	bool returnFound;
+
+}
+fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
+{
+	this.ast = ast;
+	this.errors.init(mem);
+	this.symbolTable = {};
+	this.symbolTable.symbols.init(mem);
+	this.symbolTable.exprSymbols.init(mem);
+	this.symbolTable.stmtSymbols.init(mem);
+	this.symbolTable.declSymbols.init(mem);
+	
+	this.symbolTable.exprSymbols.reserve(this.ast.expressions.len());
+	this.symbolTable.stmtSymbols.reserve(this.ast.statements.len());
+	this.symbolTable.declSymbols.reserve(this.ast.declarations.len());
+	// Fill lists with NO_SYMBOL
+	for (usz i = 0; i < this.ast.expressions.len(); i++) {
+		this.symbolTable.exprSymbols.push(NO_SYMBOL);
+	}
+
+	this.symbolTable.stmtSymbols.reserve(this.ast.statements.len());
+	for (usz i = 0; i < this.ast.statements.len(); i++) {
+		this.symbolTable.stmtSymbols.push(NO_SYMBOL);
+	}
+
+	this.symbolTable.declSymbols.reserve(this.ast.declarations.len());
+	for (usz i = 0; i < this.ast.declarations.len(); i++) {
+		this.symbolTable.declSymbols.push(NO_SYMBOL);
+	}
+	this.currentReturnType = make_type(ValueType.NULL);
+	this.returnFound = false;
+}
+
+fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
+{
+	this.symbolTable.symbols.free();
+	this.symbolTable.exprSymbols.free();
+	this.symbolTable.stmtSymbols.free();
+	this.symbolTable.declSymbols.free();
+	this.errors.free();
+}
+
+fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
+{
+	CompTypeInfo nullType = make_type(ValueType.NULL);
+	// Predeclare function symbols with return types.
+	for (usz i = 0; i < this.ast.declarations.len(); i++){
+		Decl* decl = &this.ast.declarations[i];
+		if (decl.kind == DeclKind.FUNCTION){
+			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
+			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
+			if (returnType.hadError) return returnType;
+			SymbolIdx symbolIdx = this.symbolTable.symbols.len();
+			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
+			this.symbolTable.symbols.push(symbol);
+			this.symbolTable.declSymbols[i] = symbolIdx;
+		}
+	}
+
+	for (usz i = 0; i < this.ast.declarations.len(); i++){
+		Decl* decl = &this.ast.declarations[i];
+		switch (decl.kind)
+		{
+			case DeclKind.FUNCTION:
+			{
+				TypeResult declType = this.analyze_fn(&decl.fnDecl);
+				if (declType.hadError) return declType;
+			}
+			case DeclKind.STRUCT: ;;
+			default: return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, {});
+		}
+	}
+	return type_ok(make_type(ValueType.NULL));
+}
+
+
+fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnDecl)
+{
+	Span fnSpan = this.ast.statements[fnDecl.body].span;
+	TypeResult expectedRetType = this.create_type_from_ast(&fnDecl.returnType, fnSpan);
+	if (expectedRetType.hadError) return expectedRetType;
+	debug::@log_compilation("fn '%s', expects '%s' return type", this.ast.names[fnDecl.nameIdx], expectedRetType.value.type);
+	List{StmtIdx}* stmtsIndices = &this.ast.statements[fnDecl.body].blockStmt.stmts;
+
+	Scope fnScope = {.depth = this.scopes.size, .returnType = expectedRetType, .enclosingIdx = this.scopes.size };
+	this.scopes.push(fnScope);
+	// Scan and analyze all statments in the function
+	this.currentReturnType = expectedRetType.value;
+	this.returnFound = false;
+	foreach (stmtIdx : stmtsIndices){
+		TypeResult resultType = this.analyze_stmt(stmtIdx);
+		if (resultType.hadError) return resultType;
+	}
+
+	if(expectedRetType.value.type != ValueType.NULL && !this.returnFound){
+		CompTypeInfo nullType = make_type(ValueType.NULL);
+		return this.type_error(ErrorKind.NO_RETURN, nullType, expectedRetType.value, fnSpan);
+	}
+	this.scopes.pop();
+	return type_ok(expectedRetType.value);
+}
+
+
+fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmtIdx)
+{
+	Stmt* stmt = &this.ast.statements[stmtIdx];
+	switch (stmt.kind)
+	{
+		case StmtKind.EXPR:
+			return this.analyze_expr(stmt.exprStmt);
+		case StmtKind.ECHO:
+			return this.analyze_expr(stmt.echoStmt);
+		case StmtKind.DECL:
+		{
+			TypeResult lhsType = this.create_type_from_ast(&stmt.varDecl.type, stmt.span);
+			if (lhsType.hadError) return lhsType;
+			SymbolIdx symbolIdx = this.symbolTable.symbols.len();
+			Symbol symbol = { .kind = SymbolKind.LOCAL, .idx = stmtIdx, .type = lhsType.value };
+			this.symbolTable.symbols.push(symbol);
+			this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
+			debug::@log_compilation("statement %s: %s is of type %s", stmt.kind, this.ast.names[stmt.varDecl.nameIdx], lhsType.value.type);
+			if (stmt.varDecl.init != parser::NO_IDX){
+				Expr* initExpr = &this.ast.expressions[stmt.varDecl.init];
+				TypeResult rhsType = this.analyze_expr(stmt.varDecl.init);
+				if (rhsType.hadError) return rhsType;
+				if(parser::type_info_matches(lhsType.value, rhsType.value)){
+					return type_ok(lhsType.value);
+				}
+				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
+			}
+			return type_ok(lhsType.value);
+		}
+		case StmtKind.BLOCK:
+		{
+			// Same as function, scan and analyze all statements
+			foreach (childIdx : stmt.blockStmt.stmts){
+				TypeResult result = this.analyze_stmt(childIdx);
+				if (result.hadError) return result;
+			}
+			return type_ok(make_type(ValueType.NULL));
+		}
+		case StmtKind.IF:
+		{
+			CompTypeInfo boolType = make_type(ValueType.BOOL);
+			Expr* condExpr = &this.ast.expressions[stmt.ifStmt.cond];
+			TypeResult condType = this.analyze_expr(stmt.ifStmt.cond);
+			if (condType.hadError) return condType;
+			if (condType.value.type != ValueType.BOOL) return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
+			TypeResult thenType = this.analyze_stmt(stmt.ifStmt.thenBlock);
+			if (thenType.hadError) return thenType;
+			if (stmt.ifStmt.elseBlock != parser::NO_IDX){
+				TypeResult elseType = this.analyze_stmt(stmt.ifStmt.elseBlock);
+				if (elseType.hadError) return elseType;
+			}
+			return type_ok(make_type(ValueType.NULL));
+		}
+		case StmtKind.WHILE:
+		{
+			CompTypeInfo boolType = make_type(ValueType.BOOL);
+			Expr* condExpr = &this.ast.expressions[stmt.whileStmt.cond];
+			TypeResult condType = this.analyze_expr(stmt.whileStmt.cond);
+			if (condType.hadError) return condType;
+			if (condType.value.type != ValueType.BOOL) return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
+			return this.analyze_stmt(stmt.whileStmt.body);
+		}
+		case StmtKind.RETURN:
+		{
+			CompTypeInfo nullType = make_type(ValueType.NULL);
+			this.returnFound = true;
+			if (stmt.retStmt.value == parser::NO_IDX){
+				if (this.currentReturnType.type != ValueType.NULL){
+					return this.type_error(ErrorKind.TYPE_MISMATCH, nullType, this.currentReturnType, stmt.span);
+				}
+				return type_ok(nullType);
+			}
+			TypeResult valueType = this.analyze_expr(stmt.retStmt.value);
+			if (valueType.hadError) return valueType;
+			if (!parser::type_info_matches(this.currentReturnType, valueType.value)){
+				return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
+			}
+			return type_ok(valueType.value);
+		}
+		default:
+			return type_ok(make_type(ValueType.NULL));
+	}
+}
+
+
+fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx exprIdx)
+{
+	if (exprIdx == parser::NO_IDX) return type_ok(make_type(ValueType.NULL));
+	Expr* expr = &this.ast.expressions[exprIdx];
+	CompTypeInfo nullType = make_type(ValueType.NULL);
+
+	switch(expr.kind)
+	{
+		case ExprKind.VAR:
+		{
+			String name = this.ast.names[expr.varExpr];
+			for (isz i = (isz)this.symbolTable.symbols.len() - 1; i >= 0; i--){
+				Symbol* symbol = &this.symbolTable.symbols[(usz)i];
+				if (symbol.kind != SymbolKind.LOCAL) continue;
+				Stmt* declStmt = &this.ast.statements[(StmtIdx)symbol.idx];
+				if (declStmt.kind != StmtKind.DECL) continue;
+				String declName = this.ast.names[declStmt.varDecl.nameIdx];
+				if (common::string_equals(declName, name)){
+					this.symbolTable.exprSymbols[exprIdx] = (SymbolIdx)i;
+					break;
+				}
+			}
+			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
+			if (symbolIdx != NO_SYMBOL) return type_ok(this.symbolTable.symbols[symbolIdx].type);
+
+			for (isz i = (isz)this.symbolTable.symbols.len() - 1; i >= 0; i--){
+				Symbol* symbol = &this.symbolTable.symbols[(usz)i];
+				if (symbol.kind != SymbolKind.FUNCTION) continue;
+				Decl* decl = &this.ast.declarations[(DeclIdx)symbol.idx];
+				if (decl.kind != DeclKind.FUNCTION) continue;
+				String declName = this.ast.names[decl.fnDecl.nameIdx];
+				if (common::string_equals(declName, name)){
+					this.symbolTable.exprSymbols[exprIdx] = (SymbolIdx)i;
+					return type_ok(symbol.type);
+				}
+			}
+			return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, nullType, expr.span);
+		}
+		case ExprKind.INT:			return type_ok(make_type(ValueType.INT));
+		case ExprKind.FLOAT:		return type_ok(make_type(ValueType.FLOAT));
+		case ExprKind.DOUBLE:		return type_ok(make_type(ValueType.DOUBLE));
+		case ExprKind.BOOL:			return type_ok(make_type(ValueType.BOOL));
+		case ExprKind.NULL:			return type_ok(make_type(ValueType.NULL));
+		case ExprKind.STRING:		return type_ok(make_ref_type(ValueType.NULL, parser::NOT_STRUCT));
+		case ExprKind.UNARY:
+		{
+			TypeResult rhsType = this.analyze_expr(expr.unary.rhs);
+			if (rhsType.hadError) return rhsType;
+			switch (expr.unary.op){
+				case UnOp.NEG:
+					if (!is_numeric_type(rhsType.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, rhsType.value, expr.span);
+					return type_ok(rhsType.value);
+				case UnOp.NOT:
+					if (rhsType.value.type != ValueType.BOOL) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, make_type(ValueType.BOOL), expr.span);
+					return type_ok(make_type(ValueType.BOOL));
+				default:
+					return type_ok(rhsType.value);
+			}
+		}
+		case ExprKind.BINARY:
+		{
+			TypeResult lhsType = this.analyze_expr(expr.binary.lhs);
+			if (lhsType.hadError) return lhsType;
+			if (expr.binary.op == BinOp.AS) return type_ok(lhsType.value);
+			TypeResult rhsType = this.analyze_expr(expr.binary.rhs);
+			if (rhsType.hadError) return rhsType;
+
+			switch (expr.binary.op)
+			{
+				case BinOp.ADD:			nextcase;
+				case BinOp.SUB:			nextcase;
+				case BinOp.MUL:			nextcase;
+				case BinOp.DIV:		
+					if (!is_numeric_type(lhsType.value) || !parser::type_info_matches(lhsType.value, rhsType.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+					return type_ok(lhsType.value);
+				case BinOp.EQ:
+				case BinOp.NEQ:
+					if (!parser::type_info_matches(lhsType.value, rhsType.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+					return type_ok(make_type(ValueType.BOOL));
+				case BinOp.LESS:		nextcase;
+				case BinOp.LESS_EQ:		nextcase;
+				case BinOp.GREATER:		nextcase;
+				case BinOp.GREATER_EQ:
+					if (!is_numeric_type(lhsType.value) || !parser::type_info_matches(lhsType.value, rhsType.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+					return type_ok(make_type(ValueType.BOOL));
+				case BinOp.AND:			nextcase;
+				case BinOp.OR:
+					if (lhsType.value.type != ValueType.BOOL) return this.type_error(ErrorKind.TYPE_MISMATCH, lhsType.value, make_type(ValueType.BOOL), expr.span);
+					if (rhsType.value.type != ValueType.BOOL) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, make_type(ValueType.BOOL), expr.span);
+					return type_ok(make_type(ValueType.BOOL));
+				case BinOp.ASSIGN:
+					if (!parser::type_info_matches(lhsType.value, rhsType.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+					return type_ok(lhsType.value);
+				default:
+					return type_ok(lhsType.value);
+			}
+		}
+		case ExprKind.NEW:
+		{
+			TypeResult type = this.create_type_from_ast(&expr.new.type, expr.span);
+			return type;
+		}
+		case ExprKind.CALL:
+		{
+			TypeResult calleeType = this.analyze_expr(expr.call.callee);
+			if (calleeType.hadError) return calleeType;
+			foreach (argIdx : expr.call.args){
+				TypeResult argType = this.analyze_expr(argIdx);
+				if (argType.hadError) return argType;
+			}
+			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[expr.call.callee];
+			if (symbolIdx != NO_SYMBOL && this.symbolTable.symbols[symbolIdx].kind == SymbolKind.FUNCTION){
+				return type_ok(this.symbolTable.symbols[symbolIdx].type);
+			}
+			return type_ok(calleeType.value);
+		}
+		case ExprKind.FIELD:
+		{
+			TypeResult baseType = this.analyze_expr(expr.field.base);
+			if (baseType.hadError) return baseType;
+			return type_ok(make_type(ValueType.NULL));
+		}
+		default:
+			return type_ok(make_type(ValueType.NULL));
+	}
+
+}

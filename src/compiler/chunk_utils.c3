@@ -74,7 +74,7 @@ fn ushort Chunk.add_const_string(Chunk* chunk, String src){
     }
         
     FrameSlotInfo info = {
-        .type = ValueType.GC_OBJ,
+        .type = ValueType.REF,
         .sizeInBytes = uptr.sizeof,  // Pointer
         .offset = offset,
         .index = index,
@@ -98,7 +98,7 @@ fn ushort Chunk.add_const_function(Chunk* chunk, ObjFunction* function){
     }
 
     FrameSlotInfo info = {
-        .type = ValueType.NO_GC_OBJ,
+        .type = ValueType.PTR,
         .sizeInBytes = uptr.sizeof,  // Pointer
         .offset = offset,
         .index = index,
@@ -124,7 +124,7 @@ fn ushort Chunk.add_const_native(Chunk* chunk, NativeFn* function){
     }
 
     FrameSlotInfo info = {
-        .type = ValueType.NO_GC_OBJ,
+        .type = ValueType.PTR,
         .sizeInBytes = uptr.sizeof,  // Pointer
         .offset = offset,
         .index = index,

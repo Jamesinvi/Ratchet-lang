@@ -17,6 +17,15 @@ enum DeclKind : char
     FIELD,
 }
 
+
+struct ProgramAst
+{
+    List{Decl}      declarations;
+    List{Stmt}      statements;      // global statement list indexed by nodes
+    List{Expr}      expressions;     // global expression list indexed by nodes
+    List{String}    names;           // global name list indexed by nodes
+}
+
 struct ParamAst
 {
     TypeAst type;
@@ -58,14 +67,6 @@ struct Decl
         FnDeclAst       fnDecl;
         StructDeclAst   structDecl;
     }
-}
-
-struct ProgramAst
-{
-    List{Decl}      declarations;
-    List{Stmt}      statements;      // global statement list indexed by nodes
-    List{Expr}      expressions;     // global expression list indexed by nodes
-    List{String}    names;           // global name list indexed by nodes
 }
 
 fn void ProgramAst.init(ProgramAst* this, Allocator allocator)
@@ -259,6 +260,8 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         case ExprKind.NEW:
         {
             log::log("new");
+			String typeName = this.names[expr.new.type.nameIdx];
+			log::log("<%s>", typeName);
         }
         case ExprKind.GROUP:
         {

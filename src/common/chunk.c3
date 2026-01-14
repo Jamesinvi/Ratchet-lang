@@ -243,8 +243,8 @@ fn void Chunk.print_constant(Chunk* this, int offset){
         case ValueType.BOOL:        log::log("%s", @as(bool, bytes,));  
         case ValueType.STRUCT:      log::log("struct, change to print");
         case ValueType.NULL:        log::log("NULL");
-        case ValueType.GC_OBJ:      nextcase;
-        case ValueType.NO_GC_OBJ:   {
+        case ValueType.REF:      nextcase;
+        case ValueType.PTR:   {
             switch (@as(Obj*, bytes).type)
             {
                 case ObjType.STRING:            log::log("\"%s\"", @as(ObjString*, bytes).str);

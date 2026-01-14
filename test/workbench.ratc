@@ -9,13 +9,16 @@ fn bool program(){
 	vec3 prova;
 	vec3* trpv = createVec3Heap();
 	echo(trpv.x);
+	int t = 12;
+	int k = t + 2;
+	int n = k + (-3);
 	return false;
 }
 
 fn vec3* createVec3Heap(){
-	vec3* res = new;
+	vec3* res = new vec3*;
 
-	res.x = 35;
+	//res.x = 35;
 	return res;
 }
 

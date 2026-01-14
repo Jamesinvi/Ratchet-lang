@@ -8,8 +8,8 @@ enum ValueType : char
     DOUBLE,
     BOOL,
     STRUCT,
-    GC_OBJ,
-    NO_GC_OBJ,
+    REF,
+    PTR,
 }
 
 // For future me: This macro is very simple:

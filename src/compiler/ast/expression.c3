@@ -49,6 +49,7 @@ struct ExprUnary    { UnOp op;           ExprIdx rhs; }
 struct ExprBinary   { BinOp op;          ExprIdx lhs;     ExprIdx rhs; }
 struct ExprCall     { ExprIdx callee;    List{ExprIdx} args; }
 struct ExprField    { ExprIdx base;      NameIdx field; }
+struct ExprNew		{ TypeAst type; }
 
 struct Expr
 {
@@ -68,6 +69,7 @@ struct Expr
         ExprBinary  binary;
         ExprCall    call;
         ExprField   field;
+		ExprNew 	new;
     }    
 }
 

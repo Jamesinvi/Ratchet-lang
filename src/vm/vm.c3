@@ -216,8 +216,8 @@ fn RunResult run(Vm* vm)
                     case ValueType.FLOAT:       @read_local_and_push(vm, float, offset);
                     case ValueType.DOUBLE:      @read_local_and_push(vm, double, offset);
                     case ValueType.BOOL:        @read_local_and_push(vm, bool, offset);
-                    case ValueType.GC_OBJ:      nextcase;
-                    case ValueType.NO_GC_OBJ:   @read_local_and_push(vm, Obj*, offset);
+                    case ValueType.REF:      nextcase;
+                    case ValueType.PTR:   @read_local_and_push(vm, Obj*, offset);
                     case ValueType.NULL:        @push_val(vm, bool, false); // or special NULL handling
                     case ValueType.STRUCT:{
                         Byte* src = &vm.stack[offset];
@@ -262,8 +262,8 @@ fn RunResult run(Vm* vm)
                     case ValueType.FLOAT:       @read_local_and_push(vm, float, offset);
                     case ValueType.DOUBLE:      @read_local_and_push(vm, double, offset);
                     case ValueType.BOOL:        @read_local_and_push(vm, bool, offset);
-                    case ValueType.GC_OBJ:      nextcase;
-                    case ValueType.NO_GC_OBJ:   @read_local_and_push(vm, Obj*, offset);
+                    case ValueType.REF:      nextcase;
+                    case ValueType.PTR:   @read_local_and_push(vm, Obj*, offset);
                     case ValueType.NULL:        @push_val(vm, bool, false); // or special NULL handling
                     default:
                         vm.error("Handle some loading of structs and primitives");
@@ -307,8 +307,8 @@ fn RunResult run(Vm* vm)
                     case ValueType.FLOAT:  { float v = @unaligned_load(*(float*)fieldAddr, float.alignof); @push_val(vm, float, v); }
                     case ValueType.DOUBLE: { double v = @unaligned_load(*(double*)fieldAddr, double.alignof); @push_val(vm, double, v); }
                     case ValueType.BOOL:   { bool v = @unaligned_load(*(bool*)fieldAddr, bool.alignof); @push_val(vm, bool, v); }
-                    case ValueType.GC_OBJ: nextcase;
-                    case ValueType.NO_GC_OBJ:
+                    case ValueType.REF: nextcase;
+                    case ValueType.PTR:
                     {
                         Obj* v = @unaligned_load(*(Obj**)fieldAddr, uptr.alignof);
                         @push_val(vm, Obj*, v);
@@ -506,8 +506,8 @@ fn RunResult run(Vm* vm)
                     case ValueType.BOOL:        io::fprintfn(vm.output, "%s", @pop_val(vm, bool));
                     case ValueType.NULL:        io::fprintfn(vm.output, "null"); @pop_val(vm, bool);
                     case ValueType.STRUCT:      io::fprintfn(vm.output, "Struct"); @pop_val(vm, int);
-                    case ValueType.NO_GC_OBJ:   nextcase;
-                    case ValueType.GC_OBJ:
+                    case ValueType.PTR:   nextcase;
+                    case ValueType.REF:
                     {
                         Obj* obj = @pop_val(vm, Obj*);
                         ObjType kind = obj.type;

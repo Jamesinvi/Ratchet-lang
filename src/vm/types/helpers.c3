@@ -8,8 +8,8 @@ fn ushort get_type_size(ValueType type)
         case ValueType.FLOAT:       return float.sizeof;
         case ValueType.DOUBLE:      return double.sizeof;
         case ValueType.BOOL:        return bool.sizeof;
-        case ValueType.GC_OBJ:      return uptr.sizeof;
-        case ValueType.NO_GC_OBJ:   return uptr.sizeof;
+        case ValueType.REF:      return uptr.sizeof;
+        case ValueType.PTR:   return uptr.sizeof;
         default:                    return 0;
     }
 }

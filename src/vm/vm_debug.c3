@@ -36,7 +36,7 @@ fn void print_function_and_children(ObjFunction* function) {
     // Also descend into function constants
     for (int i = 0; i < (int)function.chunk.debugConstantsSlots.len(); i++) {
         FrameSlotInfo info = function.chunk.debugConstantsSlots[i];
-        if (info.type == ValueType.NO_GC_OBJ || info.type == ValueType.GC_OBJ) {
+        if (info.type == ValueType.PTR || info.type == ValueType.REF) {
             Byte* constantBytes = &function.chunk.constants[info.offset];
             ObjFunction* child = common::@as(ObjFunction*, constantBytes);
             if (((Obj*)child).type == ObjType.FUNCTION) {

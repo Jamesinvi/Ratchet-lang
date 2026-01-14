@@ -182,9 +182,12 @@ fn void Tokenizer.number(Tokenizer* this) {
     bool isDecimal = false;
     bool isFloat   = false;
 
-    while ((common::is_digit(this.peek()) || this.peek() == '.') && !this.is_at_end()) {
-        if (this.peek() == '.') {
+    while ((common::is_digit(this.peek()) || this.peek() == '.' || this.peek() == 'f') && !this.is_at_end()) {
+        if (this.peek() == '.'|| this.peek() == 'f') {
             isDecimal = true;
+			if(this.peek() == 'f'){
+				isFloat = true;
+			}
         }
         this.advance();
     }
@@ -198,11 +201,6 @@ fn void Tokenizer.number(Tokenizer* this) {
     if (this.is_at_end()) {
         error_lin(this.line, this.column, "Unterminated number");
         return;
-    }
-
-    if (this.peek() == 'f') {
-        isFloat = true;
-        this.advance();
     }
 
     if (isDecimal) {
