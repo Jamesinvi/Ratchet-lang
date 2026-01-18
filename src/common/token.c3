@@ -15,8 +15,8 @@ enum TokenType : uint {
 
     // Keywords.
     AND, CLASS, ELSE, FALSE, FN, FOR, IF, NULL, OR,
-    PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE, ECHO,
-    METHOD, NEW, AS,
+    PRINT, RETURN, SUPER, THIS, TRUE, WHILE, ECHO,
+    METHOD, AS, NEW,
 
     // Types
     INTEGER_T, FLOAT_T, DOUBLE_T, STRING_T, STRUCT_T, BOOL_T,
@@ -69,5 +69,6 @@ Keyword[*] keywords = {
     {.tokenType = NEW, .value = "new"},
     {.tokenType = ECHO, .value = "echo"},
     {.tokenType = AS, .value = "as"},
+    {.tokenType = METHOD, .value = "method"},
 
 };

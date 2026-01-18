@@ -244,18 +244,46 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
     // Ensure fields list is initialized
     decl.structDecl.nameIdx = this.push_name_get_idx(name);
     decl.structDecl.fields.init(&this.allocator);
+    decl.structDecl.methods.init(&this.allocator);
 
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name");
-    while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
-        // Parse field: <type> <name> ;
-        TypeAst fieldType = this.parse_type_ast();
-        this.consume(TokenType.IDENTIFIER, "Expected field name.");
-        NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value);
-        FieldAst field = {.type = fieldType, .nameIdx = fieldNameIdx};
-        decl.structDecl.fields.push(field);
-        this.consume(TokenType.SEMICOLON, "Expected ';' after field");
+	int rightBraceExpected = 1;
+    while (rightBraceExpected != 0 && !this.check(TokenType.EOF)) {
+		if(this.check_any_type_token()){
+			// Parse field: <type> <name> ;
+			TypeAst fieldType = this.parse_type_ast();
+			this.consume(TokenType.IDENTIFIER, "Expected field name.");
+			NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value);
+			FieldAst field = {.type = fieldType, .nameIdx = fieldNameIdx};
+			usz fieldsCount = decl.structDecl.fields.len();
+			field.idxInFields = fieldsCount;
+			decl.structDecl.fields.push(field);
+			this.consume(TokenType.SEMICOLON, "Expected ';' after field");
+		}else if (this.match(TokenType.METHOD)){
+			TypeAst retType = this.parse_type_ast();
+			this.consume(TokenType.IDENTIFIER, "Expected method name.");
+			NameIdx methodNameIdx = this.push_name_get_idx(this.previous.value);
+			MethodDeclAst method = {};
+			method.returnType = retType;
+			method.nameIdx = methodNameIdx;
+			method.structIdx = declIdx;
+			// parse params + body
+			this.consume(TokenType.LEFT_PAREN, "Expected '(' after method name");
+			this.fill_fun_params(&method.params);
+			this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
+			StmtIdx bodyIdx = this.block(); // block consumes the closing '}'
+			method.body = bodyIdx;
+			decl.structDecl.methods.push(method);
+		}else if (this.match(TokenType.RIGHT_BRACE)){
+			rightBraceExpected--;
+		}else{
+			this.error("Unexpected token in struct body.");
+			this.advance();
+		}
     }
-    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after struct fields");
+    if (rightBraceExpected != 0) {
+        this.error("Expected '}' after struct fields");
+    }
     return declIdx;
 }
 
@@ -264,15 +292,18 @@ fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
     debug::@log_compilation("dot at %s at %s", this.previous.value, this.current.value);
 
     String fieldName = this.current.value;
-
     this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
     
     NameIdx nameIdx = this.push_name_get_idx(fieldName);
 
-    Expr expr = {.kind = ExprKind.FIELD};
+    Expr expr = {.kind = ExprKind.MEMBER};
     expr.span = {.line = this.previous.line};
-    expr.field = {.base = lhs, .field = nameIdx};
+    expr.member = {.base = lhs, .memberIdx = nameIdx};
     ExprIdx index = this.push_expr_get_idx(&expr);
+	// Method call?
+    if (this.match(TokenType.LEFT_PAREN)) {
+        return this.call(index);
+    }
     return index;
 }
 
@@ -305,31 +336,12 @@ fn ushort Parser.parse_variable(Parser* this, String errMsg)
     this.consume(TokenType.IDENTIFIER, errMsg);
     Token* name = this.previous;
 
-    this.declare_variable();
     return this.identifier_constant(this.previous);
-}
-
-fn void Parser.declare_variable(Parser* this)
-{
-    Token* name = this.previous;
-    this.add_local(*name);
-}
-
-fn void Parser.add_local(Parser* this, Token name)
-{
-}
-
-fn void Parser.mark_initialized(Parser* this)
-{
 }
 
 fn ushort Parser.identifier_constant(Parser* this, Token* name)
 {
     return 0;
-}
-
-fn void Parser.define_variable(Parser* this, ushort globalsIndex)
-{
 }
 
 fn ExprIdx Parser.variable(Parser* this)
@@ -379,7 +391,7 @@ fn DeclIdx Parser.fun_declaration(Parser* this)
 
     // parse params + body
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
-    this.fill_fun_params(&decl.fnDecl);
+    this.fill_fun_params(&decl.fnDecl.params);
 
     this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
     StmtIdx bodyIdx = this.block(); // block consumes the closing '}'
@@ -389,21 +401,21 @@ fn DeclIdx Parser.fun_declaration(Parser* this)
 }
 
 
-fn void Parser.fill_fun_params(Parser* this, FnDeclAst* declFn)
+fn void Parser.fill_fun_params(Parser* this, List{ParamAst}* params)
 {
     // assumes '(' has already been consumed
     // ensure list is initialized
-    declFn.params.init(&this.allocator);
+    params.init(&this.allocator);
 
     if (!this.check(TokenType.RIGHT_PAREN))
     {
         do {
             ParamAst p = this.fun_param();
-            if (declFn.params.len() >= Byte.max) {
+            if (params.len() >= Byte.max) {
                 this.error("Can't have more than 255 parameters");
                 break;
             }
-            declFn.params.push(p);
+            params.push(p);
         } while (this.match(TokenType.COMMA));
     }
 

@@ -1,44 +1,59 @@
 program        → declaration* EOF ;
 
 // DECLARATIONS
-declaration    → structDecl | funDecl | varDecl | statement ;
-structDecl     → "struct" IDENTIFIER "{" (varDecl | function)* "}" ;
+declaration    → structDecl | interfaceDecl | funDecl ;
+structDecl     → "struct" IDENTIFIER ( ":" IDENTIFIER ( "," IDENTIFIER )* )?
+                 "{" structMember* "}" ;
+interfaceDecl  → "interface" IDENTIFIER "{" interfaceMember* "}" ;
+structMember   → varDecl | methodDecl ;
+interfaceMember→ fieldDecl | methodDecl ;
+fieldDecl      → "field" type IDENTIFIER ";" ;
 funDecl        → "fn" function ;
-methodDecl     → "method" function;
+methodDecl     → "method" function ;
 varDecl        → type IDENTIFIER ( "=" expression )? ";" ;
-type           → "int" | "float" | "double" | "string";
+type           → baseType typeModifier* ;
+baseType       → "int" | "float" | "double" | "bool" | "string" | IDENTIFIER ;
+typeModifier   → "&" | "*" | "[]" ;
 
 // STATEMENTS
-statement      → exprStmt | forStmt | ifStmt | debugStmt | returnStmt | whileStmt | block ;
+statement      → varDecl | exprStmt | forStmt | ifStmt | returnStmt | whileStmt | block ;
 exprStmt       → expression ";" ;
 forStmt        → "for" "(" ( varDecl | exprStmt | ";" )
                            expression? ";"
                            expression? ")" statement ;
 ifStmt         → "if" "(" expression ")" block ( "else" block )? ;
-debugStmt      → "debug" expression ";" ;
 returnStmt     → "return" expression? ";" ;
 whileStmt      → "while" "(" expression ")" statement ;
-block          → "{" declaration* "}" ;
+block          → "{" statement* "}" ;
 
 // EXPRESSIONS
 expression     → assignment ;
-assignment     → ( call "." )? IDENTIFIER "=" assignment
+assignment     → lvalue "=" assignment
                | logic_or ;
+lvalue         → IDENTIFIER ( "." IDENTIFIER | "[" expression "]" )* ;
 logic_or       → logic_and ( "||" logic_and )* ;
 logic_and      → equality ( "&&" equality )* ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term           → factor ( ( "-" | "+" ) factor )* ;
 factor         → unary ( ( "/" | "*" ) unary )* ;
-unary          → ( "!" | "-" | cast) unary | call ;
-call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+unary          → ( "!" | "-" ) unary | cast | call ;
+cast           → call "as" type ;
+call           → primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
 primary        → "true" | "false" | "null"
                | INTEGER | FLOAT | DOUBLE
                | STRING | IDENTIFIER
+               | structLiteral
+               | newExpr
                | "(" expression ")" ;
+structLiteral  → "{" fieldInit ( "," fieldInit )* "}" ;
+fieldInit      → IDENTIFIER "=" expression ;
+newExpr        → "new" type ( structLiteral | "(" expression ")" | arrayAlloc )? ;
+arrayAlloc     → "[" expression "]" ( "[" expression "]" )* ;
 
 // UTILITY
 function       → returnType IDENTIFIER "(" parameters? ")" block ;
-parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
+parameters     → parameter ( "," parameter )* ;
+parameter      → type IDENTIFIER ;
 arguments      → expression ( "," expression )* ;
-returnType     → type | "void" ;
+returnType     → type | "null" ;

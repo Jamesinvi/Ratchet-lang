@@ -11,7 +11,8 @@ struct CompStructTypeInfo
     ushort sizeInBytes;
     ushort fieldCount;
     uint typeIndex;                 //index in structTypes
-    List{FieldInfo} fieldInfos;
+    List{FieldInfo} 	fieldInfos;
+	List{MethodInfo}	methodsInfos;
 }
 
 fn void CompStructTypeInfo.init(CompStructTypeInfo* this){
@@ -30,6 +31,12 @@ struct FieldInfo
     String name;
     CompTypeInfo typeInfo;
     ushort offset;
+}
+
+struct MethodInfo
+{
+	String name;
+	ushort arity;
 }
 
 // This map is used by the parser so the user can't define the same struct twice

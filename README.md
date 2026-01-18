@@ -10,7 +10,7 @@ Ratchet is an imperative programming language with a familiar C-like syntax that
 
 The guiding principle is to keep most code simple and safe, but allow tighter control where it matters. Because the choice is per-variable, you can start with GC-managed code and later refactor hot paths without rewriting everything.
 
-Ratchet allocates data on the stack by default and passes by **value**, unless the type is explicitly marked with `&` (e.g. `Foo&`) or `*` (e.g. `Foo*`). In Ratchet, references are handles to heap data and are allocated with `new` (`T&`) or `new*` (`T*`).
+Ratchet allocates data on the stack by default and passes by **value**, unless the type is explicitly marked with `&` (e.g. `Foo&`) or `*` (e.g. `Foo*`). In Ratchet, references are handles to heap data and are allocated with `new T&` or `new T*`.
 
 References in Ratchet are allocated on the **heap** and tracked by the GC.
 
@@ -26,14 +26,14 @@ int& b = &a;       // not allowed, '&' is part of the type, and a and b have dif
 Instead, in Ratchet you would do something like:
 
 ```
-int& a = new(5);  // a is an integer, but heap allocated
+int& a = new int&{5};  // a is an integer, but heap allocated
 ```
 
 or, if you need a copy:
 
 ```
 int a = 5;
-int& b = new(a); // creates a new int-ref with the value of a
+int& b = new int&{a}; // creates a new int-ref with the value of a
 ```
 
 ## Why Ratchet
@@ -51,7 +51,7 @@ These are the core rules that guide how values and references behave:
 * `T*` is a manual handle to heap data; the programmer owns the lifetime and must `free` it.
 * A `T` value may contain `T&` fields; copying the `T` copies the handles (shallow) and keeps the referenced objects alive.
 * There are no implicit or explicit conversions between `T`, `T&`, and `T*`.
-* Allocation uses `new` for `T&` and `new*` for `T*`.
+* Allocation uses `new T&` or `new T*` for references or pointers respectively.
 
 | Type | Allocation | Lifetime | Copy behavior | Typical use |
 | --- | --- | --- | --- | --- |
@@ -71,10 +71,10 @@ struct Squad {
 }
 
 fn null demo() {
-    Enemy& boss = new { hp = 100 };
+    Enemy& boss = new Enemy& { hp = 100 };
     Squad a = { leader = boss };
     Squad b = a;         // shallow copy, same leader reference
-    Enemy* scratch = new* { hp = 1 };
+    Enemy* scratch = new Enemy* { hp = 1 };
     free(scratch);
 }
 ```
@@ -194,7 +194,7 @@ int x = 42;
 ### GC-Managed References `T&`
 
 ```ratchet
-Vec3& a = new { x = 1, y = 2, z = 3 };
+Vec3& a = new Vec3& { x = 1, y = 2, z = 3 };
 ```
 
 `T&` is a **GC-managed reference**:
@@ -208,7 +208,7 @@ Vec3& a = new { x = 1, y = 2, z = 3 };
 ### Manual References `T*`
 
 ```ratchet
-Vec3* b = new* { x = 4, y = 5, z = 6 };
+Vec3* b = new Vec3* { x = 4, y = 5, z = 6 };
 free(b);
 ```
 
@@ -223,12 +223,12 @@ free(b);
 ---
 
 ## Struct Literals
-Struct literals use `{ field = value }` and work for values, `T&`, and `T*` (use `new` for `T&` and `new*` for `T*`).
+Struct literals use `{ field = value }` and work for values, `T&`, and `T*` (use `new T&` for `T&` and `new T*` for `T*`).
 
 ```ratchet
 Vec3 v = { x = 1, y = 2, z = 3 };       // value
-Vec3& a = new { x = 1, y = 2, z = 3 };  // GC heap
-Vec3* b = new* { x = 4, y = 5, z = 6 };  // manual heap
+Vec3& a = new Vec3& { x = 1, y = 2, z = 3 };  // GC heap
+Vec3* b = new Vec3* { x = 4, y = 5, z = 6 };  // manual heap
 ```
 
 ---
@@ -380,7 +380,7 @@ struct Player : HasPosition {
 }
 
 fn Player& makeHero() {
-    Player& p = new {
+    Player& p = new Player&{
         position = { x = 1.0, y = 2.0, z = 0.0 },
         name = "Hero"
     };
@@ -394,7 +394,7 @@ fn bool program() {
     Vec3[]& positions = new Vec3[16];
     positions[0] = { x = 3, y = 9, z = 1 };
 
-    Vec3* scratch = new* { x = 0, y = 0, z = 0 };
+    Vec3* scratch = new Vec3* { x = 0, y = 0, z = 0 };
     scratch.translate(1,2,3);
     free(scratch);
 }

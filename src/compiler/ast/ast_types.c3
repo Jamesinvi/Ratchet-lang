@@ -14,7 +14,6 @@ enum DeclKind : char
 {
     FUNCTION,
     STRUCT,
-    FIELD,
 }
 
 
@@ -37,6 +36,7 @@ struct FieldAst
 {
     TypeAst type;
     NameIdx nameIdx;
+	usz idxInFields;		// index in the StructDeclAst field list
 }
 
 struct TypeAst
@@ -53,10 +53,21 @@ struct FnDeclAst
     StmtIdx body;
 }
 
+struct MethodDeclAst 
+{
+    TypeAst returnType;
+    NameIdx nameIdx;
+	DeclIdx structIdx;
+    List{ParamAst} params;
+    StmtIdx body;
+}
+
+
 struct StructDeclAst
 {
     NameIdx nameIdx;
     List{FieldAst} fields;
+    List{MethodDeclAst} methods;
 }
 
 struct Decl
@@ -93,21 +104,57 @@ fn void ProgramAst.print(ProgramAst* this)
 
 fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 {
-    if (decl.kind == DeclKind.FUNCTION) {
-        String funcName = this.names[decl.fnDecl.nameIdx];
-        String retType = this.names[decl.fnDecl.returnType.nameIdx];
-        this.print_indent(indent);
-        log::log("fn %s(", funcName);
-        foreach(&param : decl.fnDecl.params){
-            String paramName = this.names[param.nameIdx];
-            String paramType = this.names[param.type.nameIdx];
-            log::log("<%s> %s", paramType, paramName);
-        }
-        log::logn(") -> <%s>", retType);
+	switch(decl.kind)
+	{
+		case DeclKind.FUNCTION:
+		{
+			String funcName = this.names[decl.fnDecl.nameIdx];
+			String retType = this.names[decl.fnDecl.returnType.nameIdx];
+			this.print_indent(indent);
+			log::log("fn %s(", funcName);
+			foreach(&param : decl.fnDecl.params){
+				String paramName = this.names[param.nameIdx];
+				String paramType = this.names[param.type.nameIdx];
+				log::log("<%s> %s", paramType, paramName);
+			}
+			log::logn(") -> <%s>", retType);
 
-        Stmt* stmt = &this.statements[decl.fnDecl.body];
-        this.print_statement(stmt, indent + 2);
-    }
+			Stmt* stmt = &this.statements[decl.fnDecl.body];
+			this.print_statement(stmt, indent + 2);
+		}
+				
+		case DeclKind.STRUCT:
+		{
+			String structName = this.names[decl.structDecl.nameIdx];
+			this.print_indent(indent);
+			log::logn("struct %s \n{", structName);
+			foreach(&field : decl.structDecl.fields){
+				String fieldName = this.names[field.nameIdx];
+				String fieldType = this.names[field.type.nameIdx];
+				this.print_indent(indent+2);
+				log::logn("<%s> %s", fieldType, fieldName);
+			}
+			foreach(&method : decl.structDecl.methods){
+				String methodName = this.names[method.nameIdx];
+				String retType = this.names[method.returnType.nameIdx];
+				Decl structAtIdx = this.declarations[method.structIdx];
+				this.print_indent(indent+2);
+				log::log("method <%s> %s (", retType, methodName);
+				foreach(idx, &param : method.params){
+					if(idx > 0) log::log(", ");
+					String paramName = this.names[param.nameIdx];
+					String paramType = this.names[param.type.nameIdx];
+					log::log("<%s> %s", paramType, paramName);
+				}
+				log::logn(") -> <%s>", retType);
+				Stmt* stmt = &this.statements[method.body];
+				this.print_statement(stmt, indent + 2);
+			}
+
+
+			log::logn("}");
+		}
+	}
 }
 
 fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
@@ -142,7 +189,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
             this.print_indent(indent);
             String typeName = this.names[stmt.varDecl.type.nameIdx];
             String name = this.names[stmt.varDecl.nameIdx];
-            log::log("%s %s", typeName, name);
+            log::log("<%s> %s", typeName, name);
             if (stmt.varDecl.init != NO_IDX) {
                 log::log(" = ");
                 this.print_expression(&this.expressions[stmt.varDecl.init]);
@@ -243,6 +290,7 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         }
         case ExprKind.CALL:
         {
+			log::log("call ");
             this.print_expression(&this.expressions[expr.call.callee]);
             log::log("(");
             foreach(idx, argIdx : expr.call.args){
@@ -251,11 +299,11 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
             }
             log::log(")");
         }
-        case ExprKind.FIELD:
+        case ExprKind.MEMBER:
         {
-            this.print_expression(&this.expressions[expr.field.base]);
-            String field = this.names[expr.field.field];
-            log::log(".%s", field);
+            this.print_expression(&this.expressions[expr.member.base]);
+            String member = this.names[expr.member.memberIdx];
+            log::log(".%s", member);
         }
         case ExprKind.NEW:
         {

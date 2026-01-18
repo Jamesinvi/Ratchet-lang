@@ -1,5 +1,6 @@
 module parser;
 import common;
+import log;
 
 
 fn bool Token.matches_type(Token* t, TokenType toCheck) @inline

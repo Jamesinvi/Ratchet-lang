@@ -9,6 +9,7 @@ enum SymbolKind : char
 	LOCAL,
 	FUNCTION,
 	FIELD,
+	PARAM,
 }
 
 struct Symbol

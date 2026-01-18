@@ -71,7 +71,6 @@ ParseRule[]rules = {
   [TokenType.SUPER.ordinal]         = {null,                    null,               Precedence.NONE},
   [TokenType.THIS.ordinal]          = {null,                    null,               Precedence.NONE},
   [TokenType.TRUE.ordinal]          = {&Parser.literal_true,    null,               Precedence.NONE},
-  [TokenType.VAR.ordinal]           = {null,                    null,               Precedence.NONE},
   [TokenType.WHILE.ordinal]         = {null,                    null,               Precedence.NONE},
   [TokenType.EOF.ordinal]           = {null,                    null,               Precedence.NONE},
   [TokenType.NEW.ordinal]           = {&Parser.new_expr,        null,               Precedence.NONE},

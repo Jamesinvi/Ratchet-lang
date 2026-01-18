@@ -3,6 +3,8 @@ import common;
 import debug;
 import std::collections::list;
 import common::stack;
+import log;
+
 struct SemanticAnalyzer
 {
 	ProgramAst* ast;
@@ -12,8 +14,10 @@ struct SemanticAnalyzer
 	List{TypeResult} errors;
 	Stack{Scope} scopes;
 	bool returnFound;
+	DeclIdx currentStructDeclIdx;
 
 }
+
 fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 {
 	this.ast = ast;
@@ -43,6 +47,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	}
 	this.currentReturnType = make_type(ValueType.NULL);
 	this.returnFound = false;
+	this.currentStructDeclIdx = parser::NO_IDX;
 }
 
 fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
@@ -54,6 +59,7 @@ fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
 	this.errors.free();
 }
 
+// ---- Entry point ----
 fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 {
 	CompTypeInfo nullType = make_type(ValueType.NULL);
@@ -80,13 +86,58 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 				TypeResult declType = this.analyze_fn(&decl.fnDecl);
 				if (declType.hadError) return declType;
 			}
-			case DeclKind.STRUCT: ;;
+			case DeclKind.STRUCT:
+			{
+				foreach (method : decl.structDecl.methods){
+					TypeResult declType = this.analyze_method(&method);
+					if (declType.hadError) return declType;
+				}
+			}
 			default: return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, {});
 		}
 	}
 	return type_ok(make_type(ValueType.NULL));
 }
 
+fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params)
+{
+	foreach (&param : *params){
+		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
+		if (paramType.hadError) return paramType;
+		SymbolIdx symbolIdx = this.symbolTable.symbols.len();
+		Symbol symbol = { .kind = SymbolKind.PARAM, .idx = (SymbolIdx)param.nameIdx, .type = paramType.value };
+		this.symbolTable.symbols.push(symbol);
+	}
+	return type_ok(make_type(ValueType.NULL));
+}
+
+fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx structDeclIdx, String methodName, ExprCall* call, Span span, TypeResult* out)
+{
+	if (structDeclIdx == parser::NO_IDX) {
+		return false;
+	}
+
+	Decl* structDecl = &this.ast.declarations[structDeclIdx];
+	if (structDecl.kind != DeclKind.STRUCT) {
+		return false;
+	}
+	
+	usz methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
+	if (methodIdx == parser::NO_IDX) {
+		return false;
+	}
+
+	foreach (argIdx : call.args){
+		TypeResult argType = this.analyze_expr(argIdx);
+		if (argType.hadError) {
+			*out = argType;
+			return true;
+		}
+	}
+	MethodDeclAst* methodDecl = &structDecl.structDecl.methods[methodIdx];
+	*out = this.create_type_from_ast(&methodDecl.returnType, span);
+	return true;
+}
 
 fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnDecl)
 {
@@ -98,6 +149,10 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 
 	Scope fnScope = {.depth = this.scopes.size, .returnType = expectedRetType, .enclosingIdx = this.scopes.size };
 	this.scopes.push(fnScope);
+	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
+	this.currentStructDeclIdx = parser::NO_IDX;
+	TypeResult paramsType = this.declare_params(&fnDecl.params);
+	if (paramsType.hadError) return paramsType;
 	// Scan and analyze all statments in the function
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
@@ -111,9 +166,63 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 		return this.type_error(ErrorKind.NO_RETURN, nullType, expectedRetType.value, fnSpan);
 	}
 	this.scopes.pop();
+	this.currentStructDeclIdx = prevStructDeclIdx;
 	return type_ok(expectedRetType.value);
 }
 
+fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDeclAst* methodDecl)
+{
+	Span methodSpan = this.ast.statements[methodDecl.body].span;
+	TypeResult expectedRetType = this.create_type_from_ast(&methodDecl.returnType, methodSpan);
+	if (expectedRetType.hadError) return expectedRetType;
+	debug::@log_compilation("method '%s', expects '%s' return type", this.ast.names[methodDecl.nameIdx], expectedRetType.value.type);
+	List{StmtIdx}* stmtsIndices = &this.ast.statements[methodDecl.body].blockStmt.stmts;
+
+	Scope methodScope = {.depth = this.scopes.size, .returnType = expectedRetType, .enclosingIdx = this.scopes.size };
+	this.scopes.push(methodScope);
+	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
+	this.currentStructDeclIdx = methodDecl.structIdx;
+	TypeResult paramsType = this.declare_params(&methodDecl.params);
+	if (paramsType.hadError) return paramsType;
+	this.currentReturnType = expectedRetType.value;
+	this.returnFound = false;
+	foreach (stmtIdx : stmtsIndices){
+		TypeResult resultType = this.analyze_stmt(stmtIdx);
+		if (resultType.hadError) return resultType;
+	}
+
+	if(expectedRetType.value.type != ValueType.NULL && !this.returnFound){
+		CompTypeInfo nullType = make_type(ValueType.NULL);
+		return this.type_error(ErrorKind.NO_RETURN, nullType, expectedRetType.value, methodSpan);
+	}
+	this.scopes.pop();
+	this.currentStructDeclIdx = prevStructDeclIdx;
+	return type_ok(expectedRetType.value);
+}
+
+fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, uint structTypeIndex)
+{
+	// Search for a struct that has the same structTypeIndex 
+	foreach(idx, &decl : this.ast.declarations){
+		if (decl.kind != DeclKind.STRUCT) continue;
+		String structName = this.ast.names[decl.structDecl.nameIdx];
+		if (!parser::structNamesToIdx.has_key(structName)) continue;
+		usz? indexInStructNames = parser::structNamesToIdx.get(structName);
+		if (catch err = indexInStructNames) continue;
+		if ((uint)indexInStructNames == structTypeIndex) return idx;
+	}
+	return parser::NO_IDX;
+}
+
+fn usz SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* structDecl, String name)
+{
+	for (usz i = 0; i < structDecl.methods.len(); i++){
+		MethodDeclAst* method = &structDecl.methods[i];
+		String methodName = this.ast.names[method.nameIdx];
+		if (common::string_equals(methodName, name)) return i;
+	}
+	return parser::NO_IDX;
+}
 
 fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmtIdx)
 {
@@ -199,7 +308,6 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 	}
 }
 
-
 fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
 	if (exprIdx == parser::NO_IDX) return type_ok(make_type(ValueType.NULL));
@@ -208,22 +316,29 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 
 	switch(expr.kind)
 	{
-		case ExprKind.VAR:
-		{
-			String name = this.ast.names[expr.varExpr];
-			for (isz i = (isz)this.symbolTable.symbols.len() - 1; i >= 0; i--){
-				Symbol* symbol = &this.symbolTable.symbols[(usz)i];
-				if (symbol.kind != SymbolKind.LOCAL) continue;
-				Stmt* declStmt = &this.ast.statements[(StmtIdx)symbol.idx];
-				if (declStmt.kind != StmtKind.DECL) continue;
-				String declName = this.ast.names[declStmt.varDecl.nameIdx];
-				if (common::string_equals(declName, name)){
-					this.symbolTable.exprSymbols[exprIdx] = (SymbolIdx)i;
-					break;
+			case ExprKind.VAR:
+			{
+				String name = this.ast.names[expr.varExpr];
+				for (isz i = (isz)this.symbolTable.symbols.len() - 1; i >= 0; i--){
+					Symbol* symbol = &this.symbolTable.symbols[(usz)i];
+					if (symbol.kind == SymbolKind.LOCAL){
+						Stmt* declStmt = &this.ast.statements[(StmtIdx)symbol.idx];
+						if (declStmt.kind != StmtKind.DECL) continue;
+						String declName = this.ast.names[declStmt.varDecl.nameIdx];
+						if (common::string_equals(declName, name)){
+							this.symbolTable.exprSymbols[exprIdx] = (SymbolIdx)i;
+							break;
+						}
+					} else if (symbol.kind == SymbolKind.PARAM){
+						String declName = this.ast.names[(usz)symbol.idx];
+						if (common::string_equals(declName, name)){
+							this.symbolTable.exprSymbols[exprIdx] = (SymbolIdx)i;
+							break;
+						}
+					}
 				}
-			}
-			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			if (symbolIdx != NO_SYMBOL) return type_ok(this.symbolTable.symbols[symbolIdx].type);
+				SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
+				if (symbolIdx != NO_SYMBOL) return type_ok(this.symbolTable.symbols[symbolIdx].type);
 
 			for (isz i = (isz)this.symbolTable.symbols.len() - 1; i >= 0; i--){
 				Symbol* symbol = &this.symbolTable.symbols[(usz)i];
@@ -304,6 +419,31 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		}
 		case ExprKind.CALL:
 		{
+			// Method calls: resolve against struct methods before treating as free function calls.
+			Expr* calleeExpr = &this.ast.expressions[expr.call.callee];
+			if (calleeExpr.kind == ExprKind.MEMBER) {
+				TypeResult baseType = this.analyze_expr(calleeExpr.member.base);
+				if (baseType.hadError) return baseType;
+				CompTypeInfo baseInfo = baseType.value;
+				bool isStruct = baseInfo.type == ValueType.STRUCT;
+				bool isStructRef = (baseInfo.type == ValueType.REF || baseInfo.type == ValueType.PTR) && baseInfo.refToType == ValueType.STRUCT;
+				if (isStruct || isStructRef) {
+					DeclIdx structDeclIdx = this.find_struct_decl_idx(baseInfo.structTypeIndex);
+					String methodName = this.ast.names[calleeExpr.member.memberIdx];
+					TypeResult resolved = {};
+					if (this.try_resolve_method_call(structDeclIdx, methodName, &expr.call, expr.span, &resolved)) {
+						return resolved;
+					}
+				}
+			}
+			if (calleeExpr.kind == ExprKind.VAR && this.currentStructDeclIdx != parser::NO_IDX) {
+				String methodName = this.ast.names[calleeExpr.varExpr];
+				TypeResult resolved = {};
+				if (this.try_resolve_method_call(this.currentStructDeclIdx, methodName, &expr.call, expr.span, &resolved)) {
+					return resolved;
+				}
+			}
+
 			TypeResult calleeType = this.analyze_expr(expr.call.callee);
 			if (calleeType.hadError) return calleeType;
 			foreach (argIdx : expr.call.args){
@@ -316,11 +456,34 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 			}
 			return type_ok(calleeType.value);
 		}
-		case ExprKind.FIELD:
+		case ExprKind.MEMBER:
 		{
-			TypeResult baseType = this.analyze_expr(expr.field.base);
+			TypeResult baseType = this.analyze_expr(expr.member.base);
 			if (baseType.hadError) return baseType;
-			return type_ok(make_type(ValueType.NULL));
+			CompTypeInfo baseInfo = baseType.value;
+			bool isStruct = baseInfo.type == ValueType.STRUCT;
+			bool isStructRef = (baseInfo.type == ValueType.REF || baseInfo.type == ValueType.PTR) && baseInfo.refToType == ValueType.STRUCT;
+			if (!isStruct && !isStructRef) {
+				return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
+			}
+			if (baseInfo.structTypeIndex == parser::NOT_STRUCT) {
+				return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
+			}
+
+			DeclIdx structDeclIdx = this.find_struct_decl_idx(baseInfo.structTypeIndex);
+			if (structDeclIdx == parser::NO_IDX) {
+				return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
+			}
+
+			Decl* structDecl = &this.ast.declarations[structDeclIdx];
+			String fieldName = this.ast.names[expr.member.memberIdx];
+			foreach (&field : structDecl.structDecl.fields){
+				String declName = this.ast.names[field.nameIdx];
+				if (common::string_equals(declName, fieldName)){
+					return this.create_type_from_ast(&field.type, expr.span);
+				}
+			}
+			return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, nullType, expr.span);
 		}
 		default:
 			return type_ok(make_type(ValueType.NULL));

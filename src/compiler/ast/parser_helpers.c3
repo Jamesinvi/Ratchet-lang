@@ -126,46 +126,13 @@ fn ushort Parser.ensure_constant(Parser* this, int constantIndex)
 
 // ---------- Predeclaration for functions / structs / natives ----------
 
-fn void Parser.predeclare_struct_names(Parser* this)
-{
-    // Look for patterns: STRUCT <identifier>
-    for (usz i = 0; i < this.input.len(); i++) {
-        if (this.input[i].tokenType != TokenType.STRUCT_T) {
-            continue;
-        }
-        if (i + 1 >= this.input.size){
-            break;
-        } 
-
-        Token nameTok = this.input[i + 1];
-        if (nameTok.tokenType != TokenType.IDENTIFIER) {
-            continue;
-        }
-
-        String name = nameTok.value;
-
-        if (!declaredStructs.has_key(name)) {
-            // reserve an index so function signatures can refer to it
-            uint idx = (uint)structTypes.size;
-
-            CompStructTypeInfo placeholder = {};
-            placeholder.init();
-            placeholder.name = String.copy(name, mem);
-            placeholder.sizeInBytes = 0;
-            placeholder.fieldCount = 0;
-
-            structTypes.push(placeholder);
-            declaredStructs.set(name, idx);
-        }
-    }
-}
-
 fn void Parser.predeclare_structs(Parser* this)
 {
     // Look for patterns: struct <name>
     for (usz i = 0; i < this.input.len() - 2; i++) {
         Token* t = &this.input[i];
         if (t.tokenType == TokenType.STRUCT_T) {
+			int scopeCloseExpected = 1;
             Token* nameTok = &this.input[i + 1];
             debug::@log_compilation("pre-declaring struct with name '%s'", nameTok.value);
             // We push a temporary declaration that will have to be filled in later
@@ -180,7 +147,7 @@ fn void Parser.predeclare_structs(Parser* this)
             declaredStructs.set(starName, declIdx);
             String ampName = nameTok.value.concat(&this.allocator, "&");
             declaredStructs.set(ampName, declIdx);
-        }
+		}
     }
 }
 

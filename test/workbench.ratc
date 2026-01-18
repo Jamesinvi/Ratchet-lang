@@ -4,14 +4,19 @@ struct vec3 {
 	int x;
 	int y;
 	int z;
+
+	method null testMethod(int x1, int x2, int x3){
+		echo(x1+x2+x3);
+		return;
+	}
 }
 fn bool program(){
 	vec3 prova;
-	vec3* trpv = createVec3Heap();
-	echo(trpv.x);
-	int t = 12;
-	int k = t + 2;
-	int n = k + (-3);
+	prova.x = 5;
+	vec3* test = createVec3Heap();
+	prova.testMethod(5,2,3);
+	int t;
+	t = 5;
 	return false;
 }
 

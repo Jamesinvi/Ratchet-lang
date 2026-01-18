@@ -14,7 +14,7 @@ enum ExprKind : char
     UNARY,      // -x, !x
     BINARY,     // x + y, x * y, ...
     CALL,       // f(a,b)
-    FIELD,      // a.b
+    MEMBER,      // a.b
     NEW,        // new
     GROUP,      // (x) optional; often you skip this and just use Span
 }
@@ -46,9 +46,9 @@ enum UnOp  : char (String asStr)
 
 
 struct ExprUnary    { UnOp op;           ExprIdx rhs; }
-struct ExprBinary   { BinOp op;          ExprIdx lhs;     ExprIdx rhs; }
+struct ExprBinary   { BinOp op;          ExprIdx lhs;    	ExprIdx rhs; }
 struct ExprCall     { ExprIdx callee;    List{ExprIdx} args; }
-struct ExprField    { ExprIdx base;      NameIdx field; }
+struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
 struct ExprNew		{ TypeAst type; }
 
 struct Expr
@@ -68,7 +68,7 @@ struct Expr
         ExprUnary   unary;
         ExprBinary  binary;
         ExprCall    call;
-        ExprField   field;
+        ExprMember  member;
 		ExprNew 	new;
     }    
 }
