@@ -1,11 +1,85 @@
-# 🔧 Ratchet Language
+# Ratchet Language
 
 ***Still working on a v0.1, only some of the functionality
 is currently implemented***
 
 ---
 
-## 🎯 Design Goals
+## Overview
+Ratchet is an imperative programming language with a familiar C-like syntax that sits between low-level systems languages (C/C++/Rust) and high-level scripting languages (Lua/JS/Python). It targets fast iteration with GC by default, while still giving the programmer control over memory in performance-critical code. Think of Ratchet as a small, embeddable mid-level language.
+
+The guiding principle is to keep most code simple and safe, but allow tighter control where it matters. Because the choice is per-variable, you can start with GC-managed code and later refactor hot paths without rewriting everything.
+
+Ratchet allocates data on the stack by default and passes by **value**, unless the type is explicitly marked with `&` (e.g. `Foo&`) or `*` (e.g. `Foo*`). In Ratchet, references are handles to heap data and are allocated with `new` (`T&`) or `new*` (`T*`).
+
+References in Ratchet are allocated on the **heap** and tracked by the GC.
+
+Ratchet also allows **untracked references**, marked with `*` (e.g. `Foo*`). These "pointers" behave like references but are not tracked by the GC, leaving the responsibility to the programmer to free them when no longer needed.
+
+Reference and pointer types specify how memory is allocated, so unlike C this is not allowed:
+
+```
+int a = 5;
+int& b = &a;       // not allowed, '&' is part of the type, and a and b have different types
+```
+
+Instead, in Ratchet you would do something like:
+
+```
+int& a = new(5);  // a is an integer, but heap allocated
+```
+
+or, if you need a copy:
+
+```
+int a = 5;
+int& b = new(a); // creates a new int-ref with the value of a
+```
+
+## Why Ratchet
+Ratchet is aimed at projects that want a scripting-like workflow but need optional control in hot paths, especially when embedding in games and tools.
+
+* GC-by-default keeps iteration fast and code simple.
+* `T*` lets you reduce GC pressure in critical sections without forcing manual memory everywhere.
+* The runtime can stay small and easy to embed.
+
+## Memory Model (Rules)
+These are the core rules that guide how values and references behave:
+
+* `T` is a value type stored inline and copied by value.
+* `T&` is a GC-tracked handle to heap data.
+* `T*` is a manual handle to heap data; the programmer owns the lifetime and must `free` it.
+* A `T` value may contain `T&` fields; copying the `T` copies the handles (shallow) and keeps the referenced objects alive.
+* There are no implicit or explicit conversions between `T`, `T&`, and `T*`.
+* Allocation uses `new` for `T&` and `new*` for `T*`.
+
+| Type | Allocation | Lifetime | Copy behavior | Typical use |
+| --- | --- | --- | --- | --- |
+| `T` | Stack/inline | Automatic | Value copy | Most data and logic |
+| `T&` | Heap (GC) | GC-managed | Handle copy | Shared data, simple ownership |
+| `T*` | Heap (manual) | Explicit `free` | Handle copy | Hot paths, manual control |
+
+Example:
+
+```ratchet
+struct Enemy {
+    int hp;
+}
+
+struct Squad {
+    Enemy& leader; // GC-managed reference
+}
+
+fn null demo() {
+    Enemy& boss = new { hp = 100 };
+    Squad a = { leader = boss };
+    Squad b = a;         // shallow copy, same leader reference
+    Enemy* scratch = new* { hp = 1 };
+    free(scratch);
+}
+```
+
+## Design Goals
 
 * **Simple, Statically typed** imperative language.
 * Interpreted in a bytecode **VM** with (maybe) optional JIT or AOT compilation to binary.
@@ -26,30 +100,28 @@ is currently implemented***
 
 ---
 
-
-## ⏳ Current State
+## Current State
 ***Skip this section to see the language features***.
 
-Please not **ALL** of these will be heavily changed. The following list simply states what has been done, even if only in as a temporary implementation.
+Please note **ALL** of these will be heavily changed once the compiler rewrite lands. The current goal is to rebuild the pipeline so features can be added cleanly afterward, so this list only reflects temporary progress.
 
 * ✅ Lexer/parser basics (custom-made, no yacc/lex)
 * 🚧 Basic types (partially done, more to come)
-* ✅ Bytecode VM basics 
+* ✅ Bytecode VM basics
 * ✅ Struct and function definitions
 * ✅ Basic stack frame setup
 * ✅ Basic primitive operations (math, assignment and logic)
 * ✅ Struct field set/get
-* ❌ Constructors (planned)
+* ❌ Struct literals (planned)
 * ❌ Methods (planned)
 * ❌ Arrays (planned)
-* ✅ Reference types (T& and T*)
-* ❌ More optimization passes (planned)
+* ✅ Reference types (`T&` and `T*`)
+* ❌ More optimization passes (planned, currently only collapses increment operations as a proof of concept)
 * ❌ GC tracing (planned)
 * ❌ Interfaces (planned)
 * ❌ JIT (planned)
 * ❌ LLVM IR or binary generation (maybe)
-
-## 🧱 Types
+## Types
 
 ### Primitive Types
 
@@ -103,12 +175,12 @@ struct Vec3 {
 
 ---
 
-## 📦 Values vs References
+## Values vs References
 
 ### Pure Values
 
 ```ratchet
-Vec3 v = Vec3(1, 2, 3);
+Vec3 v = { x = 1, y = 2, z = 3 };
 int x = 42;
 ```
 
@@ -119,10 +191,10 @@ int x = 42;
 
 ---
 
-### GC-Managed References – `T&`
+### GC-Managed References `T&`
 
 ```ratchet
-Vec3& a = new Vec3(1, 2, 3);
+Vec3& a = new { x = 1, y = 2, z = 3 };
 ```
 
 `T&` is a **GC-managed reference**:
@@ -133,10 +205,10 @@ Vec3& a = new Vec3(1, 2, 3);
 
 ---
 
-### Manual References – `T*`
+### Manual References `T*`
 
 ```ratchet
-Vec3* b = new Vec3(4, 5, 6);
+Vec3* b = new* { x = 4, y = 5, z = 6 };
 free(b);
 ```
 
@@ -146,20 +218,22 @@ free(b);
 * Must be explicitly freed.
 * No pointer arithmetic.
 * Failure to free results in a leak.
+* Running in debug mode will detect leaks (TBD whether this will be included)
 
 ---
 
-## 🛠 Object Creation
+## Struct Literals
+Struct literals use `{ field = value }` and work for values, `T&`, and `T*` (use `new` for `T&` and `new*` for `T*`).
 
 ```ratchet
-Vec3 v = Vec3(1,2,3);       // value
-Vec3& a = new Vec3(1,2,3);  // GC heap
-Vec3* b = new Vec3(4,5,6);  // manual heap
+Vec3 v = { x = 1, y = 2, z = 3 };       // value
+Vec3& a = new { x = 1, y = 2, z = 3 };  // GC heap
+Vec3* b = new* { x = 4, y = 5, z = 6 };  // manual heap
 ```
 
 ---
 
-## 🧩 Struct Methods
+## Struct Methods
 
 ```ratchet
 struct Foo {
@@ -194,7 +268,7 @@ All calls are statically bound in v1.
 
 ---
 
-## 📜 Interfaces
+## Interfaces
 
 ```ratchet
 interface HasPosition {
@@ -229,13 +303,13 @@ Static only; no dynamic dispatch in v1.
 
 ---
 
-## 📚 Arrays
+## Arrays
 
 Values:
 
 ```ratchet
 Vec3[] arr = new Vec3[16];
-arr[0] = Vec3(1,2,3);
+arr[0] = { x = 1, y = 2, z = 3 };
 ```
 
 References:
@@ -261,7 +335,7 @@ arr[1] = v2;  // error if Vec3& vs Vec3*
 
 ---
 
-## ♻ Garbage Collection Rules
+## Garbage Collection Rules
 
 GC traces:
 
@@ -276,7 +350,7 @@ Ignored by GC:
 
 ---
 
-## 🔍 Example Program
+## Example Program
 
 ```ratchet
 struct Vec3 {
@@ -306,10 +380,10 @@ struct Player : HasPosition {
 }
 
 fn Player& makeHero() {
-    Player& p = new Player();
-    p.position.x = 1.0;
-    p.position.y = 2.0;
-    p.name = "Hero";
+    Player& p = new {
+        position = { x = 1.0, y = 2.0, z = 0.0 },
+        name = "Hero"
+    };
     return p;
 }
 
@@ -318,9 +392,9 @@ fn bool program() {
     print(p.length2D());
 
     Vec3[]& positions = new Vec3[16];
-    positions[0] = Vec3(3,9,1);
+    positions[0] = { x = 3, y = 9, z = 1 };
 
-    Vec3* scratch = new Vec3(0,0,0);
+    Vec3* scratch = new* { x = 0, y = 0, z = 0 };
     scratch.translate(1,2,3);
     free(scratch);
 }
