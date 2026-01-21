@@ -17,6 +17,7 @@ enum ExprKind : char
     MEMBER,      // a.b
     NEW,        // new
     GROUP,      // (x) optional; often you skip this and just use Span
+    THIS,       // used in methods to get borrowed ref
 }
 
 enum BinOp : char (String asStr)

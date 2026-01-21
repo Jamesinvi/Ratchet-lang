@@ -45,14 +45,15 @@ fn int main(String[] args)
     }
     tokenizer.deinit();
     parser.outputAst.print();
-	foreach(decl : parser.outputAst.declarations){
-		log::logn("[decl: %s]", decl.kind);
-	}
 	SemanticAnalyzer semanticAnalyzer = {};
 	semanticAnalyzer.init(&parser.outputAst);
 	TypeResult typeResult = semanticAnalyzer.run();
+	log::log("\n   Compilation output:");
 	foreach(err : semanticAnalyzer.errors){
 		log::errlogn("Type error: %s at line %s, expected %s, got %s", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
+	}
+	if(semanticAnalyzer.errors.len() == 0){
+		log::logn(" compiled successfully");
 	}
 	if (typeResult.hadError || semanticAnalyzer.errors.len() > 0) {
 		return 1;

@@ -291,10 +291,10 @@ fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
 {
     debug::@log_compilation("dot at %s at %s", this.previous.value, this.current.value);
 
-    String fieldName = this.current.value;
+    String memberName = this.current.value;
     this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
     
-    NameIdx nameIdx = this.push_name_get_idx(fieldName);
+    NameIdx nameIdx = this.push_name_get_idx(memberName);
 
     Expr expr = {.kind = ExprKind.MEMBER};
     expr.span = {.line = this.previous.line};
@@ -306,6 +306,18 @@ fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
     }
     return index;
 }
+
+fn ExprIdx Parser.this_kwrd(Parser* this)
+{
+    debug::@log_compilation("this_kwrd at %s", this.previous.value, this.current.value);
+
+    String memberName = this.current.value;
+    Expr expr = {.kind = ExprKind.THIS};
+    expr.span = {.line = this.previous.line};
+    ExprIdx index = this.push_expr_get_idx(&expr);
+    return index;
+}
+
 
 // ---------- Variable declarations & access ----------
 
@@ -331,19 +343,6 @@ fn StmtIdx Parser.var_declaration(Parser* this)
     return this.push_stmt_get_idx(&stmt);
 }
 
-fn ushort Parser.parse_variable(Parser* this, String errMsg)
-{
-    this.consume(TokenType.IDENTIFIER, errMsg);
-    Token* name = this.previous;
-
-    return this.identifier_constant(this.previous);
-}
-
-fn ushort Parser.identifier_constant(Parser* this, Token* name)
-{
-    return 0;
-}
-
 fn ExprIdx Parser.variable(Parser* this)
 {
     debug::@log_compilation("variable at %s", this.previous.value);
@@ -351,10 +350,6 @@ fn ExprIdx Parser.variable(Parser* this)
     Expr expr = {.kind = ExprKind.VAR, .varExpr = nameIdx};
     expr.span = {.line = this.previous.line};
     return this.push_expr_get_idx(&expr);
-}
-
-fn void Parser.named_variable(Parser* this, Token name)
-{
 }
 
 // ---------- Functions & calls ----------

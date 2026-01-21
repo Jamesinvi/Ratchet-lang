@@ -95,7 +95,7 @@ fn void ProgramAst.print_indent(ProgramAst* this, int indent)
 
 fn void ProgramAst.print(ProgramAst* this)
 {
-    log::logn("------------Printing AST------------");
+    log::logn("------------Printing Generated AST------------");
     foreach(&declaration : this.declarations){
         this.print_declaration(declaration, 0);
     }
@@ -117,7 +117,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 				String paramType = this.names[param.type.nameIdx];
 				log::log("<%s> %s", paramType, paramName);
 			}
-			log::logn(") -> <%s>", retType);
+			log::logn(") returns <%s>", retType);
 
 			Stmt* stmt = &this.statements[decl.fnDecl.body];
 			this.print_statement(stmt, indent + 2);
@@ -146,7 +146,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 					String paramType = this.names[param.type.nameIdx];
 					log::log("<%s> %s", paramType, paramName);
 				}
-				log::logn(") -> <%s>", retType);
+				log::logn(") returns <%s>", retType);
 				Stmt* stmt = &this.statements[method.body];
 				this.print_statement(stmt, indent + 2);
 			}
@@ -269,6 +269,10 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         {
             String s = this.names[expr.stringLiteral];
             log::log("\"%s\"", s);
+        }
+		case ExprKind.THIS:
+        {
+            log::log("@this");
         }
         case ExprKind.VAR:
         {

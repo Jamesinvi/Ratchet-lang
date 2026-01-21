@@ -240,7 +240,8 @@ fn void Chunk.print_constant(Chunk* this, int offset){
         case ValueType.INT:         log::log("%d", @as(int, bytes));  
         case ValueType.FLOAT:       log::log("%f", @as(float, bytes,));  
         case ValueType.DOUBLE:      log::log("%f", @as(double, bytes,));  
-        case ValueType.BOOL:        log::log("%s", @as(bool, bytes,));  
+        case ValueType.BOOL:        log::log("%s", @as(bool, bytes,));
+		case ValueType.BORROW_REF:log::log("struct, change to print");  
         case ValueType.STRUCT:      log::log("struct, change to print");
         case ValueType.NULL:        log::log("NULL");
         case ValueType.REF:      nextcase;
@@ -248,7 +249,7 @@ fn void Chunk.print_constant(Chunk* this, int offset){
             switch (@as(Obj*, bytes).type)
             {
                 case ObjType.STRING:            log::log("\"%s\"", @as(ObjString*, bytes).str);
-                case ObjType.FUNCTION:          log::log("fn %s", @as(ObjFunction*, bytes).name.str);
+                case ObjType.FUNCTION:          log::log("fn %s",  @as(ObjFunction*, bytes).name.str);
                 case ObjType.REF:               log::log("ref %s", @as(ObjRef*, bytes).refTo);
                 case ObjType.NATIVE_FUNCTION:   log::log("<native_fn>");
             }

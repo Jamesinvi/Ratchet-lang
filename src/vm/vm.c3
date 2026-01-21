@@ -506,7 +506,8 @@ fn RunResult run(Vm* vm)
                     case ValueType.BOOL:        io::fprintfn(vm.output, "%s", @pop_val(vm, bool));
                     case ValueType.NULL:        io::fprintfn(vm.output, "null"); @pop_val(vm, bool);
                     case ValueType.STRUCT:      io::fprintfn(vm.output, "Struct"); @pop_val(vm, int);
-                    case ValueType.PTR:   nextcase;
+                    case ValueType.BORROW_REF:nextcase;
+                    case ValueType.PTR:   		nextcase;
                     case ValueType.REF:
                     {
                         Obj* obj = @pop_val(vm, Obj*);

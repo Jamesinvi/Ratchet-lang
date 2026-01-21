@@ -31,6 +31,13 @@ macro @log_compilation(String msg, args ...){
 }
 
 
+macro @log_analysis(String msg, args ...){
+    $if ($feature(TRACE_ANALYSIS)):
+        log::logn(msg,...args);
+    $endif
+}
+
+
 macro @print_type_stack(Stack{CompTypeInfo}* typeStack)
 {
     $if ($feature(TRACE_COMPILATION)):
