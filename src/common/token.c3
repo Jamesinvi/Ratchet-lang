@@ -1,5 +1,7 @@
 module common;
+import globals;
 import log;
+import std::collections::list;
 
 enum TokenType : uint {
     // Single-character tokens.
@@ -28,47 +30,48 @@ enum TokenType : uint {
 struct Keyword
 {
     TokenType tokenType;
-    String value;
+    String string;
 }
 struct Token 
 {
     TokenType tokenType;
     int line;
-    String value;
+	usz valueIdx;			// Index in a list of strings
 }
 
-fn void Token.debug_print(Token* token) {
-    log::logn("Token: {type: %s, value: '%s'}",  token.tokenType, token.value);
+
+fn String Token.value(Token* this)
+{
+	return globals::tokenValues[this.valueIdx];
 }
 
 Keyword[*] keywords = {
-    {.tokenType = AND, .value = "and"},
-    {.tokenType = ELSE, .value = "else"},
-    {.tokenType = FALSE, .value = "false"},
-    {.tokenType = FN, .value = "fn"},
-    {.tokenType = FOR, .value = "for"},
-    {.tokenType = IF, .value = "if"},
-    {.tokenType = NULL, .value = "null"},
-    {.tokenType = OR, .value = "or"},
-    {.tokenType = PRINT, .value = "print"},
-    {.tokenType = RETURN, .value = "return"},
-    {.tokenType = THIS, .value = "this"},
-    {.tokenType = TRUE, .value = "true"},
-    {.tokenType = WHILE, .value = "while"},
-    {.tokenType = INT_REF_GC, .value = "int&"},
-    {.tokenType = FLOAT_REF_GC, .value = "float&"},
-    {.tokenType = DOUBLE_REF_GC, .value = "double&"},
-    {.tokenType = BOOL_REF_GC, .value = "bool&"},
-    {.tokenType = INTEGER_T, .value = "int"},
-    {.tokenType = FLOAT_T, .value = "float"},
-    {.tokenType = DOUBLE_T, .value = "double"},
-    {.tokenType = ECHO, .value = "echo"},
-    {.tokenType = STRING_T, .value = "string"},
-    {.tokenType = STRUCT_T, .value = "struct"},
-    {.tokenType = BOOL_T, .value = "bool"},
-    {.tokenType = NEW, .value = "new"},
-    {.tokenType = ECHO, .value = "echo"},
-    {.tokenType = AS, .value = "as"},
-    {.tokenType = METHOD, .value = "method"},
-
+    {.tokenType = AND, .string = "and"},
+    {.tokenType = ELSE, .string = "else"},
+    {.tokenType = FALSE, .string = "false"},
+    {.tokenType = FN, .string = "fn"},
+    {.tokenType = FOR, .string = "for"},
+    {.tokenType = IF, .string = "if"},
+    {.tokenType = NULL, .string = "null"},
+    {.tokenType = OR, .string = "or"},
+    {.tokenType = PRINT, .string = "print"},
+    {.tokenType = RETURN, .string = "return"},
+    {.tokenType = THIS, .string = "this"},
+    {.tokenType = TRUE, .string = "true"},
+    {.tokenType = WHILE, .string = "while"},
+    {.tokenType = INT_REF_GC, .string = "int&"},
+    {.tokenType = FLOAT_REF_GC, .string = "float&"},
+    {.tokenType = DOUBLE_REF_GC, .string = "double&"},
+    {.tokenType = BOOL_REF_GC, .string = "bool&"},
+    {.tokenType = INTEGER_T, .string = "int"},
+    {.tokenType = FLOAT_T, .string = "float"},
+    {.tokenType = DOUBLE_T, .string = "double"},
+    {.tokenType = ECHO, .string = "echo"},
+    {.tokenType = STRING_T, .string = "string"},
+    {.tokenType = STRUCT_T, .string = "struct"},
+    {.tokenType = BOOL_T, .string = "bool"},
+    {.tokenType = NEW, .string = "new"},
+    {.tokenType = ECHO, .string = "echo"},
+    {.tokenType = AS, .string = "as"},
+    {.tokenType = METHOD, .string = "method"},
 };

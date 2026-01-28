@@ -1,0 +1,4998 @@
+struct Vec3 {
+    float x;
+    float y;
+    float z;
+
+    method Vec3 add(Vec3 other) {
+        Vec3 out;
+        out.x = this.x + other.x;
+        out.y = this.y + other.y;
+        out.z = this.z + other.z;
+        return out;
+    }
+
+    method Vec3 scale(float s) {
+        Vec3 out;
+        out.x = this.x * s;
+        out.y = this.y * s;
+        out.z = this.z * s;
+        return out;
+    }
+
+    method float dot(Vec3 other) {
+        float v;
+        v = (this.x * other.x) + (this.y * other.y) + (this.z * other.z);
+        return v;
+    }
+}
+
+struct Mat2 {
+    float a;
+    float b;
+    float c;
+    float d;
+
+    method float det() {
+        return (this.a * this.d) - (this.b * this.c);
+    }
+
+    method Vec3 mul(Vec3 v) {
+        Vec3 out;
+        out.x = (this.a * v.x) + (this.b * v.y);
+        out.y = (this.c * v.x) + (this.d * v.y);
+        out.z = v.z;
+        return out;
+    }
+}
+
+struct Range {
+    int min;
+    int max;
+
+    method bool contains(int v) {
+        if (v < this.min) { return false; }
+        if (v > this.max) { return false; }
+        return true;
+    }
+}
+
+struct Color {
+    float r;
+    float g;
+    float b;
+
+    method Color blend(Color other, float t) {
+        Color out;
+        out.r = (this.r * (1.0f - t)) + (other.r * t);
+        out.g = (this.g * (1.0f - t)) + (other.g * t);
+        out.b = (this.b * (1.0f - t)) + (other.b * t);
+        return out;
+    }
+
+    method float luminance() {
+        float v;
+        v = (this.r * 0.2126f) + (this.g * 0.7152f) + (this.b * 0.0722f);
+        return v;
+    }
+}
+
+fn Vec3 mkVec3(float x, float y, float z) {
+    Vec3 v;
+    v.x = x;
+    v.y = y;
+    v.z = z;
+    return v;
+}
+
+fn Mat2 mkMat2(float a, float b, float c, float d) {
+    Mat2 m;
+    m.a = a; m.b = b; m.c = c; m.d = d;
+    return m;
+}
+
+fn int crunch(int x) {
+    int a = 3;
+    int b = 7;
+    int c = 11;
+
+    x = x + a;  x = x * b;  x = x - c;  x = x + 17;  x = x / 2;
+    x = x + 5;  x = x * 3;  x = x - 9;  x = x + 21;  x = x / 3;
+    x = x + 8;  x = x * 2;  x = x - 6;  x = x + 19;  x = x / 2;
+
+    if (x > 1000) { x = x - 333; } else { x = x + 111; }
+    if (x < 0)    { x = 0; }
+
+    x = x + 13; x = x * 5;  x = x - 27; x = x + 41; x = x / 2;
+    x = x + 29; x = x * 2;  x = x - 14; x = x + 9;  x = x / 3;
+    x = x + 31; x = x * 3;  x = x - 22; x = x + 7;  x = x / 2;
+
+    if (x > 5000) { x = x / 4; } else { x = x + 123; }
+    if (x > 2000) { x = x - 999; }
+
+    x = x + 1;  x = x * 2;  x = x - 3;  x = x + 4;  x = x / 2;
+    x = x + 6;  x = x * 3;  x = x - 7;  x = x + 8;  x = x / 3;
+    x = x + 9;  x = x * 2;  x = x - 5;  x = x + 12; x = x / 2;
+
+    if (x > 100) { x = x - 10; }
+    if (x > 200) { x = x - 20; }
+    if (x > 300) { x = x - 30; }
+    if (x > 400) { x = x - 40; }
+    if (x > 500) { x = x - 50; }
+
+    x = x + 17; x = x * 7;  x = x - 19; x = x + 23; x = x / 2;
+    x = x + 31; x = x * 5;  x = x - 29; x = x + 37; x = x / 3;
+    x = x + 41; x = x * 3;  x = x - 43; x = x + 47; x = x / 2;
+
+    if (x > 10000) { x = x / 5; }
+    if (x > 5000)  { x = x - 1234; } else { x = x + 4321; }
+
+    x = x + a; x = x * b; x = x - c;
+    x = x + 101; x = x / 2;
+    x = x + 103; x = x * 2; x = x - 97;
+    x = x + 109; x = x / 3;
+    x = x + 113; x = x * 3; x = x - 107;
+    x = x + 127; x = x / 2;
+
+    if (x > 2500) { x = x - 250; } else { x = x + 250; }
+    if (x > 1500) { x = x - 150; } else { x = x + 150; }
+    if (x >  500) { x = x -  50; } else { x = x +  50; }
+
+    x = x + 7;  x = x * 2; x = x - 5;
+    x = x + 11; x = x * 3; x = x - 9;
+    x = x + 13; x = x * 5; x = x - 17;
+
+    return x;
+}
+
+fn int loopMix(int x) {
+    int i = 0;
+    int acc = x;
+    while (i < 100) {
+        acc = acc + i;
+        acc = acc * 2;
+        acc = acc - (i / 3);
+        if (acc > 100000) { acc = acc / 2; }
+        if (acc < 0) { acc = 1; }
+        i = i + 1;
+    }
+    return acc;
+}
+
+fn int stressInts2(int x) {
+    int i = 0;
+    int acc = x;
+    int step = 7;
+    while (i < 60) {
+        acc = acc + (i * 3);
+        acc = acc - (step * 2);
+        acc = acc + (acc / 3);
+        acc = acc * 2;
+        if (acc > 200000) { acc = acc / 4; }
+        if (acc < 0) { acc = acc + 12345; }
+        if (i > 30) { acc = acc - (i * 5); }
+        step = step + 1;
+        i = i + 1;
+    }
+    return acc;
+}
+
+fn Vec3 walkVec(Vec3 v) {
+    int i = 0;
+    float s = 0.10f;
+    while (i < 25) {
+        v.x = v.x + s;
+        v.y = v.y - (s * 0.5f);
+        v.z = v.z + (s * s);
+        if (i > 10) { v = v.scale(1.1f); }
+        if (i > 20) { v = v.add(v); }
+        s = s + 0.05f;
+        i = i + 1;
+    }
+    return v;
+}
+
+fn float bigExpr(float a, float b, float c) {
+    float v;
+    v = (((a + b) * (c + 1.0f)) / ((a - b) + 0.5f)) + (a * b) - (c / 2.0f);
+    v = v + (a * a) + (b * b) + (c * c);
+    v = v - ((a + b + c) / 3.0f);
+    return v;
+}
+
+// --- auto-generated bulk for size benchmarking ---
+fn int dummyFunc1(int x) {
+    int a = 1;
+    int b = 3;
+    int c = 7;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1001) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy1 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10001) { out = out - 1; }
+        return out;
+    }
+}
+
+fn int dummyFunc2(int x) {
+    int a = 2;
+    int b = 6;
+    int c = 14;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1002) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy2 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10002) { out = out - 2; }
+        return out;
+    }
+}
+
+fn int dummyFunc3(int x) {
+    int a = 3;
+    int b = 9;
+    int c = 21;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1003) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy3 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10003) { out = out - 3; }
+        return out;
+    }
+}
+
+fn int dummyFunc4(int x) {
+    int a = 4;
+    int b = 12;
+    int c = 28;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1004) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy4 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10004) { out = out - 4; }
+        return out;
+    }
+}
+
+fn int dummyFunc5(int x) {
+    int a = 5;
+    int b = 15;
+    int c = 35;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1005) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy5 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10005) { out = out - 5; }
+        return out;
+    }
+}
+
+fn int dummyFunc6(int x) {
+    int a = 6;
+    int b = 18;
+    int c = 42;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1006) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy6 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10006) { out = out - 6; }
+        return out;
+    }
+}
+
+fn int dummyFunc7(int x) {
+    int a = 7;
+    int b = 21;
+    int c = 49;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1007) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy7 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10007) { out = out - 7; }
+        return out;
+    }
+}
+
+fn int dummyFunc8(int x) {
+    int a = 8;
+    int b = 24;
+    int c = 56;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1008) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy8 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10008) { out = out - 8; }
+        return out;
+    }
+}
+
+fn int dummyFunc9(int x) {
+    int a = 9;
+    int b = 27;
+    int c = 63;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1009) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy9 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10009) { out = out - 9; }
+        return out;
+    }
+}
+
+fn int dummyFunc10(int x) {
+    int a = 10;
+    int b = 30;
+    int c = 70;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1010) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy10 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10010) { out = out - 10; }
+        return out;
+    }
+}
+
+fn int dummyFunc11(int x) {
+    int a = 11;
+    int b = 33;
+    int c = 77;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1011) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy11 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10011) { out = out - 11; }
+        return out;
+    }
+}
+
+fn int dummyFunc12(int x) {
+    int a = 12;
+    int b = 36;
+    int c = 84;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1012) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy12 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10012) { out = out - 12; }
+        return out;
+    }
+}
+
+fn int dummyFunc13(int x) {
+    int a = 13;
+    int b = 39;
+    int c = 91;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1013) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy13 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10013) { out = out - 13; }
+        return out;
+    }
+}
+
+fn int dummyFunc14(int x) {
+    int a = 14;
+    int b = 42;
+    int c = 98;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1014) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy14 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10014) { out = out - 14; }
+        return out;
+    }
+}
+
+fn int dummyFunc15(int x) {
+    int a = 15;
+    int b = 45;
+    int c = 105;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1015) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy15 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10015) { out = out - 15; }
+        return out;
+    }
+}
+
+fn int dummyFunc16(int x) {
+    int a = 16;
+    int b = 48;
+    int c = 112;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1016) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy16 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10016) { out = out - 16; }
+        return out;
+    }
+}
+
+fn int dummyFunc17(int x) {
+    int a = 17;
+    int b = 51;
+    int c = 119;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1017) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy17 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10017) { out = out - 17; }
+        return out;
+    }
+}
+
+fn int dummyFunc18(int x) {
+    int a = 18;
+    int b = 54;
+    int c = 126;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1018) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy18 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10018) { out = out - 18; }
+        return out;
+    }
+}
+
+fn int dummyFunc19(int x) {
+    int a = 19;
+    int b = 57;
+    int c = 133;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1019) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy19 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10019) { out = out - 19; }
+        return out;
+    }
+}
+
+fn int dummyFunc20(int x) {
+    int a = 20;
+    int b = 60;
+    int c = 140;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1020) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy20 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10020) { out = out - 20; }
+        return out;
+    }
+}
+
+fn int dummyFunc21(int x) {
+    int a = 21;
+    int b = 63;
+    int c = 147;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1021) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy21 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10021) { out = out - 21; }
+        return out;
+    }
+}
+
+fn int dummyFunc22(int x) {
+    int a = 22;
+    int b = 66;
+    int c = 154;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1022) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy22 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10022) { out = out - 22; }
+        return out;
+    }
+}
+
+fn int dummyFunc23(int x) {
+    int a = 23;
+    int b = 69;
+    int c = 161;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1023) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy23 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10023) { out = out - 23; }
+        return out;
+    }
+}
+
+fn int dummyFunc24(int x) {
+    int a = 24;
+    int b = 72;
+    int c = 168;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1024) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy24 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10024) { out = out - 24; }
+        return out;
+    }
+}
+
+fn int dummyFunc25(int x) {
+    int a = 25;
+    int b = 75;
+    int c = 175;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1025) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy25 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10025) { out = out - 25; }
+        return out;
+    }
+}
+
+fn int dummyFunc26(int x) {
+    int a = 26;
+    int b = 78;
+    int c = 182;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1026) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy26 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10026) { out = out - 26; }
+        return out;
+    }
+}
+
+fn int dummyFunc27(int x) {
+    int a = 27;
+    int b = 81;
+    int c = 189;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1027) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy27 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10027) { out = out - 27; }
+        return out;
+    }
+}
+
+fn int dummyFunc28(int x) {
+    int a = 28;
+    int b = 84;
+    int c = 196;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1028) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy28 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10028) { out = out - 28; }
+        return out;
+    }
+}
+
+fn int dummyFunc29(int x) {
+    int a = 29;
+    int b = 87;
+    int c = 203;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1029) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy29 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10029) { out = out - 29; }
+        return out;
+    }
+}
+
+fn int dummyFunc30(int x) {
+    int a = 30;
+    int b = 90;
+    int c = 210;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1030) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy30 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10030) { out = out - 30; }
+        return out;
+    }
+}
+
+fn int dummyFunc31(int x) {
+    int a = 31;
+    int b = 93;
+    int c = 217;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1031) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy31 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10031) { out = out - 31; }
+        return out;
+    }
+}
+
+fn int dummyFunc32(int x) {
+    int a = 32;
+    int b = 96;
+    int c = 224;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1032) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy32 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10032) { out = out - 32; }
+        return out;
+    }
+}
+
+fn int dummyFunc33(int x) {
+    int a = 33;
+    int b = 99;
+    int c = 231;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1033) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy33 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10033) { out = out - 33; }
+        return out;
+    }
+}
+
+fn int dummyFunc34(int x) {
+    int a = 34;
+    int b = 102;
+    int c = 238;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1034) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy34 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10034) { out = out - 34; }
+        return out;
+    }
+}
+
+fn int dummyFunc35(int x) {
+    int a = 35;
+    int b = 105;
+    int c = 245;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1035) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy35 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10035) { out = out - 35; }
+        return out;
+    }
+}
+
+fn int dummyFunc36(int x) {
+    int a = 36;
+    int b = 108;
+    int c = 252;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1036) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy36 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10036) { out = out - 36; }
+        return out;
+    }
+}
+
+fn int dummyFunc37(int x) {
+    int a = 37;
+    int b = 111;
+    int c = 259;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1037) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy37 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10037) { out = out - 37; }
+        return out;
+    }
+}
+
+fn int dummyFunc38(int x) {
+    int a = 38;
+    int b = 114;
+    int c = 266;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1038) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy38 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10038) { out = out - 38; }
+        return out;
+    }
+}
+
+fn int dummyFunc39(int x) {
+    int a = 39;
+    int b = 117;
+    int c = 273;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1039) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy39 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10039) { out = out - 39; }
+        return out;
+    }
+}
+
+fn int dummyFunc40(int x) {
+    int a = 40;
+    int b = 120;
+    int c = 280;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1040) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy40 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10040) { out = out - 40; }
+        return out;
+    }
+}
+
+fn int dummyFunc41(int x) {
+    int a = 41;
+    int b = 123;
+    int c = 287;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1041) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy41 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10041) { out = out - 41; }
+        return out;
+    }
+}
+
+fn int dummyFunc42(int x) {
+    int a = 42;
+    int b = 126;
+    int c = 294;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1042) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy42 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10042) { out = out - 42; }
+        return out;
+    }
+}
+
+fn int dummyFunc43(int x) {
+    int a = 43;
+    int b = 129;
+    int c = 301;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1043) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy43 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10043) { out = out - 43; }
+        return out;
+    }
+}
+
+fn int dummyFunc44(int x) {
+    int a = 44;
+    int b = 132;
+    int c = 308;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1044) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy44 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10044) { out = out - 44; }
+        return out;
+    }
+}
+
+fn int dummyFunc45(int x) {
+    int a = 45;
+    int b = 135;
+    int c = 315;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1045) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy45 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10045) { out = out - 45; }
+        return out;
+    }
+}
+
+fn int dummyFunc46(int x) {
+    int a = 46;
+    int b = 138;
+    int c = 322;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1046) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy46 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10046) { out = out - 46; }
+        return out;
+    }
+}
+
+fn int dummyFunc47(int x) {
+    int a = 47;
+    int b = 141;
+    int c = 329;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1047) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy47 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10047) { out = out - 47; }
+        return out;
+    }
+}
+
+fn int dummyFunc48(int x) {
+    int a = 48;
+    int b = 144;
+    int c = 336;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1048) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy48 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10048) { out = out - 48; }
+        return out;
+    }
+}
+
+fn int dummyFunc49(int x) {
+    int a = 49;
+    int b = 147;
+    int c = 343;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1049) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy49 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10049) { out = out - 49; }
+        return out;
+    }
+}
+
+fn int dummyFunc50(int x) {
+    int a = 50;
+    int b = 150;
+    int c = 350;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1050) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy50 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10050) { out = out - 50; }
+        return out;
+    }
+}
+
+fn int dummyFunc51(int x) {
+    int a = 51;
+    int b = 153;
+    int c = 357;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1051) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy51 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10051) { out = out - 51; }
+        return out;
+    }
+}
+
+fn int dummyFunc52(int x) {
+    int a = 52;
+    int b = 156;
+    int c = 364;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1052) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy52 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10052) { out = out - 52; }
+        return out;
+    }
+}
+
+fn int dummyFunc53(int x) {
+    int a = 53;
+    int b = 159;
+    int c = 371;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1053) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy53 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10053) { out = out - 53; }
+        return out;
+    }
+}
+
+fn int dummyFunc54(int x) {
+    int a = 54;
+    int b = 162;
+    int c = 378;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1054) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy54 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10054) { out = out - 54; }
+        return out;
+    }
+}
+
+fn int dummyFunc55(int x) {
+    int a = 55;
+    int b = 165;
+    int c = 385;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1055) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy55 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10055) { out = out - 55; }
+        return out;
+    }
+}
+
+fn int dummyFunc56(int x) {
+    int a = 56;
+    int b = 168;
+    int c = 392;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1056) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy56 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10056) { out = out - 56; }
+        return out;
+    }
+}
+
+fn int dummyFunc57(int x) {
+    int a = 57;
+    int b = 171;
+    int c = 399;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1057) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy57 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10057) { out = out - 57; }
+        return out;
+    }
+}
+
+fn int dummyFunc58(int x) {
+    int a = 58;
+    int b = 174;
+    int c = 406;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1058) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy58 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10058) { out = out - 58; }
+        return out;
+    }
+}
+
+fn int dummyFunc59(int x) {
+    int a = 59;
+    int b = 177;
+    int c = 413;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1059) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy59 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10059) { out = out - 59; }
+        return out;
+    }
+}
+
+fn int dummyFunc60(int x) {
+    int a = 60;
+    int b = 180;
+    int c = 420;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1060) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy60 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10060) { out = out - 60; }
+        return out;
+    }
+}
+
+fn int dummyFunc61(int x) {
+    int a = 61;
+    int b = 183;
+    int c = 427;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1061) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy61 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10061) { out = out - 61; }
+        return out;
+    }
+}
+
+fn int dummyFunc62(int x) {
+    int a = 62;
+    int b = 186;
+    int c = 434;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1062) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy62 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10062) { out = out - 62; }
+        return out;
+    }
+}
+
+fn int dummyFunc63(int x) {
+    int a = 63;
+    int b = 189;
+    int c = 441;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1063) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy63 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10063) { out = out - 63; }
+        return out;
+    }
+}
+
+fn int dummyFunc64(int x) {
+    int a = 64;
+    int b = 192;
+    int c = 448;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1064) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy64 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10064) { out = out - 64; }
+        return out;
+    }
+}
+
+fn int dummyFunc65(int x) {
+    int a = 65;
+    int b = 195;
+    int c = 455;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1065) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy65 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10065) { out = out - 65; }
+        return out;
+    }
+}
+
+fn int dummyFunc66(int x) {
+    int a = 66;
+    int b = 198;
+    int c = 462;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1066) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy66 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10066) { out = out - 66; }
+        return out;
+    }
+}
+
+fn int dummyFunc67(int x) {
+    int a = 67;
+    int b = 201;
+    int c = 469;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1067) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy67 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10067) { out = out - 67; }
+        return out;
+    }
+}
+
+fn int dummyFunc68(int x) {
+    int a = 68;
+    int b = 204;
+    int c = 476;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1068) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy68 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10068) { out = out - 68; }
+        return out;
+    }
+}
+
+fn int dummyFunc69(int x) {
+    int a = 69;
+    int b = 207;
+    int c = 483;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1069) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy69 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10069) { out = out - 69; }
+        return out;
+    }
+}
+
+fn int dummyFunc70(int x) {
+    int a = 70;
+    int b = 210;
+    int c = 490;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1070) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy70 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10070) { out = out - 70; }
+        return out;
+    }
+}
+
+fn int dummyFunc71(int x) {
+    int a = 71;
+    int b = 213;
+    int c = 497;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1071) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy71 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10071) { out = out - 71; }
+        return out;
+    }
+}
+
+fn int dummyFunc72(int x) {
+    int a = 72;
+    int b = 216;
+    int c = 504;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1072) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy72 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10072) { out = out - 72; }
+        return out;
+    }
+}
+
+fn int dummyFunc73(int x) {
+    int a = 73;
+    int b = 219;
+    int c = 511;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1073) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy73 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10073) { out = out - 73; }
+        return out;
+    }
+}
+
+fn int dummyFunc74(int x) {
+    int a = 74;
+    int b = 222;
+    int c = 518;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1074) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy74 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10074) { out = out - 74; }
+        return out;
+    }
+}
+
+fn int dummyFunc75(int x) {
+    int a = 75;
+    int b = 225;
+    int c = 525;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1075) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy75 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10075) { out = out - 75; }
+        return out;
+    }
+}
+
+fn int dummyFunc76(int x) {
+    int a = 76;
+    int b = 228;
+    int c = 532;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1076) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy76 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10076) { out = out - 76; }
+        return out;
+    }
+}
+
+fn int dummyFunc77(int x) {
+    int a = 77;
+    int b = 231;
+    int c = 539;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1077) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy77 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10077) { out = out - 77; }
+        return out;
+    }
+}
+
+fn int dummyFunc78(int x) {
+    int a = 78;
+    int b = 234;
+    int c = 546;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1078) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy78 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10078) { out = out - 78; }
+        return out;
+    }
+}
+
+fn int dummyFunc79(int x) {
+    int a = 79;
+    int b = 237;
+    int c = 553;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1079) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy79 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10079) { out = out - 79; }
+        return out;
+    }
+}
+
+fn int dummyFunc80(int x) {
+    int a = 80;
+    int b = 240;
+    int c = 560;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1080) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy80 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10080) { out = out - 80; }
+        return out;
+    }
+}
+
+fn int dummyFunc81(int x) {
+    int a = 81;
+    int b = 243;
+    int c = 567;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1081) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy81 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10081) { out = out - 81; }
+        return out;
+    }
+}
+
+fn int dummyFunc82(int x) {
+    int a = 82;
+    int b = 246;
+    int c = 574;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1082) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy82 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10082) { out = out - 82; }
+        return out;
+    }
+}
+
+fn int dummyFunc83(int x) {
+    int a = 83;
+    int b = 249;
+    int c = 581;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1083) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy83 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10083) { out = out - 83; }
+        return out;
+    }
+}
+
+fn int dummyFunc84(int x) {
+    int a = 84;
+    int b = 252;
+    int c = 588;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1084) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy84 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10084) { out = out - 84; }
+        return out;
+    }
+}
+
+fn int dummyFunc85(int x) {
+    int a = 85;
+    int b = 255;
+    int c = 595;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1085) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy85 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10085) { out = out - 85; }
+        return out;
+    }
+}
+
+fn int dummyFunc86(int x) {
+    int a = 86;
+    int b = 258;
+    int c = 602;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1086) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy86 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10086) { out = out - 86; }
+        return out;
+    }
+}
+
+fn int dummyFunc87(int x) {
+    int a = 87;
+    int b = 261;
+    int c = 609;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1087) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy87 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10087) { out = out - 87; }
+        return out;
+    }
+}
+
+fn int dummyFunc88(int x) {
+    int a = 88;
+    int b = 264;
+    int c = 616;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1088) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy88 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10088) { out = out - 88; }
+        return out;
+    }
+}
+
+fn int dummyFunc89(int x) {
+    int a = 89;
+    int b = 267;
+    int c = 623;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1089) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy89 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10089) { out = out - 89; }
+        return out;
+    }
+}
+
+fn int dummyFunc90(int x) {
+    int a = 90;
+    int b = 270;
+    int c = 630;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1090) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy90 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10090) { out = out - 90; }
+        return out;
+    }
+}
+
+fn int dummyFunc91(int x) {
+    int a = 91;
+    int b = 273;
+    int c = 637;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1091) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy91 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10091) { out = out - 91; }
+        return out;
+    }
+}
+
+fn int dummyFunc92(int x) {
+    int a = 92;
+    int b = 276;
+    int c = 644;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1092) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy92 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10092) { out = out - 92; }
+        return out;
+    }
+}
+
+fn int dummyFunc93(int x) {
+    int a = 93;
+    int b = 279;
+    int c = 651;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1093) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy93 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10093) { out = out - 93; }
+        return out;
+    }
+}
+
+fn int dummyFunc94(int x) {
+    int a = 94;
+    int b = 282;
+    int c = 658;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1094) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy94 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10094) { out = out - 94; }
+        return out;
+    }
+}
+
+fn int dummyFunc95(int x) {
+    int a = 95;
+    int b = 285;
+    int c = 665;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1095) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy95 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10095) { out = out - 95; }
+        return out;
+    }
+}
+
+fn int dummyFunc96(int x) {
+    int a = 96;
+    int b = 288;
+    int c = 672;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1096) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy96 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10096) { out = out - 96; }
+        return out;
+    }
+}
+
+fn int dummyFunc97(int x) {
+    int a = 97;
+    int b = 291;
+    int c = 679;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1097) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy97 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10097) { out = out - 97; }
+        return out;
+    }
+}
+
+fn int dummyFunc98(int x) {
+    int a = 98;
+    int b = 294;
+    int c = 686;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1098) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy98 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10098) { out = out - 98; }
+        return out;
+    }
+}
+
+fn int dummyFunc99(int x) {
+    int a = 99;
+    int b = 297;
+    int c = 693;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1099) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy99 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10099) { out = out - 99; }
+        return out;
+    }
+}
+
+fn int dummyFunc100(int x) {
+    int a = 100;
+    int b = 300;
+    int c = 700;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1100) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy100 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10100) { out = out - 100; }
+        return out;
+    }
+}
+
+fn int dummyFunc101(int x) {
+    int a = 101;
+    int b = 303;
+    int c = 707;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1101) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy101 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10101) { out = out - 101; }
+        return out;
+    }
+}
+
+fn int dummyFunc102(int x) {
+    int a = 102;
+    int b = 306;
+    int c = 714;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1102) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy102 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10102) { out = out - 102; }
+        return out;
+    }
+}
+
+fn int dummyFunc103(int x) {
+    int a = 103;
+    int b = 309;
+    int c = 721;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1103) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy103 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10103) { out = out - 103; }
+        return out;
+    }
+}
+
+fn int dummyFunc104(int x) {
+    int a = 104;
+    int b = 312;
+    int c = 728;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1104) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy104 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10104) { out = out - 104; }
+        return out;
+    }
+}
+
+fn int dummyFunc105(int x) {
+    int a = 105;
+    int b = 315;
+    int c = 735;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1105) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy105 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10105) { out = out - 105; }
+        return out;
+    }
+}
+
+fn int dummyFunc106(int x) {
+    int a = 106;
+    int b = 318;
+    int c = 742;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1106) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy106 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10106) { out = out - 106; }
+        return out;
+    }
+}
+
+fn int dummyFunc107(int x) {
+    int a = 107;
+    int b = 321;
+    int c = 749;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1107) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy107 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10107) { out = out - 107; }
+        return out;
+    }
+}
+
+fn int dummyFunc108(int x) {
+    int a = 108;
+    int b = 324;
+    int c = 756;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1108) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy108 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10108) { out = out - 108; }
+        return out;
+    }
+}
+
+fn int dummyFunc109(int x) {
+    int a = 109;
+    int b = 327;
+    int c = 763;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1109) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy109 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10109) { out = out - 109; }
+        return out;
+    }
+}
+
+fn int dummyFunc110(int x) {
+    int a = 110;
+    int b = 330;
+    int c = 770;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1110) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy110 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10110) { out = out - 110; }
+        return out;
+    }
+}
+
+fn int dummyFunc111(int x) {
+    int a = 111;
+    int b = 333;
+    int c = 777;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1111) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy111 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10111) { out = out - 111; }
+        return out;
+    }
+}
+
+fn int dummyFunc112(int x) {
+    int a = 112;
+    int b = 336;
+    int c = 784;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1112) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy112 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10112) { out = out - 112; }
+        return out;
+    }
+}
+
+fn int dummyFunc113(int x) {
+    int a = 113;
+    int b = 339;
+    int c = 791;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1113) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy113 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10113) { out = out - 113; }
+        return out;
+    }
+}
+
+fn int dummyFunc114(int x) {
+    int a = 114;
+    int b = 342;
+    int c = 798;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1114) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy114 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10114) { out = out - 114; }
+        return out;
+    }
+}
+
+fn int dummyFunc115(int x) {
+    int a = 115;
+    int b = 345;
+    int c = 805;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1115) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy115 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10115) { out = out - 115; }
+        return out;
+    }
+}
+
+fn int dummyFunc116(int x) {
+    int a = 116;
+    int b = 348;
+    int c = 812;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1116) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy116 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10116) { out = out - 116; }
+        return out;
+    }
+}
+
+fn int dummyFunc117(int x) {
+    int a = 117;
+    int b = 351;
+    int c = 819;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1117) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy117 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10117) { out = out - 117; }
+        return out;
+    }
+}
+
+fn int dummyFunc118(int x) {
+    int a = 118;
+    int b = 354;
+    int c = 826;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1118) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy118 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10118) { out = out - 118; }
+        return out;
+    }
+}
+
+fn int dummyFunc119(int x) {
+    int a = 119;
+    int b = 357;
+    int c = 833;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1119) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy119 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10119) { out = out - 119; }
+        return out;
+    }
+}
+
+fn int dummyFunc120(int x) {
+    int a = 120;
+    int b = 360;
+    int c = 840;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1120) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy120 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10120) { out = out - 120; }
+        return out;
+    }
+}
+
+// --- auto-generated bulk for size benchmarking (extra) ---
+fn int dummyFunc121(int x) {
+    int a = 121;
+    int b = 363;
+    int c = 847;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1121) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy121 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10121) { out = out - 121; }
+        return out;
+    }
+}
+
+fn int dummyFunc122(int x) {
+    int a = 122;
+    int b = 366;
+    int c = 854;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1122) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy122 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10122) { out = out - 122; }
+        return out;
+    }
+}
+
+fn int dummyFunc123(int x) {
+    int a = 123;
+    int b = 369;
+    int c = 861;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1123) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy123 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10123) { out = out - 123; }
+        return out;
+    }
+}
+
+fn int dummyFunc124(int x) {
+    int a = 124;
+    int b = 372;
+    int c = 868;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1124) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy124 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10124) { out = out - 124; }
+        return out;
+    }
+}
+
+fn int dummyFunc125(int x) {
+    int a = 125;
+    int b = 375;
+    int c = 875;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1125) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy125 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10125) { out = out - 125; }
+        return out;
+    }
+}
+
+fn int dummyFunc126(int x) {
+    int a = 126;
+    int b = 378;
+    int c = 882;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1126) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy126 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10126) { out = out - 126; }
+        return out;
+    }
+}
+
+fn int dummyFunc127(int x) {
+    int a = 127;
+    int b = 381;
+    int c = 889;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1127) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy127 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10127) { out = out - 127; }
+        return out;
+    }
+}
+
+fn int dummyFunc128(int x) {
+    int a = 128;
+    int b = 384;
+    int c = 896;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1128) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy128 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10128) { out = out - 128; }
+        return out;
+    }
+}
+
+fn int dummyFunc129(int x) {
+    int a = 129;
+    int b = 387;
+    int c = 903;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1129) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy129 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10129) { out = out - 129; }
+        return out;
+    }
+}
+
+fn int dummyFunc130(int x) {
+    int a = 130;
+    int b = 390;
+    int c = 910;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1130) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy130 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10130) { out = out - 130; }
+        return out;
+    }
+}
+
+fn int dummyFunc131(int x) {
+    int a = 131;
+    int b = 393;
+    int c = 917;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1131) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy131 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10131) { out = out - 131; }
+        return out;
+    }
+}
+
+fn int dummyFunc132(int x) {
+    int a = 132;
+    int b = 396;
+    int c = 924;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1132) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy132 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10132) { out = out - 132; }
+        return out;
+    }
+}
+
+fn int dummyFunc133(int x) {
+    int a = 133;
+    int b = 399;
+    int c = 931;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1133) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy133 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10133) { out = out - 133; }
+        return out;
+    }
+}
+
+fn int dummyFunc134(int x) {
+    int a = 134;
+    int b = 402;
+    int c = 938;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1134) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy134 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10134) { out = out - 134; }
+        return out;
+    }
+}
+
+fn int dummyFunc135(int x) {
+    int a = 135;
+    int b = 405;
+    int c = 945;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1135) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy135 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10135) { out = out - 135; }
+        return out;
+    }
+}
+
+fn int dummyFunc136(int x) {
+    int a = 136;
+    int b = 408;
+    int c = 952;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1136) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy136 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10136) { out = out - 136; }
+        return out;
+    }
+}
+
+fn int dummyFunc137(int x) {
+    int a = 137;
+    int b = 411;
+    int c = 959;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1137) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy137 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10137) { out = out - 137; }
+        return out;
+    }
+}
+
+fn int dummyFunc138(int x) {
+    int a = 138;
+    int b = 414;
+    int c = 966;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1138) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy138 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10138) { out = out - 138; }
+        return out;
+    }
+}
+
+fn int dummyFunc139(int x) {
+    int a = 139;
+    int b = 417;
+    int c = 973;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1139) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy139 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10139) { out = out - 139; }
+        return out;
+    }
+}
+
+fn int dummyFunc140(int x) {
+    int a = 140;
+    int b = 420;
+    int c = 980;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1140) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy140 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10140) { out = out - 140; }
+        return out;
+    }
+}
+
+fn int dummyFunc141(int x) {
+    int a = 141;
+    int b = 423;
+    int c = 987;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1141) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy141 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10141) { out = out - 141; }
+        return out;
+    }
+}
+
+fn int dummyFunc142(int x) {
+    int a = 142;
+    int b = 426;
+    int c = 994;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1142) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy142 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10142) { out = out - 142; }
+        return out;
+    }
+}
+
+fn int dummyFunc143(int x) {
+    int a = 143;
+    int b = 429;
+    int c = 1001;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1143) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy143 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10143) { out = out - 143; }
+        return out;
+    }
+}
+
+fn int dummyFunc144(int x) {
+    int a = 144;
+    int b = 432;
+    int c = 1008;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1144) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy144 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10144) { out = out - 144; }
+        return out;
+    }
+}
+
+fn int dummyFunc145(int x) {
+    int a = 145;
+    int b = 435;
+    int c = 1015;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1145) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy145 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10145) { out = out - 145; }
+        return out;
+    }
+}
+
+fn int dummyFunc146(int x) {
+    int a = 146;
+    int b = 438;
+    int c = 1022;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1146) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy146 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10146) { out = out - 146; }
+        return out;
+    }
+}
+
+fn int dummyFunc147(int x) {
+    int a = 147;
+    int b = 441;
+    int c = 1029;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1147) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy147 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10147) { out = out - 147; }
+        return out;
+    }
+}
+
+fn int dummyFunc148(int x) {
+    int a = 148;
+    int b = 444;
+    int c = 1036;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1148) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy148 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10148) { out = out - 148; }
+        return out;
+    }
+}
+
+fn int dummyFunc149(int x) {
+    int a = 149;
+    int b = 447;
+    int c = 1043;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1149) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy149 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10149) { out = out - 149; }
+        return out;
+    }
+}
+
+fn int dummyFunc150(int x) {
+    int a = 150;
+    int b = 450;
+    int c = 1050;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1150) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy150 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10150) { out = out - 150; }
+        return out;
+    }
+}
+
+fn int dummyFunc151(int x) {
+    int a = 151;
+    int b = 453;
+    int c = 1057;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1151) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy151 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10151) { out = out - 151; }
+        return out;
+    }
+}
+
+fn int dummyFunc152(int x) {
+    int a = 152;
+    int b = 456;
+    int c = 1064;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1152) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy152 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10152) { out = out - 152; }
+        return out;
+    }
+}
+
+fn int dummyFunc153(int x) {
+    int a = 153;
+    int b = 459;
+    int c = 1071;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1153) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy153 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10153) { out = out - 153; }
+        return out;
+    }
+}
+
+fn int dummyFunc154(int x) {
+    int a = 154;
+    int b = 462;
+    int c = 1078;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1154) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy154 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10154) { out = out - 154; }
+        return out;
+    }
+}
+
+fn int dummyFunc155(int x) {
+    int a = 155;
+    int b = 465;
+    int c = 1085;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1155) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy155 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10155) { out = out - 155; }
+        return out;
+    }
+}
+
+fn int dummyFunc156(int x) {
+    int a = 156;
+    int b = 468;
+    int c = 1092;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1156) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy156 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10156) { out = out - 156; }
+        return out;
+    }
+}
+
+fn int dummyFunc157(int x) {
+    int a = 157;
+    int b = 471;
+    int c = 1099;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1157) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy157 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10157) { out = out - 157; }
+        return out;
+    }
+}
+
+fn int dummyFunc158(int x) {
+    int a = 158;
+    int b = 474;
+    int c = 1106;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1158) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy158 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10158) { out = out - 158; }
+        return out;
+    }
+}
+
+fn int dummyFunc159(int x) {
+    int a = 159;
+    int b = 477;
+    int c = 1113;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1159) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy159 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10159) { out = out - 159; }
+        return out;
+    }
+}
+
+fn int dummyFunc160(int x) {
+    int a = 160;
+    int b = 480;
+    int c = 1120;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1160) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy160 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10160) { out = out - 160; }
+        return out;
+    }
+}
+
+fn int dummyFunc161(int x) {
+    int a = 161;
+    int b = 483;
+    int c = 1127;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1161) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy161 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10161) { out = out - 161; }
+        return out;
+    }
+}
+
+fn int dummyFunc162(int x) {
+    int a = 162;
+    int b = 486;
+    int c = 1134;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1162) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy162 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10162) { out = out - 162; }
+        return out;
+    }
+}
+
+fn int dummyFunc163(int x) {
+    int a = 163;
+    int b = 489;
+    int c = 1141;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1163) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy163 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10163) { out = out - 163; }
+        return out;
+    }
+}
+
+fn int dummyFunc164(int x) {
+    int a = 164;
+    int b = 492;
+    int c = 1148;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1164) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy164 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10164) { out = out - 164; }
+        return out;
+    }
+}
+
+fn int dummyFunc165(int x) {
+    int a = 165;
+    int b = 495;
+    int c = 1155;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1165) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy165 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10165) { out = out - 165; }
+        return out;
+    }
+}
+
+fn int dummyFunc166(int x) {
+    int a = 166;
+    int b = 498;
+    int c = 1162;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1166) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy166 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10166) { out = out - 166; }
+        return out;
+    }
+}
+
+fn int dummyFunc167(int x) {
+    int a = 167;
+    int b = 501;
+    int c = 1169;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1167) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy167 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10167) { out = out - 167; }
+        return out;
+    }
+}
+
+fn int dummyFunc168(int x) {
+    int a = 168;
+    int b = 504;
+    int c = 1176;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1168) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy168 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10168) { out = out - 168; }
+        return out;
+    }
+}
+
+fn int dummyFunc169(int x) {
+    int a = 169;
+    int b = 507;
+    int c = 1183;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1169) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy169 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10169) { out = out - 169; }
+        return out;
+    }
+}
+
+fn int dummyFunc170(int x) {
+    int a = 170;
+    int b = 510;
+    int c = 1190;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1170) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy170 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10170) { out = out - 170; }
+        return out;
+    }
+}
+
+fn int dummyFunc171(int x) {
+    int a = 171;
+    int b = 513;
+    int c = 1197;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1171) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy171 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10171) { out = out - 171; }
+        return out;
+    }
+}
+
+fn int dummyFunc172(int x) {
+    int a = 172;
+    int b = 516;
+    int c = 1204;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1172) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy172 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10172) { out = out - 172; }
+        return out;
+    }
+}
+
+fn int dummyFunc173(int x) {
+    int a = 173;
+    int b = 519;
+    int c = 1211;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1173) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy173 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10173) { out = out - 173; }
+        return out;
+    }
+}
+
+fn int dummyFunc174(int x) {
+    int a = 174;
+    int b = 522;
+    int c = 1218;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1174) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy174 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10174) { out = out - 174; }
+        return out;
+    }
+}
+
+fn int dummyFunc175(int x) {
+    int a = 175;
+    int b = 525;
+    int c = 1225;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1175) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy175 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10175) { out = out - 175; }
+        return out;
+    }
+}
+
+fn int dummyFunc176(int x) {
+    int a = 176;
+    int b = 528;
+    int c = 1232;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1176) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy176 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10176) { out = out - 176; }
+        return out;
+    }
+}
+
+fn int dummyFunc177(int x) {
+    int a = 177;
+    int b = 531;
+    int c = 1239;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1177) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy177 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10177) { out = out - 177; }
+        return out;
+    }
+}
+
+fn int dummyFunc178(int x) {
+    int a = 178;
+    int b = 534;
+    int c = 1246;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1178) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy178 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10178) { out = out - 178; }
+        return out;
+    }
+}
+
+fn int dummyFunc179(int x) {
+    int a = 179;
+    int b = 537;
+    int c = 1253;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1179) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy179 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10179) { out = out - 179; }
+        return out;
+    }
+}
+
+fn int dummyFunc180(int x) {
+    int a = 180;
+    int b = 540;
+    int c = 1260;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1180) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy180 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10180) { out = out - 180; }
+        return out;
+    }
+}
+
+fn int dummyFunc181(int x) {
+    int a = 181;
+    int b = 543;
+    int c = 1267;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1181) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy181 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10181) { out = out - 181; }
+        return out;
+    }
+}
+
+fn int dummyFunc182(int x) {
+    int a = 182;
+    int b = 546;
+    int c = 1274;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1182) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy182 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10182) { out = out - 182; }
+        return out;
+    }
+}
+
+fn int dummyFunc183(int x) {
+    int a = 183;
+    int b = 549;
+    int c = 1281;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1183) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy183 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10183) { out = out - 183; }
+        return out;
+    }
+}
+
+fn int dummyFunc184(int x) {
+    int a = 184;
+    int b = 552;
+    int c = 1288;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1184) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy184 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10184) { out = out - 184; }
+        return out;
+    }
+}
+
+fn int dummyFunc185(int x) {
+    int a = 185;
+    int b = 555;
+    int c = 1295;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1185) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy185 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10185) { out = out - 185; }
+        return out;
+    }
+}
+
+fn int dummyFunc186(int x) {
+    int a = 186;
+    int b = 558;
+    int c = 1302;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1186) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy186 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10186) { out = out - 186; }
+        return out;
+    }
+}
+
+fn int dummyFunc187(int x) {
+    int a = 187;
+    int b = 561;
+    int c = 1309;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1187) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy187 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10187) { out = out - 187; }
+        return out;
+    }
+}
+
+fn int dummyFunc188(int x) {
+    int a = 188;
+    int b = 564;
+    int c = 1316;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1188) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy188 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10188) { out = out - 188; }
+        return out;
+    }
+}
+
+fn int dummyFunc189(int x) {
+    int a = 189;
+    int b = 567;
+    int c = 1323;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1189) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy189 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10189) { out = out - 189; }
+        return out;
+    }
+}
+
+fn int dummyFunc190(int x) {
+    int a = 190;
+    int b = 570;
+    int c = 1330;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1190) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy190 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10190) { out = out - 190; }
+        return out;
+    }
+}
+
+fn int dummyFunc191(int x) {
+    int a = 191;
+    int b = 573;
+    int c = 1337;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1191) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy191 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10191) { out = out - 191; }
+        return out;
+    }
+}
+
+fn int dummyFunc192(int x) {
+    int a = 192;
+    int b = 576;
+    int c = 1344;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1192) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy192 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10192) { out = out - 192; }
+        return out;
+    }
+}
+
+fn int dummyFunc193(int x) {
+    int a = 193;
+    int b = 579;
+    int c = 1351;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1193) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy193 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10193) { out = out - 193; }
+        return out;
+    }
+}
+
+fn int dummyFunc194(int x) {
+    int a = 194;
+    int b = 582;
+    int c = 1358;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1194) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy194 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10194) { out = out - 194; }
+        return out;
+    }
+}
+
+fn int dummyFunc195(int x) {
+    int a = 195;
+    int b = 585;
+    int c = 1365;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1195) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy195 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10195) { out = out - 195; }
+        return out;
+    }
+}
+
+fn int dummyFunc196(int x) {
+    int a = 196;
+    int b = 588;
+    int c = 1372;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1196) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy196 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10196) { out = out - 196; }
+        return out;
+    }
+}
+
+fn int dummyFunc197(int x) {
+    int a = 197;
+    int b = 591;
+    int c = 1379;
+    x = x + a;
+    x = x * 2;
+    x = x - b;
+    if (x > 1197) { x = x / 2; }
+    if (x < 0) { x = x + c; }
+    x = x + 1;
+    x = x * 3;
+    x = x - 5;
+    return x;
+}
+
+struct Dummy197 {
+    int v;
+    method int bump(int k) {
+        int out = this.v + k;
+        if (out > 10197) { out = out - 197; }
+        return out;
+    }
+}
+fn bool program() {
+    int r0 = crunch(12345);
+    int r1 = crunch(r0 + 77);
+    int r2 = loopMix(r1 - 33);
+    int r3 = stressInts2(r2 + 999);
+    echo(r0);
+    echo(r1);
+    echo(r2);
+    echo(r3);
+
+    Vec3 v = mkVec3(1.0f, 2.0f, 3.0f);
+    Vec3 w = mkVec3(4.0f, 5.0f, 6.0f);
+    Vec3 s1 = v.add(w);
+    Vec3 s2 = s1.scale(0.5f);
+    Vec3 s3 = walkVec(s2);
+    float d0 = v.dot(w);
+
+    echo(s1.x);
+    echo(s1.y);
+    echo(s1.z);
+    echo(s2.x);
+    echo(s2.y);
+    echo(s2.z);
+    echo(s3.x);
+    echo(s3.y);
+    echo(s3.z);
+    echo(d0);
+
+    Mat2 m = mkMat2(1.0f, 2.0f, 3.0f, 4.0f);
+    float det = m.det();
+    Vec3 mv = m.mul(v);
+    echo(det);
+    echo(mv.x);
+    echo(mv.y);
+    echo(mv.z);
+
+    Range r;
+    r.min = 10;
+    r.max = 500;
+    bool c0 = r.contains(r0);
+    bool c1 = r.contains(r1);
+    echo(c0);
+    echo(c1);
+
+    Color cA;
+    Color cB;
+    cA.r = 0.2f; cA.g = 0.4f; cA.b = 0.6f;
+    cB.r = 0.8f; cB.g = 0.1f; cB.b = 0.3f;
+    Color cC = cA.blend(cB, 0.25f);
+    Color cD = cC.blend(cB, 0.75f);
+    float lum0 = cC.luminance();
+    float lum1 = cD.luminance();
+    echo(cC.r);
+    echo(cC.g);
+    echo(cC.b);
+    echo(cD.r);
+    echo(cD.g);
+    echo(cD.b);
+    echo(lum0);
+    echo(lum1);
+
+    float e0 = bigExpr(1.0f, 2.0f, 3.0f);
+    float e1 = bigExpr(4.0f, 5.0f, 6.0f);
+    echo(e0);
+    echo(e1);
+
+    return false;
+}

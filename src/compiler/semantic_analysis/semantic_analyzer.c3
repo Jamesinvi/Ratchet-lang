@@ -4,6 +4,10 @@ import debug;
 import std::collections::list;
 import common::stack;
 import log;
+import globals;
+
+faultdef ANALYSIS_ERR;
+
 
 struct SemanticAnalyzer
 {
@@ -16,34 +20,36 @@ struct SemanticAnalyzer
 	bool returnFound;
 	usz currentScopeIdx;
 	DeclIdx currentStructDeclIdx;
+	DynamicArenaAllocator allocator;
 
 }
 
 fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 {
 	this.ast = ast;
-	this.errors.init(mem);
 	this.symbolTable = {};
-	this.symbolTable.symbols.init(mem);
-	this.symbolTable.exprSymbols.init(mem);
-	this.symbolTable.stmtSymbols.init(mem);
-	this.symbolTable.declSymbols.init(mem);
-	
-	this.symbolTable.exprSymbols.reserve(this.ast.expressions.len());
-	this.symbolTable.stmtSymbols.reserve(this.ast.statements.len());
-	this.symbolTable.declSymbols.reserve(this.ast.declarations.len());
+	this.allocator = {};
+	this.allocator.init(mem, 64 * 1024);
+
+	this.errors.init(&this.allocator);
+	usz exprLen = this.ast.expressions.len();
+	usz stmtLen = this.ast.statements.len();
+	usz declLen = this.ast.declarations.len();
+	this.symbolTable.symbols.init(&this.allocator, exprLen + stmtLen + declLen);
+	this.symbolTable.exprSymbols.init(&this.allocator, exprLen);
+	this.symbolTable.stmtSymbols.init(&this.allocator, stmtLen);
+	this.symbolTable.declSymbols.init(&this.allocator, declLen);
+
 	// Fill lists with NO_SYMBOL
-	for (usz i = 0; i < this.ast.expressions.len(); i++) {
+	for (usz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 	}
 
-	this.symbolTable.stmtSymbols.reserve(this.ast.statements.len());
-	for (usz i = 0; i < this.ast.statements.len(); i++) {
+	for (usz i = 0; i < stmtLen; i++) {
 		this.symbolTable.stmtSymbols.push(NO_SYMBOL);
 	}
-
-	this.symbolTable.declSymbols.reserve(this.ast.declarations.len());
-	for (usz i = 0; i < this.ast.declarations.len(); i++) {
+	
+	for (usz i = 0; i < declLen; i++) {
 		this.symbolTable.declSymbols.push(NO_SYMBOL);
 	}
 	this.currentReturnType = make_type(ValueType.NULL);
@@ -54,15 +60,11 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 
 fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
 {
-	this.symbolTable.symbols.free();
-	this.symbolTable.exprSymbols.free();
-	this.symbolTable.stmtSymbols.free();
-	this.symbolTable.declSymbols.free();
-	for(usz i = 0; i< this.scopes.size; i++){
-		this.scopes.items[i].visibleSymbols.free();
+	for(usz i = 0; i < this.scopes.size; i++){
+		this.scopes.items[i].deinit();
 	}
 	this.scopes.free();
-	this.errors.free();
+	this.allocator.free();
 }
 
 // ---- Entry point ----
@@ -146,6 +148,7 @@ fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
 {
 	Scope popped = this.scopes.pop();
 	popped.visibleSymbols.free();
+	debug::@log_analysis("exiting scope");
 	if (this.scopes.size > 0) {
 		this.currentScopeIdx = (usz)this.scopes.size - 1;
 	}
@@ -259,10 +262,10 @@ fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, uint st
 			continue;
 		}
 		String structName = this.ast.names[decl.structDecl.nameIdx];
-		if (!parser::structNamesToIdx.has_key(structName)) {
+		if (!globals::structNamesToIdx.has_key(structName)) {
 			continue;
 		}
-		usz? indexInStructNames = parser::structNamesToIdx.get(structName);
+		usz? indexInStructNames = globals::structNamesToIdx.get(structName);
 		if (catch err = indexInStructNames) {
 			continue;
 		}

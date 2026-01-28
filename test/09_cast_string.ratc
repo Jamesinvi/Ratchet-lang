@@ -2,5 +2,5 @@ fn bool program() {
     int k = 15;
     echo("hello");
     echo((k as string));
-    return;
+    return false;
 }

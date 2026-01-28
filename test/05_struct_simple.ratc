@@ -15,7 +15,7 @@ fn bool program() {
     a.z = 33.0f;
     echo(b.z);
     echo(a.z);
-    return;
+    return false;
 }
 
 fn Vec3 cloneVec3(Vec3 toClone){

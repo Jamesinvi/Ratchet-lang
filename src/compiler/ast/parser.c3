@@ -5,6 +5,7 @@ import log;
 import debug;
 import std::collections::list;
 import std::collections::map;
+import globals;
 alias Byte = common::Byte;
 
 faultdef PARSE_ERROR;
@@ -15,37 +16,35 @@ struct Parser
     Token* current;
     Token* previous;
     ProgramAst outputAst;
-    TrackingAllocator allocator;
     bool hadError;
     bool panicMode;
+	DynamicArenaAllocator allocator;
 }
 
 // ---------- Lifecycle ----------
 
-fn void Parser.init(Parser* this, List{Token} tokens)
+fn void Parser.init(Parser* this)
 {
-    this.input = tokens;
+	this.allocator = {};
+	this.allocator.init(mem, 1024);
+    this.input = globals::tokens;
     this.hadError = false;
     this.panicMode = false;
 
     this.current = &(this.input[0]);
     this.previous = this.current;
-
-    this.allocator = {};
-    this.allocator.init(mem);
-
+	
     this.outputAst = {};
     this.outputAst.init(&this.allocator);
 
-    common::ensure_globals_init();
     this.predeclare_structs();
     this.predeclare_functions();
 }
 
 fn void Parser.deinit(Parser* this)
 {
-    this.allocator.free();
-    clean_up_struct_globals();
+	this.outputAst.free(&this.allocator);
+	this.allocator.free();
 }
 
 // ---------- Top-level compile pipeline ----------
@@ -90,7 +89,7 @@ fn StmtIdx Parser.statement(Parser* this)
 
 fn StmtIdx Parser.expression_statement(Parser* this)
 {
-    debug::@log_compilation("expression_statement at %s", (this.previous-1).value);
+    debug::@log_compilation("expression_statement at %s", (this.previous-1).value());
     int line = this.current.line;
     ExprIdx exprIdx = this.expression();
     this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
@@ -103,7 +102,7 @@ fn StmtIdx Parser.expression_statement(Parser* this)
 
 fn StmtIdx Parser.echo_statement(Parser* this)
 {
-    debug::@log_compilation("echo_statement at %s", (this.previous-1).value);
+    debug::@log_compilation("echo_statement at %s", (this.previous-1).value());
     int line = this.previous.line;
     ExprIdx exprIdx = this.expression();
     this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
@@ -116,7 +115,7 @@ fn StmtIdx Parser.echo_statement(Parser* this)
 
 fn StmtIdx Parser.return_statement(Parser* this)
 {
-    debug::@log_compilation("return_statement at %s at %s", this.previous.value, this.current.value);
+    debug::@log_compilation("return_statement at %s at %s", this.previous.value(), this.current.value());
     int line = this.previous.line;
 
     Stmt stmt = {.kind = StmtKind.RETURN};
@@ -136,7 +135,7 @@ fn StmtIdx Parser.return_statement(Parser* this)
 
 fn StmtIdx Parser.if_statement(Parser* this)
 {
-    debug::@log_compilation("if_statement at %s", this.current.value);
+    debug::@log_compilation("if_statement at %s", this.current.value());
     int line = this.previous.line;
 
     this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
@@ -161,7 +160,7 @@ fn StmtIdx Parser.if_statement(Parser* this)
 
 fn StmtIdx Parser.while_statement(Parser* this)
 {
-    debug::@log_compilation("while_statement at %s", this.current.value);
+    debug::@log_compilation("while_statement at %s", this.current.value());
     int line = this.previous.line;
 
     this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
@@ -184,7 +183,7 @@ fn StmtIdx Parser.block(Parser* this)
     stmt.span = {.line = this.previous.line};
 
     BlockStmt blockStmt = {};
-    blockStmt.stmts.init(&this.allocator);
+    blockStmt.stmts.init(&this.allocator, 64);
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
         StmtIdx child = this.statement_or_vardecl_in_block();
@@ -215,15 +214,15 @@ fn StmtIdx Parser.statement_or_vardecl_in_block(Parser* this)
 
 fn DeclIdx Parser.struct_declaration(Parser* this)
 {
-    debug::@log_compilation("struct_declaration at %s", this.current.value);
+    debug::@log_compilation("struct_declaration at %s", this.current.value());
 
     // struct <name> { <fields> }
     this.consume(TokenType.IDENTIFIER, "Expected struct name after 'struct'");
-    String name = this.previous.value;
+    String name = this.previous.value();
 
     // Find the predeclared struct entry (or create one if missing)
     DeclIdx declIdx;
-    DeclIdx? found = declaredStructs.get(name);
+    DeclIdx? found = globals::declaredStructs.get(name);
     if (catch notFound = found) {
         // Not predeclared (unexpected), create a fresh one
         Decl decl = {.kind = DeclKind.STRUCT};
@@ -231,7 +230,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
         decl.structDecl.nameIdx = this.push_name_get_idx(name);
         decl.structDecl.fields.init(&this.allocator);
         declIdx = this.push_decl_get_idx(&decl);
-        declaredStructs.set(name, declIdx);
+        globals::declaredStructs.set(name, declIdx);
     } else {
         declIdx = found;
     }
@@ -253,7 +252,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 			// Parse field: <type> <name> ;
 			TypeAst fieldType = this.parse_type_ast();
 			this.consume(TokenType.IDENTIFIER, "Expected field name.");
-			NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value);
+			NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value());
 			FieldAst field = {.type = fieldType, .nameIdx = fieldNameIdx};
 			usz fieldsCount = decl.structDecl.fields.len();
 			field.idxInFields = fieldsCount;
@@ -262,7 +261,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 		}else if (this.match(TokenType.METHOD)){
 			TypeAst retType = this.parse_type_ast();
 			this.consume(TokenType.IDENTIFIER, "Expected method name.");
-			NameIdx methodNameIdx = this.push_name_get_idx(this.previous.value);
+			NameIdx methodNameIdx = this.push_name_get_idx(this.previous.value());
 			MethodDeclAst method = {};
 			method.returnType = retType;
 			method.nameIdx = methodNameIdx;
@@ -289,9 +288,9 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 
 fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
 {
-    debug::@log_compilation("dot at %s at %s", this.previous.value, this.current.value);
+    debug::@log_compilation("dot at %s at %s", this.previous.value(), this.current.value());
 
-    String memberName = this.current.value;
+    String memberName = this.current.value();
     this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
     
     NameIdx nameIdx = this.push_name_get_idx(memberName);
@@ -309,9 +308,9 @@ fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
 
 fn ExprIdx Parser.this_kwrd(Parser* this)
 {
-    debug::@log_compilation("this_kwrd at %s", this.previous.value, this.current.value);
+    debug::@log_compilation("this_kwrd at %s", this.previous.value(), this.current.value());
 
-    String memberName = this.current.value;
+    String memberName = this.current.value();
     Expr expr = {.kind = ExprKind.THIS};
     expr.span = {.line = this.previous.line};
     ExprIdx index = this.push_expr_get_idx(&expr);
@@ -323,12 +322,12 @@ fn ExprIdx Parser.this_kwrd(Parser* this)
 
 fn StmtIdx Parser.var_declaration(Parser* this)
 {
-    debug::@log_compilation("var_declaration at %s", this.current.value);
+    debug::@log_compilation("var_declaration at %s", this.current.value());
     int line = this.current.line;
 
     TypeAst type = this.parse_type_ast();
     this.consume(TokenType.IDENTIFIER, "Expected variable name");
-    NameIdx nameIdx = this.push_name_get_idx(this.previous.value);
+    NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
 
     ExprIdx initIdx = NO_IDX;
     if (this.match(TokenType.EQUAL)) {
@@ -345,8 +344,8 @@ fn StmtIdx Parser.var_declaration(Parser* this)
 
 fn ExprIdx Parser.variable(Parser* this)
 {
-    debug::@log_compilation("variable at %s", this.previous.value);
-    NameIdx nameIdx = this.push_name_get_idx(this.previous.value);
+    debug::@log_compilation("variable at %s", this.previous.value());
+    NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
     Expr expr = {.kind = ExprKind.VAR, .varExpr = nameIdx};
     expr.span = {.line = this.previous.line};
     return this.push_expr_get_idx(&expr);
@@ -356,17 +355,17 @@ fn ExprIdx Parser.variable(Parser* this)
 
 fn DeclIdx Parser.fun_declaration(Parser* this)
 {
-    debug::@log_compilation("fun_declaration at %s", this.current.value);
+    debug::@log_compilation("fun_declaration at %s", this.current.value());
 
     // return type
     TypeAst ret = this.parse_type_ast(); // consumes it
 
     // function name
     this.consume(TokenType.IDENTIFIER, "Expected function name after return type");
-    String fnName = this.previous.value;
+    String fnName = this.previous.value();
 
     // must exist from predeclaration
-    DeclIdx? declIdxOpt = declaredFunctions.get(fnName);
+    DeclIdx? declIdxOpt = globals::declaredFunctions.get(fnName);
     if (catch notFound = declIdxOpt) {
         this.error("No function pre-declared with name at %s", fnName);
         return NO_IDX;
@@ -425,7 +424,7 @@ fn ParamAst Parser.fun_param(Parser* this)
     
     this.consume(TokenType.IDENTIFIER, "Expected parameter name");
     
-    NameIdx nameIdx = this.push_name_get_idx(this.previous.value);
+    NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
     param.type = type;
     param.nameIdx = nameIdx;
     param.span = {.line = this.previous.line};
@@ -444,7 +443,7 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
     }
 
     // match_any_type_token advanced, so `previous` is the type token
-    NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value);
+    NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
     return {.tokenType = this.previous.tokenType, .nameIdx = typeNameIdx};
 }
 
@@ -486,7 +485,7 @@ fn ExprIdx Parser.expression(Parser* this)
 
 fn ExprIdx Parser.new_expr(Parser* this)
 {
-    debug::@log_compilation("new_expr at %s", this.previous.value);
+    debug::@log_compilation("new_expr at %s", this.previous.value());
 	TypeAst targetType = this.parse_type_ast();
     Expr expr = { .kind = ExprKind.NEW};
     expr.span = {.line = this.previous.line};
@@ -542,32 +541,32 @@ fn ExprIdx Parser.grouping(Parser* this)
 
 fn ExprIdx Parser.number(Parser* this)
 {
-    debug::@log_compilation("number at %s", this.previous.value);
+    debug::@log_compilation("number at %s", this.previous.value());
     Expr expr;
     switch (this.previous.tokenType) {
         case TokenType.INTEGER:
-            int? ival = String.to_int(this.previous.value);
+            int? ival = String.to_int(this.previous.value());
 			if(catch notParsable = ival) {
-				this.error("%s is not an valid int", this.previous.value);
+				this.error("%s is not an valid int", this.previous.value());
 				return NO_IDX;
 			}
             expr = {.kind = ExprKind.INT, .intLiteral = ival};
         case TokenType.FLOAT:
-            float? fval = String.to_float(this.previous.value);
+            float? fval = String.to_float(this.previous.value());
 			if(catch notParsable = fval) {
-				this.error("%s is not an valid float", this.previous.value);
+				this.error("%s is not an valid float", this.previous.value());
 				return NO_IDX;
 			}
             expr = {.kind = ExprKind.FLOAT, .floatLiteral = fval};
         case TokenType.DOUBLE:
-            double? dval = String.to_double(this.previous.value);
+            double? dval = String.to_double(this.previous.value());
 			if(catch notParsable = dval) {
-				this.error("%s is not an valid double", this.previous.value);
+				this.error("%s is not an valid double", this.previous.value());
 				return NO_IDX;
 			}
             expr = {.kind = ExprKind.DOUBLE, .doubleLiteral = dval};
         default:
-            this.error("Unknown type at %s", this.previous.value);
+            this.error("Unknown type at %s", this.previous.value());
     }
     expr.span = {.line = this.previous.line};
     return this.push_expr_get_idx(&expr);
@@ -575,7 +574,7 @@ fn ExprIdx Parser.number(Parser* this)
 
 fn ExprIdx Parser.string(Parser* this)
 {
-    String source = this.previous.value;
+    String source = this.previous.value();
     NameIdx nameIdx = this.push_name_get_idx(source);
     Expr expr = {.kind = ExprKind.STRING, .stringLiteral = nameIdx};
     ExprIdx exprIdx = this.push_expr_get_idx(&expr);

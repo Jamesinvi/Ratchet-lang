@@ -1,6 +1,7 @@
 
 module parser::analyzer;
 import common;
+import globals;
 import std::collections::list;
 import log;
 	
@@ -45,57 +46,60 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			if (lastChar == '&' || lastChar == '*') {
 				if (typeName.len < 2) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 				String baseName = typeName.[0 .. typeName.len - 1];
-				DeclIdx? found = parser::declaredStructs.get(baseName);
+				DeclIdx? found = globals::declaredStructs.get(baseName);
 				if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 				result.type = (lastChar == '&') ? ValueType.REF : ValueType.PTR;
 				result.refToType = ValueType.STRUCT;
-				if(!parser::structNamesToIdx.has_key(baseName)){
-					usz nextIdx = parser::structTypes.len();
+				usz? structTypeIdx = globals::structNamesToIdx.get(baseName);
+				if (catch err = structTypeIdx) {
+					usz nextIdx = globals::structTypes.len();
 					CompStructTypeInfo structInfo = {};
-					parser::structTypes.push(structInfo);
-					String nameCopy = String.copy(baseName, mem);
-					parser::structNamesToIdx[nameCopy] = nextIdx;
+					globals::structTypes.push(structInfo);
+					String nameCopy = String.copy(baseName, &this.allocator);
+					globals::structNamesToIdx[nameCopy] = nextIdx;
+					result.structTypeIndex = (uint)nextIdx;
+				} else {
+					result.structTypeIndex = (uint)structTypeIdx;
 				}
-				usz? structTypeIdx = parser::structNamesToIdx.get(baseName);
-				if (catch err = structTypeIdx) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
-				result.structTypeIndex = (uint)structTypeIdx;
 				return type_ok(result);
 			}
 
 			// Try structs
-			DeclIdx? found = parser::declaredStructs.get(typeName);
+			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.STRUCT;
-			if(!parser::structNamesToIdx.has_key(typeName)){
-				usz nextIdx = parser::structTypes.len();
+			usz? structTypeIdx = globals::structNamesToIdx.get(typeName);
+			if (catch err = structTypeIdx) {
+				usz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
-				parser::structTypes.push(structInfo);
-				String nameCopy = String.copy(typeName, mem);
-				parser::structNamesToIdx[nameCopy] = nextIdx;
+				globals::structTypes.push(structInfo);
+				String nameCopy = String.copy(typeName, &this.allocator);
+				globals::structNamesToIdx[nameCopy] = nextIdx;
+				result.structTypeIndex = (uint)nextIdx;
+			} else {
+				result.structTypeIndex = (uint)structTypeIdx;
 			}
-			usz? structTypeIdx = parser::structNamesToIdx.get(typeName);
-			if (catch err = structTypeIdx) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
-			result.structTypeIndex = (uint)structTypeIdx;
 			return type_ok(result);
 		}
 		case TokenType.THIS:			
 		{
 			String typeName = this.ast.names[input.nameIdx];
-			DeclIdx? found = parser::declaredStructs.get(typeName);
+			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.BORROW_REF;
 			
-			if(!parser::structNamesToIdx.has_key(typeName)){
-				usz nextIdx = parser::structTypes.len();
+			usz? structTypeIdx = globals::structNamesToIdx.get(typeName);
+			if (catch err = structTypeIdx) {
+				usz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
-				parser::structTypes.push(structInfo);
-				String nameCopy = String.copy(typeName, mem);
-				parser::structNamesToIdx[nameCopy] = nextIdx;
+				globals::structTypes.push(structInfo);
+				String nameCopy = String.copy(typeName, &this.allocator);
+				globals::structNamesToIdx[nameCopy] = nextIdx;
+				result.structTypeIndex = (uint)nextIdx;
+			}else{
+				result.structTypeIndex = (uint)structTypeIdx;
 			}
-			usz? structTypeIdx = parser::structNamesToIdx.get(typeName);
-			if (catch err = structTypeIdx) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.refToType = ValueType.STRUCT;
-			result.structTypeIndex = (uint)structTypeIdx;
 			return type_ok(result);
 		}
 		default: 						return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);

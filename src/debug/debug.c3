@@ -1,6 +1,6 @@
 module debug;
 import vm;
-import tokenizer;
+import lexer;
 import common;
 import parser;
 import log;
@@ -18,7 +18,7 @@ macro @print_disassembly(Vm* vm){
     $endif
 }
 
-macro @print_tokens(tokenizer::Tokenizer* sc){
+macro @print_tokens(lexer::Lexer* sc){
     $if ($feature(SHOW_TOKENS)):
         sc.print_tokens();
     $endif

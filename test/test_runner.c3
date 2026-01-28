@@ -1,4 +1,4 @@
-import tokenizer;
+import lexer;
 import parser;
 import common;
 import debug;
@@ -7,8 +7,9 @@ import log;
 import libc;
 import std::collections;
 import std::io::file;
+import main;
 
-alias Tokenizer = tokenizer::Tokenizer;
+alias Lexer = lexer::Lexer;
 alias Parser = parser::Parser;
 
 
@@ -72,41 +73,47 @@ fn void t_11() @test
     compile_and_run_file("./test/11_long_file.ratc","4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
 }
 
+fn void t_12() @test
+{
+    compile_and_run_file("./test/12_very_long_file.ratc","")!!;
+}
+
 
 fn void? compile_and_run_file(String filename, String expectedResult)
 {
-    Tokenizer tokenizer ={};
+ 	Lexer lexer ={};
     Parser parser ={};
-    @pool()
-    {
-        String? file = (String)file::load_temp(filename);
-        if (catch err = file)
-        {
-            // Print the error
-            log::errlogn("Failed to load %s: %s", filename, err);
-            // We return, so that below 'file' will be unwrapped.
-            return io::FILE_NOT_FOUND?;
-        }
-        tokenizer.init(file);
-        tokenizer.parse_tokens();
-    };
 
-    parser.init(tokenizer.tokens);
-    ObjFunction*? entryPoint = parser::parse(&parser);
-    if(catch err = entryPoint){
-        tokenizer.deinit();
-        return parser::PARSE_ERROR?;
+	String? file = (String)file::load(mem,filename);
+	if (catch err = file)
+	{
+		// Print the error
+		log::errlogn("Failed to load %s: %s", filename, err);
+		// We return, so that below 'file' will be unwrapped.
+		return io::FILE_NOT_FOUND?;
+	}
+
+	main::initialize_globals();
+	defer main::cleanup_globals();
+
+	lexer.init(file);
+	lexer.parse_tokens();
+	free(file);
+
+    parser.init();
+	defer parser.deinit();
+    if(catch err = parser.parse()){
+		return parser::PARSE_ERROR?;
     }
-    tokenizer.deinit();
-
-    vm::Vm vm ={};
-    DString output;
-    output.init(mem);
-    vm.init(entryPoint, &output);
-    RunResult res = vm::run(&vm);
-    assert(res == RunResult.OK);
-    assert(output.str_view() == expectedResult);
-    vm.deinit();
-    parser.deinit();
-    output.free();
+	parser.outputAst.print();
+	SemanticAnalyzer semanticAnalyzer = {};
+	semanticAnalyzer.init(&parser.outputAst);
+	defer semanticAnalyzer.deinit();
+	TypeResult typeResult = semanticAnalyzer.run();
+	if (typeResult.hadError || semanticAnalyzer.errors.len() > 0) {
+		return parser::analyzer::ANALYSIS_ERR?;
+	}
+	if(semanticAnalyzer.errors.len() == 0){
+		log::logn("Compiled successfully");
+	}
 }

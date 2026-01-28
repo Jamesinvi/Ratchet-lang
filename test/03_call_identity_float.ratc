@@ -1,6 +1,6 @@
 fn bool program() {
     echo(test(2.3f));
-    return;
+    return false;
 }
 
 fn float test(float t) {

@@ -7,5 +7,5 @@ fn bool program(){
 	echo (i);
 	double end = clock();
 	echo(end-start);
-	return;
+	return false;
 }

@@ -1,5 +1,6 @@
 module parser;
 import common;
+import globals;
 import common::stack;
 import std::collections::list;
 import libc;
@@ -66,7 +67,7 @@ fn void Parser.warning_at(Parser* this, Token* token, String msg)
     if (this.panicMode) return;
 
     log::errlog("[line %d] Warning", token.line);
-    log::errlog(" at '%s'", token.value);
+    log::errlog(" at '%s'", token.value());
     log::errlog(", %s \n", msg);
 }
 
@@ -86,7 +87,7 @@ fn void Parser.error_at(Parser* this, Token* token, String msg, args ...)
     if (token.tokenType == TokenType.EOF) {
         log::errlog(" at end, ");
     } else {
-        log::errlog(" at '%s', ", token.value);
+        log::errlog(" at '%s', ", token.value());
     }
 
     log::errlogn(msg, ...args);
@@ -97,7 +98,7 @@ fn void Parser.error_at(Parser* this, Token* token, String msg, args ...)
 
 fn bool identifiers_equal(Token* a, Token* b) @inline
 {
-    return strings_equal(a.value, b.value);
+    return strings_equal(a.value(), b.value());
 }
 
 fn bool strings_equal(String a, String b)
@@ -128,25 +129,30 @@ fn ushort Parser.ensure_constant(Parser* this, int constantIndex)
 
 fn void Parser.predeclare_structs(Parser* this)
 {
+	assert(globals::declaredStructs.is_initialized());
+	assert(globals::declaredStructs.table.len > 0);
+
     // Look for patterns: struct <name>
     for (usz i = 0; i < this.input.len() - 2; i++) {
         Token* t = &this.input[i];
         if (t.tokenType == TokenType.STRUCT_T) {
 			int scopeCloseExpected = 1;
             Token* nameTok = &this.input[i + 1];
-            debug::@log_compilation("pre-declaring struct with name '%s'", nameTok.value);
             // We push a temporary declaration that will have to be filled in later
             Decl decl = {.kind = DeclKind.STRUCT};
             decl.structDecl = {};
-            NameIdx nameIdx = this.push_name_get_idx(nameTok.value);
+            NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
             decl.structDecl.nameIdx = nameIdx;
             DeclIdx declIdx = this.push_decl_get_idx(&decl);
-            declaredStructs.set(nameTok.value, declIdx);
+
             // Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
-            String starName = nameTok.value.concat(&this.allocator, "*");
-            declaredStructs.set(starName, declIdx);
-            String ampName = nameTok.value.concat(&this.allocator, "&");
-            declaredStructs.set(ampName, declIdx);
+            String starName = nameTok.value().concat(&globals::allocator, "*");
+            String ampName = nameTok.value().concat(&globals::allocator, "&");
+
+            debug::@log_compilation("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
+            globals::declaredStructs.set(nameTok.value(), declIdx);
+            globals::declaredStructs.set(starName, declIdx);
+            globals::declaredStructs.set(ampName, declIdx);
 		}
     }
 }
@@ -159,17 +165,17 @@ fn void Parser.predeclare_functions(Parser* this)
         if (t.tokenType == TokenType.FN) {
             Token* typeTok = &this.input[i + 1];
             Token* nameTok = &this.input[i + 2];
-            debug::@log_compilation("pre-declaring function '%s' with return type {%s}", nameTok.value, typeTok.value);
             // We push a temporary declaration that will have to be filled in later
             Decl decl = {.kind = DeclKind.FUNCTION};
             decl.fnDecl = {};
-            NameIdx returnTypeNameIdx = this.push_name_get_idx(typeTok.value);
+            NameIdx returnTypeNameIdx = this.push_name_get_idx(typeTok.value());
             TypeAst returnTypeAst = {.tokenType = typeTok.tokenType, .nameIdx = returnTypeNameIdx};
-            NameIdx nameIdx = this.push_name_get_idx(nameTok.value);
+            NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
             decl.fnDecl.returnType = returnTypeAst;
             decl.fnDecl.nameIdx = nameIdx;
+            debug::@log_compilation("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), typeTok.value(), nameIdx);
             DeclIdx declIdx = this.push_decl_get_idx(&decl);
-            declaredFunctions.set(nameTok.value, declIdx);
+            globals::declaredFunctions.set(nameTok.value(), declIdx);
         }
     }
 }
@@ -196,6 +202,7 @@ fn NameIdx Parser.push_name_get_idx(Parser* this, String toCopy){
     NameIdx index = this.outputAst.names.len();
     String copy = String.copy(toCopy, &this.allocator);
     this.outputAst.names.push(copy);
+	assert(this.outputAst.names.len() == index + 1);
     return index;
 }
 

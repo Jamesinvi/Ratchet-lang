@@ -1,6 +1,6 @@
 fn bool program() {
     echo(test(2.3));
-    return;
+    return false;
 }
 
 fn double test(double t) {

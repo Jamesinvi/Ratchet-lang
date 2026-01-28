@@ -1,5 +1,6 @@
 module parser;
 import common;
+import globals;
 import log;
 
 
@@ -22,7 +23,7 @@ fn bool Token.is_any_type(Token* t)
 
 fn bool Token.is_struct_type(Token* t)
 {
-    bool typeAlreadyDeclared = str_is_struct_type(t.value);
+    bool typeAlreadyDeclared = str_is_struct_type(t.value());
     return t.matches_type(TokenType.IDENTIFIER) && typeAlreadyDeclared;
 }
 
@@ -30,9 +31,9 @@ fn bool Token.is_struct_ref(Token* t)
 {
     if (!t.matches_type(TokenType.IDENTIFIER)) return false;
 
-	char tokenLastChar = t.value[t.value.len-1];
+	char tokenLastChar = t.value()[t.value().len-1];
 	if(tokenLastChar != '&') return false;
-	String refStructName = t.value.[0 .. t.value.len-2];
+	String refStructName = t.value().[0 .. t.value().len-2];
 	return str_is_struct_type(refStructName);
 }
 
@@ -40,16 +41,16 @@ fn bool Token.is_struct_ptr(Token* t)
 {
     if (!t.matches_type(TokenType.IDENTIFIER)) return false;
 
-	char tokenLastChar = t.value[t.value.len-1];
+	char tokenLastChar = t.value()[t.value().len-1];
 	if(tokenLastChar != '*') return false;
-	String refStructName = t.value.[0 .. t.value.len-2];
+	String refStructName = t.value().[0 .. t.value().len-2];
 	return str_is_struct_type(refStructName);
 }
 
 
 fn bool str_is_struct_type(String str) @inline
 {
-	return declaredStructs.has_key(str);
+	return globals::declaredStructs.has_key(str);
 }
 
 // ------------TokenType based matches------------

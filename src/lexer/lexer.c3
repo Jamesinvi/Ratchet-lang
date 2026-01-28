@@ -1,56 +1,44 @@
-module tokenizer;
+module lexer;
 import common;
+import globals;
 import std::collections;
 import libc;
 import log;
 
 faultdef INVALID_TOKEN;
 
-struct Tokenizer
+struct Lexer
 {
     String input;
     int line;
     int current;
     int column;
     int start;
-    List{Token} tokens;
-
-    TrackingAllocator allocator;
 }
 
-fn void Tokenizer.init(Tokenizer* this, String inputString) {
-    this.allocator.init(mem);
-    this.input = String.copy(inputString, &this.allocator);
+fn void Lexer.init(Lexer* this, String inputString) {
+	this.input = inputString;
     this.line = 1;
     this.current = 0;
     this.column = 0;
     this.start = 0;
-    this.tokens.init(&this.allocator);
 }
 
-fn void Tokenizer.print_tokens(Tokenizer* this){
-    foreach (t : this.tokens){
-        t.debug_print();
+fn void Lexer.print_tokens(Lexer* this){
+    foreach (t : globals::tokens){
+		log::logn("[%s: \"%s\"]", t.tokenType, t.value());
     }
-}
-fn void Tokenizer.deinit(Tokenizer* this)
-{
-    foreach (t : this.tokens) {
-        t.value.free(&this.allocator);
-    }
-    this.tokens.free();
-    this.input.free(&this.allocator);
-    this.allocator.free();
 }
 
-fn void Tokenizer.parse_tokens(Tokenizer* this) {
+fn void Lexer.parse_tokens(Lexer* this) {
     while (!this.is_at_end()) {
         this.parse_token();
     }
     this.add_token(TokenType.EOF);
+
 }
 
-fn void Tokenizer.parse_token(Tokenizer* this) {
+fn void Lexer.parse_token(Lexer* this) {
     this.start = this.current;
     char character = this.advance();
     this.column += 1;
@@ -101,15 +89,15 @@ fn void Tokenizer.parse_token(Tokenizer* this) {
 
 }
 
-fn char Tokenizer.advance(Tokenizer* this) {
+fn char Lexer.advance(Lexer* this) {
     return this.input[this.current++];
 }
 
-fn bool Tokenizer.is_at_end(Tokenizer* this) {
+fn bool Lexer.is_at_end(Lexer* this) {
     return this.current >= this.input.len;
 }
 
-fn bool Tokenizer.match_c(Tokenizer* this, char c) {
+fn bool Lexer.match_c(Lexer* this, char c) {
     if (this.is_at_end()) return false;
     if (this.peek() == c) {
         this.advance();
@@ -118,7 +106,7 @@ fn bool Tokenizer.match_c(Tokenizer* this, char c) {
     return false;
 }
 
-fn bool Tokenizer.match_s(Tokenizer* this, String str) {
+fn bool Lexer.match_s(Lexer* this, String str) {
     if (this.is_at_end()) return false;
 
     int indexBeforeMatch = this.current;
@@ -141,25 +129,30 @@ fn bool Tokenizer.match_s(Tokenizer* this, String str) {
     return true;
 }
 
-fn char Tokenizer.peek(Tokenizer* this) {
+fn char Lexer.peek(Lexer* this) {
     if (this.is_at_end()) return '\0';
     return this.input[this.current];
 }
 
-fn char Tokenizer.peek_at(Tokenizer* this, int distance) {
+fn char Lexer.peek_at(Lexer* this, int distance) {
     if (this.is_at_end()) return '\0';
     return this.input[this.current + distance];
 }
 
 
-fn void Tokenizer.add_token(Tokenizer* this, TokenType tokenType) {
-    String lexeme = String.copy(this.input[this.start .. this.current-1], &this.allocator);
-    Token token = { tokenType, this.line, lexeme };
-    this.tokens.push(token);
+fn void Lexer.add_token(Lexer* this, TokenType tokenType) {
+    String lexeme = "";
+	lexeme = String.copy(this.input[this.start .. this.current -1], &globals::allocator);
+	usz tokenValueIdx = globals::tokenValues.len();
+	assert(this.start <= this.current);
+	assert(this.current <= this.input.len);
+	globals::tokenValues.push(lexeme);
+    Token token = { tokenType, this.line, tokenValueIdx };
+    globals::tokens.push(token);
 }
 
 
-fn void Tokenizer.string(Tokenizer* this) {
+fn void Lexer.string(Lexer* this) {
     this.start=this.current;
     while (this.peek() != '"' && !this.is_at_end()) {
         if (this.peek() == '\n') {
@@ -178,7 +171,7 @@ fn void Tokenizer.string(Tokenizer* this) {
 
 }
 
-fn void Tokenizer.number(Tokenizer* this) {
+fn void Lexer.number(Lexer* this) {
     bool isDecimal = false;
     bool isFloat   = false;
 
@@ -211,9 +204,9 @@ fn void Tokenizer.number(Tokenizer* this) {
     }
 }
 
-fn void Tokenizer.keyword(Tokenizer* this) {
+fn void Lexer.keyword(Lexer* this) {
     foreach (k : common::keywords) {
-        if (this.match_s(k.value)) {
+        if (this.match_s(k.string)) {
             this.add_token(k.tokenType);
             return;
         }
@@ -233,10 +226,10 @@ fn void error_lin(int l, int c, String msg) {
     log::errlogn("Error on line: %d:%d, %s", l, c, msg);
 }
 
-fn void error_tok(Token token, String message) {
+fn void error_tok(Token token,  String message) {
     if (token.tokenType == TokenType.EOF) {
         log::errlogn("%d, at end, %s",token.line, message);
     } else {
-        log::errlogn("%d, at '%s' %s",token.line, token.value, message);
+        log::errlogn("%d, at '%s' %s",token.line, token.value(), message);
     }
 }

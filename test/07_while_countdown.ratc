@@ -4,5 +4,5 @@ fn bool program() {
         echo(i);
         i = i - 1;
     }
-    return;
+    return false;
 }

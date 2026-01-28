@@ -3,7 +3,7 @@ import std::collections::list;
 import log;
 alias Byte = char;
 
-struct Chunk (DebugPrintable)
+struct Chunk
 {
     ushort constantsCount;
     ushort totalConstantsBytes;
@@ -35,7 +35,7 @@ fn void Chunk.append_to_chunk(Chunk* chunk, Byte toWrite, int line){
     chunk.lines.push(line);
 }
 
-fn void Chunk.debug_print(Chunk* chunk) @dynamic{
+fn void Chunk.debug_print(Chunk* chunk) {
     log::log("Constants: [");
     foreach (idx, constant : chunk.debugConstantsSlots){
         if(idx>0){

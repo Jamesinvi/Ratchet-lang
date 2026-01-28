@@ -1,5 +1,6 @@
 module parser;
 import common;
+import globals;
 import std::io;
 import std::collections::list;
 alias NativeFn = fn double();
@@ -25,7 +26,7 @@ fn ushort get_obj_pointee_size(CompTypeInfo info)
      // It must be a reference for this function to make sense
     assert(is_ref(info));
     if(info.refToType == ValueType.STRUCT){
-        return structTypes[info.structTypeIndex].sizeInBytes;
+        return globals::structTypes[info.structTypeIndex].sizeInBytes;
     }
     return 0;
 }

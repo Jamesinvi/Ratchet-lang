@@ -82,10 +82,45 @@ struct Decl
 
 fn void ProgramAst.init(ProgramAst* this, Allocator allocator)
 {
-    this.declarations.init(allocator);
-    this.statements.init(allocator);
-    this.expressions.init(allocator);
-    this.names.init(allocator);
+    this.declarations.init(allocator, 1024);
+    this.statements.init(allocator, 1024);
+    this.expressions.init(allocator, 1024);
+    this.names.init(allocator, 1024);
+}
+
+fn void ProgramAst.free(ProgramAst* this, Allocator allocator)
+{
+	foreach(name : this.names){
+		name.free(allocator);
+	}
+	foreach(decl : this.declarations){
+		if(decl.kind == DeclKind.STRUCT){
+			foreach(method : decl.structDecl.methods){
+				method.params.free();
+			}
+			decl.structDecl.methods.free();
+			decl.structDecl.fields.free();
+		}else if (decl.kind == FUNCTION){
+			decl.fnDecl.params.free();
+		}
+	}
+
+	foreach(stmt : this.statements){
+		if(stmt.kind == StmtKind.BLOCK){
+			stmt.blockStmt.stmts.free();
+		}
+	}
+
+	foreach(expr : this.expressions){
+		if(expr.kind == ExprKind.CALL){
+			expr.call.args.free();
+		}
+	}
+	
+	this.names.free();
+	this.declarations.free();
+    this.statements.free();
+    this.expressions.free();
 }
 
 fn void ProgramAst.print_indent(ProgramAst* this, int indent)

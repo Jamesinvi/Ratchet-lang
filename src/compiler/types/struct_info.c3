@@ -38,23 +38,3 @@ struct MethodInfo
 	String name;
 	ushort arity;
 }
-
-// This map is used by the parser so the user can't define the same struct twice
-HashMap{String, DeclIdx} declaredStructs;
-HashMap{String, DeclIdx} declaredFunctions;
-
-// This map maps a struct name to its index in structTypes
-HashMap{String, usz} structNamesToIdx;
-List{CompStructTypeInfo} structTypes;
-
-fn void clean_up_struct_globals(){
-    foreach(structTypeInfo : structTypes){
-        foreach(fieldInfo : structTypeInfo.fieldInfos){
-            fieldInfo.name.free(mem);
-        }
-        structTypeInfo.fieldInfos.free();
-        structTypeInfo.name.free(mem);
-    }
-    structTypes.free();
-    declaredStructs.clear();
-}

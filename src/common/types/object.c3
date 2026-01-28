@@ -16,7 +16,7 @@ enum ObjType : Byte
 
 // -------- STRUCTS -----------
 
-struct Obj (DebugPrintable)  @align(16)
+struct Obj @align(16)
 {
     ObjType type;
     bool isConstant;
@@ -123,7 +123,7 @@ fn ObjNative* create_obj_native(NativeFn* function){
     return object;
 }
 
-fn void Obj.debug_print(Obj* this) @dynamic {
+fn void Obj.debug_print(Obj* this) {
     io::printf("%s, ", ObjType.names[this.type.ordinal]);
     if(this.allocIndex < ulong.max){
         io::printf("%d", this.allocIndex);

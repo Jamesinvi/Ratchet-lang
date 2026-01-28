@@ -4,7 +4,7 @@ import std::collections;
 import log;
 alias FreeSlotsStack = common::stack::Stack{ulong};
 
-struct HeapTracker (DebugPrintable)
+struct HeapTracker
 {
     List{Obj*} objects;
     HashSet{ulong} usedSlots;
@@ -76,7 +76,7 @@ fn void HeapTracker.retain_obj(HeapTracker* this, Obj* trackedObj){
     trackedObj.refCounter++;
 }
 
-fn void HeapTracker.debug_print(HeapTracker* this) @dynamic {
+fn void HeapTracker.debug_print(HeapTracker* this) {
     log::logn("===========%s===========", this.name);
     foreach (idx, potentialSlot : this.objects){
         if(this.usedSlots.contains(idx)){
