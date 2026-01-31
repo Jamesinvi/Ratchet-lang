@@ -1,5 +1,6 @@
 module globals;
 import parser;
+import common;
 import parser::analyzer;
 import std::collections::list;
 import std::collections::map;

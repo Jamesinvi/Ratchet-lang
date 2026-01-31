@@ -90,7 +90,7 @@ fn void? compile_and_run_file(String filename, String expectedResult)
 		// Print the error
 		log::errlogn("Failed to load %s: %s", filename, err);
 		// We return, so that below 'file' will be unwrapped.
-		return io::FILE_NOT_FOUND?;
+		return io::FILE_NOT_FOUND~;
 	}
 
 	main::initialize_globals();
@@ -103,7 +103,7 @@ fn void? compile_and_run_file(String filename, String expectedResult)
     parser.init();
 	defer parser.deinit();
     if(catch err = parser.parse()){
-		return parser::PARSE_ERROR?;
+		return parser::PARSE_ERROR~;
     }
 	parser.outputAst.print();
 	SemanticAnalyzer semanticAnalyzer = {};
@@ -111,7 +111,7 @@ fn void? compile_and_run_file(String filename, String expectedResult)
 	defer semanticAnalyzer.deinit();
 	TypeResult typeResult = semanticAnalyzer.run();
 	if (typeResult.hadError || semanticAnalyzer.errors.len() > 0) {
-		return parser::analyzer::ANALYSIS_ERR?;
+		return parser::analyzer::ANALYSIS_ERR~;
 	}
 	if(semanticAnalyzer.errors.len() == 0){
 		log::logn("Compiled successfully");

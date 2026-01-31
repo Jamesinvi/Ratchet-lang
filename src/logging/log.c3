@@ -1,8 +1,6 @@
 module log;
 import std::io;
 
-
-
 fn void log(String msg, args ...){
     io::printf(msg,...args);
 }

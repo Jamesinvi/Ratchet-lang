@@ -16,13 +16,13 @@ enum DeclKind : char
     STRUCT,
 }
 
-
 struct ProgramAst
 {
     List{Decl}      declarations;
     List{Stmt}      statements;      // global statement list indexed by nodes
     List{Expr}      expressions;     // global expression list indexed by nodes
     List{String}    names;           // global name list indexed by nodes
+	List{ExprIdx}	args;			 // global function argument list, indices into expression list
 }
 
 struct ParamAst
@@ -80,12 +80,123 @@ struct Decl
     }
 }
 
+
+enum ExprKind : char
+{
+    INT,
+    FLOAT,
+    DOUBLE,
+    BOOL,
+    NULL,
+    STRING,
+    VAR,        // identifier
+    UNARY,      // -x, !x
+    BINARY,     // x + y, x * y, ...
+    CALL,       // f(a,b)
+    MEMBER,     // a.b
+    NEW,        // new
+    GROUP,      // (x) optional; often you skip this and just use Span
+    THIS,       // used in methods to get borrowed ref
+}
+
+enum BinOp : char (String asStr)
+{
+    ADD         = "add",
+    SUB         = "sub", 
+    MUL         = "mul", 
+    DIV         = "div", 
+    EQ          = "eq", 
+    NEQ         = "noteq", 
+    LESS        = "less", 
+    LESS_EQ     = "lesseq", 
+    GREATER     = "greater", 
+    GREATER_EQ  = "greatereq", 
+    AND         = "and", 
+    OR          = "or",
+    AS          = "as",
+    ASSIGN      = "assign",
+}
+
+enum UnOp  : char (String asStr)
+{ 
+    NEG         = "neg",
+    NOT         = "not"
+}
+
+
+
+struct ExprUnary    { UnOp op;           ExprIdx rhs; }
+struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
+struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd; }
+struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
+struct ExprNew		{ TypeAst type; }
+
+struct Expr
+{
+    ExprKind kind;
+    Span span;
+    union
+    {
+        // Literals
+        int         intLiteral;
+        float       floatLiteral;
+        double      doubleLiteral;
+        bool        boolLiteral;
+        NameIdx     varExpr;
+        NameIdx     stringLiteral;
+        // Operation expressions
+        ExprUnary   unary;
+        ExprBinary  binary;
+        ExprCall    call;
+        ExprMember  member;
+		ExprNew 	new;
+    }    
+}
+
+
+enum StmtKind : char
+{
+    EXPR,   // x;
+    ECHO,   // echo(x);
+    DECL,   // T x = expr;
+    WHILE, 
+    IF,
+    BLOCK,
+    RETURN,
+    FOR,    // for(DECL,expr,expr)
+}
+
+struct VarDeclStmt  { TypeAst type; NameIdx nameIdx;    ExprIdx init;}
+struct IfStmt       { ExprIdx cond; StmtIdx thenBlock;  StmtIdx elseBlock; }
+struct WhileStmt    { ExprIdx cond; StmtIdx body; }
+struct BlockStmt    { List{StmtIdx} stmts; }
+struct RetStmt      { ExprIdx value;}
+
+
+struct Stmt
+{
+    StmtKind kind;
+    Span span;
+    union
+    {
+        ExprIdx     exprStmt;
+        ExprIdx     echoStmt;
+        VarDeclStmt varDecl;    // init may be no NO_IDX
+        IfStmt      ifStmt;     // else block might NO_IDX (only if exists)
+        WhileStmt   whileStmt;  
+        BlockStmt   blockStmt;
+        RetStmt     retStmt;    // value might be NO_IDX ("return;")
+    }
+}
+
+
 fn void ProgramAst.init(ProgramAst* this, Allocator allocator)
 {
     this.declarations.init(allocator, 1024);
     this.statements.init(allocator, 1024);
     this.expressions.init(allocator, 1024);
     this.names.init(allocator, 1024);
+	this.args.init(allocator, 1024);
 }
 
 fn void ProgramAst.free(ProgramAst* this, Allocator allocator)
@@ -110,17 +221,12 @@ fn void ProgramAst.free(ProgramAst* this, Allocator allocator)
 			stmt.blockStmt.stmts.free();
 		}
 	}
-
-	foreach(expr : this.expressions){
-		if(expr.kind == ExprKind.CALL){
-			expr.call.args.free();
-		}
-	}
 	
 	this.names.free();
 	this.declarations.free();
     this.statements.free();
     this.expressions.free();
+	this.args.free();
 }
 
 fn void ProgramAst.print_indent(ProgramAst* this, int indent)
@@ -332,9 +438,12 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 			log::log("call ");
             this.print_expression(&this.expressions[expr.call.callee]);
             log::log("(");
-            foreach(idx, argIdx : expr.call.args){
-                if (idx > 0) log::log(", ");
-                this.print_expression(&this.expressions[argIdx]);
+			int counter = 0;
+			for(usz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
+                if (counter > 0) log::log(", ");
+				ExprIdx argExprIdx = this.args[i];
+                this.print_expression(&this.expressions[argExprIdx]);
+				counter++;
             }
             log::log(")");
         }

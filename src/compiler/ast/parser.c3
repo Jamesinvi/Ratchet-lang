@@ -451,7 +451,6 @@ fn ExprIdx Parser.call(Parser* this, ExprIdx lhs)
 {
     Expr expr = {.kind = ExprKind.CALL};
     expr.call = {};
-    expr.call.init(&this.allocator);
     expr.call.callee = lhs;
     this.fill_call_args(&expr.call);
     ExprIdx exprIdx = this.push_expr_get_idx(&expr);
@@ -462,16 +461,20 @@ fn void Parser.fill_call_args(Parser* this, ExprCall* exprCall)
 {
     // We're CALLING a function, so we allow expressions as arguments
     // Consume as many as we can find.
+	exprCall.argsStart = this.outputAst.args.len();
+	int arityCounter = 0;
     if (!this.check(TokenType.RIGHT_PAREN)) {
         do {
             ExprIdx argExprIdx = this.expression();
-            if (exprCall.args.len() >= Byte.max) {
+            if (arityCounter >= Byte.max) {
                 this.error("Can't have more than 255 arguments");
             }
-            exprCall.args.push(argExprIdx);
+            this.outputAst.args.push(argExprIdx);
+			arityCounter++;
             // Remove all arguments from the type stack
         } while (this.match(TokenType.COMMA));
     }
+	exprCall.argsEnd = exprCall.argsStart + arityCounter;
 
     this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
 }

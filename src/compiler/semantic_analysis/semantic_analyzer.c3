@@ -170,13 +170,15 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 		return false;
 	}
 
-	foreach (argIdx : call.args){
-		TypeResult argType = this.analyze_expr(argIdx);
+	for(usz i = call.argsStart; i < call.argsEnd; i++) {
+		ExprIdx argExprIdx = this.ast.args[i];
+		TypeResult argType = this.analyze_expr(argExprIdx);
 		if (argType.hadError) {
 			*out = argType;
 			return true;
 		}
 	}
+
 	MethodDeclAst* methodDecl = &structDecl.structDecl.methods[methodIdx];
 	*out = this.create_type_from_ast(&methodDecl.returnType, span);
 	return true;
@@ -613,12 +615,15 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, Expr* e
 	if (calleeType.hadError) {
 		return calleeType;
 	}
-	foreach (argIdx : expr.call.args){
-		TypeResult argType = this.analyze_expr(argIdx);
+
+	for(usz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
+		ExprIdx argExprIdx = this.ast.args[i];
+		TypeResult argType = this.analyze_expr(argExprIdx);
 		if (argType.hadError) {
 			return argType;
 		}
 	}
+
 	SymbolIdx symbolIdx = this.symbolTable.exprSymbols[expr.call.callee];
 	if (symbolIdx != NO_SYMBOL && this.symbolTable.symbols[symbolIdx].kind == SymbolKind.FUNCTION) {
 		return type_ok(this.symbolTable.symbols[symbolIdx].type);
