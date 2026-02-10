@@ -37,12 +37,14 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	usz declLen = this.ast.declarations.len();
 	this.symbolTable.symbols.init(&this.allocator, exprLen + stmtLen + declLen);
 	this.symbolTable.exprSymbols.init(&this.allocator, exprLen);
+	this.symbolTable.exprTypes.init(&this.allocator, exprLen);
 	this.symbolTable.stmtSymbols.init(&this.allocator, stmtLen);
 	this.symbolTable.declSymbols.init(&this.allocator, declLen);
 
 	// Fill lists with NO_SYMBOL
 	for (usz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
+		this.symbolTable.exprTypes.push(nullType);
 	}
 
 	for (usz i = 0; i < stmtLen; i++) {
@@ -402,25 +404,28 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		return type_ok(make_type(ValueType.NULL));
 	}
 	Expr* expr = &this.ast.expressions[exprIdx];
-
+	TypeResult result = {};
 	switch(expr.kind)
 	{
-		case ExprKind.VAR:			return this.analyze_expr_var(exprIdx, expr);
-		case ExprKind.INT:			return type_ok(make_type(ValueType.INT));
-		case ExprKind.FLOAT:		return type_ok(make_type(ValueType.FLOAT));
-		case ExprKind.DOUBLE:		return type_ok(make_type(ValueType.DOUBLE));
-		case ExprKind.BOOL:			return type_ok(make_type(ValueType.BOOL));
-		case ExprKind.NULL:			return type_ok(make_type(ValueType.NULL));
-		case ExprKind.STRING:		return type_ok(make_ref_type(ValueType.NULL, parser::NOT_STRUCT));
-		case ExprKind.UNARY:		return this.analyze_expr_unary(expr);
-		case ExprKind.BINARY:		return this.analyze_expr_binary(expr);
-		case ExprKind.NEW:			return this.create_type_from_ast(&expr.new.type, expr.span);
-		case ExprKind.THIS:			return this.analyze_expr_this(expr);
-		case ExprKind.CALL:			return this.analyze_expr_call(expr);
-		case ExprKind.MEMBER:		return this.analyze_expr_member(expr);
-		default:					return type_ok(make_type(ValueType.NULL));
+		case ExprKind.VAR:			result = this.analyze_expr_var(exprIdx, expr);
+		case ExprKind.INT:			result = type_ok(make_type(ValueType.INT));
+		case ExprKind.FLOAT:		result = type_ok(make_type(ValueType.FLOAT));
+		case ExprKind.DOUBLE:		result = type_ok(make_type(ValueType.DOUBLE));
+		case ExprKind.BOOL:			result = type_ok(make_type(ValueType.BOOL));
+		case ExprKind.NULL:			result = type_ok(make_type(ValueType.NULL));
+		case ExprKind.STRING:		result = type_ok(make_ref_type(ValueType.NULL, parser::NOT_STRUCT));
+		case ExprKind.UNARY:		result = this.analyze_expr_unary(expr);
+		case ExprKind.BINARY:		result = this.analyze_expr_binary(expr);
+		case ExprKind.NEW:			result = this.create_type_from_ast(&expr.new.type, expr.span);
+		case ExprKind.THIS:			result = this.analyze_expr_this(expr);
+		case ExprKind.CALL:			result = this.analyze_expr_call(expr);
+		case ExprKind.MEMBER:		result = this.analyze_expr_member(expr);
+		default:					result = type_ok(make_type(ValueType.NULL));
 	}
-
+	if (!result.hadError) {
+		this.symbolTable.exprTypes[exprIdx] = result.value;
+	}
+	return result;
 }
 
 fn bool SemanticAnalyzer.is_struct_ref_like(SemanticAnalyzer* this, CompTypeInfo info)

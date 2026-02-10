@@ -1,31 +1,7 @@
 
-
-struct vec3 {
-	int x;
-	int y;
-	int z;
-
-	method null testMethod(int x1, int x2, int x3){
-		echo(x1 + x2 + x3);
-		this.x = x1;
-		return;
-	}
-}
-
 // Entry-point. Should return true if errors occured
 fn bool program(){
-	vec3 prova;
-	prova.x = 5;
-	vec3* test = createVec3Heap();
-	prova.testMethod(5,2,3);
+	int t = 1 + 4;
+	int g = 2 + 32 + 5;
 	return false;
 }
-
-fn vec3* createVec3Heap(){
-	vec3* res = new vec3*;
-
-	//res.x = 35;
-	return res;
-}
-
-

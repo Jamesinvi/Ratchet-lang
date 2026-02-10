@@ -1,4 +1,5 @@
 module common::stack <Type>;
+
 struct Stack
 {
     int capacity;

@@ -1,5 +1,6 @@
 import lexer;
 import parser;
+import mir;
 import common;
 import debug;
 import vm;
@@ -65,6 +66,14 @@ fn int main(String[] args)
 	}else{
 		log::logn("Compiled successfully");
 	}
+
+	MirGenerator mirGen = {};
+	defer mirGen.deinit();
+	mirGen.init(&parser.outputAst, &semanticAnalyzer.symbolTable);
+	mirGen.run();
+
+
+
     return 0;
 }
 

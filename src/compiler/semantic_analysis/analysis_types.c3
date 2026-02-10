@@ -26,6 +26,7 @@ struct SymbolTable
 {
 	List{Symbol} symbols;
     List{SymbolIdx} exprSymbols; 	// index by ExprIdx
+    List{CompTypeInfo} exprTypes; 	// index by ExprIdx
     List{SymbolIdx} stmtSymbols; 	// index by StmtIdx
     List{SymbolIdx} declSymbols; 	// index by DeclIdx
     List{Scope} scopes;         	// name -> SymbolIdx
