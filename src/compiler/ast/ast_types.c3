@@ -386,40 +386,14 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 {
     switch (expr.kind)
     {
-        case ExprKind.INT:
-        {
-            log::log("<int> %s", expr.intLiteral);
-        }
-        case ExprKind.FLOAT:
-        {
-            log::log("<float> %s", expr.floatLiteral);
-        }
-        case ExprKind.DOUBLE:
-        {
-            log::log("<double> %s", expr.doubleLiteral);
-        }
-        case ExprKind.BOOL:
-        {
-            log::log("<bool> %s", expr.boolLiteral);
-        }
-        case ExprKind.NULL:
-        {
-            log::log("<null>");
-        }
-        case ExprKind.STRING:
-        {
-            String s = this.names[expr.stringLiteral];
-            log::log("\"%s\"", s);
-        }
-		case ExprKind.THIS:
-        {
-            log::log("@this");
-        }
-        case ExprKind.VAR:
-        {
-            String name = this.names[expr.varExpr];
-            log::log("%s", name);
-        }
+        case ExprKind.INT:              log::log("<int> %s", expr.intLiteral);
+        case ExprKind.FLOAT:            log::log("<float> %s", expr.floatLiteral);
+        case ExprKind.DOUBLE:           log::log("<double> %s", expr.doubleLiteral);
+        case ExprKind.BOOL:             log::log("<bool> %s", expr.boolLiteral);
+        case ExprKind.NULL:             log::log("<null>");
+        case ExprKind.STRING:           log::log("\"%s\"", this.names[expr.stringLiteral]);
+		case ExprKind.THIS:             log::log("@this");
+        case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr]);
         case ExprKind.UNARY:
         {
             log::log("%s", expr.unary.op.asStr);
@@ -459,13 +433,7 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 			String typeName = this.names[expr.new.type.nameIdx];
 			log::log("<%s>", typeName);
         }
-        case ExprKind.GROUP:
-        {
-            log::log("(<group>)");
-        }
-        default:
-        {
-            log::log("<?expr?>");
-        }
+        case ExprKind.GROUP:            log::log("(<group>)");
+        default:                        log::log("<?expr?>");
     }
 }

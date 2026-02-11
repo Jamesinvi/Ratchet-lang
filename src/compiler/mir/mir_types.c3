@@ -26,32 +26,46 @@ struct MirRegister
 	MirRegisterFlags	flags;
 }
 
-enum MirOpCode : char
+enum MirOpCode : char (String asStr)
 {
-	ADD,
-	SUB,
-	MUL,
-	DIV,
-	LOAD,
-	STORE,
+	ADD			= "add",
+	SUB			= "sub",
+	MUL 		= "mul",
+	DIV 		= "div",
+	EQ 			= "eq",
+	NEQ 		= "noteq",
+	LESS 		= "less",
+	LESS_EQ		= "lesseq",
+	GREATER 	= "greater",
+	GREATER_EQ 	= "greatereq",
+	AND 		= "and",
+	OR 			= "or",
+	AS 			= "as",
+	ASSIGN 		= "assign",
+	CALL  		= "call",
+	LOAD 		= "load",
+	STORE 		= "store",
 }
 
-enum MirTerminatorOp : char
+enum MirTerminatorOp : char (String asStr)
 {
-	JUMP,
-	BRANCH,
-	RETURN,
+	JUMP		= "jump",
+	BRANCH		= "branch",
+	RETURN 		= "return",
 }
 
-enum MirOperandKind : char
+enum MirOperandKind : char (String asStr)
 {
-	REGISTER,
-	PLACE,
-	IMM_INT,
-	IMM_FLOAT,
-	IMM_DOUBLE,
-	IMM_BOOL,
-	BLOCK,
+	INVALID		= "invalid!",
+	REGISTER 	= "reg",
+	PLACE 		= "place",
+	IMM_INT 	= "imm_i",
+	IMM_FLOAT 	= "imm_f",
+	IMM_DOUBLE  = "imm_d",
+	IMM_BOOL 	= "imm_b",
+	IMM_NULL 	= "null",
+	BLOCK 		= "block",
+	FUNCTION 	= "fn",
 }
 
 
@@ -61,6 +75,7 @@ struct MirOperand
 	union as {
 		MirRegisterID 	regId;
 		MirPlaceIdx 	placeIdx;
+		DeclIdx 		fnCalleeIdx;
 		int 			immInt;
 		float 			immFloat;
 		double 			immDouble;
@@ -132,21 +147,104 @@ fn void MirProgram.init(MirProgram* this, Allocator allocator, usz size)
 
 fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols)
 {
+	log::logn("------------ MIR ------------");
 	foreach(fun : this.functions)
 	{
+		if (fun.sourceDeclIdx >= ast.declarations.len() || ast.declarations[fun.sourceDeclIdx].kind != DeclKind.FUNCTION) {
+			log::logn("function <invalid>");
+			continue;
+		}
 		FnDeclAst* funDecl = &ast.declarations[fun.sourceDeclIdx].fnDecl;
-		SymbolIdx symbolIdx =  symbols.declSymbols[fun.sourceDeclIdx];
-		Symbol funSymbol = symbols.symbols[symbolIdx];
-		log::logn("function %s -> %s", ast.names[funDecl.nameIdx], funSymbol.type.type);
+		SymbolIdx symbolIdx = symbols.declSymbols[fun.sourceDeclIdx];
+		if (symbolIdx < symbols.symbols.len()) {
+			Symbol funSymbol = symbols.symbols[symbolIdx];
+			log::logn("function %s -> %s", ast.names[funDecl.nameIdx], funSymbol.type.type);
+		} else {
+			log::logn("function %s -> %s", ast.names[funDecl.nameIdx], ast.names[funDecl.returnType.nameIdx]);
+		}
 		for(usz i = fun.blocksStart; i < fun.blocksEnd; i++){
-			this.print_block(this.blocks[i]);
+			this.print_block(this.blocks[i], ast);
 		}
 	}
-
+	log::logn("-----------------------------");
 }
 
 
-fn void MirProgram.print_block(MirProgram* this, MirBlock block)
+fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* ast)
+{
+	switch (op.kind){
+		case MirOperandKind.REGISTER:
+			if (op.as.regId == NO_REG) {
+				log::log("<noreg>");
+			} else {
+				log::log("_r%s", op.as.regId);
+			}
+		case MirOperandKind.PLACE:							log::log("_%%%s", op.as.placeIdx);
+		case MirOperandKind.IMM_INT:						log::log("%s", op.as.immInt);
+		case MirOperandKind.IMM_FLOAT:						log::log("%s", op.as.immFloat);
+		case MirOperandKind.IMM_DOUBLE:						log::log("%s", op.as.immDouble);
+		case MirOperandKind.IMM_BOOL:						log::log("%s", op.as.immBool);
+		case MirOperandKind.IMM_NULL:						log::log("null");
+		case MirOperandKind.BLOCK:							log::log("block_%s", op.as.placeIdx);
+		case MirOperandKind.FUNCTION:
+		{
+			DeclIdx declIdx = op.as.fnCalleeIdx;
+			if (declIdx < ast.declarations.len() && ast.declarations[declIdx].kind == DeclKind.FUNCTION) {
+				NameIdx fnNameIdx = ast.declarations[declIdx].fnDecl.nameIdx;
+				log::log("%s", ast.names[fnNameIdx]);
+			} else {
+				log::log("<fn?>");
+			}
+		}
+		default:
+			log::log("<?>");
+	}
+}
+
+fn void MirProgram.print_instruction(MirProgram* this, MirInstruction inst, ProgramAst* ast)
+{
+	log::log("  ");
+	if (inst.result != NO_REG) {
+		log::log("_r%s = ", inst.result);
+	}
+	log::log("%s %s", inst.opCode.asStr, inst.type.type);
+	if (inst.operandsStart < inst.operandsEnd) {
+		log::log(" ");
+	}
+	for (usz opIdx = inst.operandsStart; opIdx < inst.operandsEnd; opIdx++){
+		if (opIdx > inst.operandsStart) {
+			log::log(", ");
+		}
+		if (opIdx >= this.operands.len()) {
+			log::log("<bad-op-idx:%s>", opIdx);
+			continue;
+		}
+		this.print_operand(this.operands[opIdx], ast);
+	}
+	log::logn("");
+}
+
+fn void MirProgram.print_terminator(MirProgram* this, MirTerminator term, ProgramAst* ast)
+{
+	String termName = term.opCode.asStr;
+	log::log("  %s", termName);
+	if (term.operandsStart < term.operandsEnd) {
+		log::log(" ");
+	}
+	for (usz opIdx = term.operandsStart; opIdx < term.operandsEnd; opIdx++){
+		if (opIdx > term.operandsStart) {
+			log::log(", ");
+		}
+		if (opIdx >= this.operands.len()) {
+			log::log("<bad-op-idx:%s>", opIdx);
+			continue;
+		}
+		this.print_operand(this.operands[opIdx], ast);
+	}
+	log::logn("");
+}
+
+fn void MirProgram.print_block(MirProgram* this, MirBlock block, ProgramAst* ast)
 {
 	if(block.idx == 0){
 		log::logn("start:");
@@ -155,26 +253,11 @@ fn void MirProgram.print_block(MirProgram* this, MirBlock block)
 	}
 
 	for (usz i = block.instructionsStart; i < block.instructionsEnd; i++){
-		MirInstruction inst = this.instructions[i];
-		log::log("  ");
-		if (inst.result != NO_REG) {
-			log::log("_r%s = ", inst.result);
+		if (i >= this.instructions.len()) {
+			log::logn("  <bad-inst-idx:%s>", i);
+			continue;
 		}
-		log::log("%s %s ", inst.opCode, inst.type.type);
-		for (usz opIdx = inst.operandsStart; opIdx < inst.operandsEnd; opIdx++){
-			if (opIdx > inst.operandsStart) {
-				log::log(", ");
-			}
-			MirOperand op = this.operands[opIdx];
-			switch (op.kind){
-				case MirOperandKind.REGISTER:	log::log("_r%s", op.as.regId);
-				case MirOperandKind.PLACE:		log::log("place_%s", op.as.placeIdx);
-				case MirOperandKind.IMM_INT:	log::log("%s", op.as.immInt);
-				case MirOperandKind.IMM_BOOL:	log::log("%s", op.as.immBool);
-				default:						log::log("<?>");
-			}
-		}
-		log::logn("");
+		this.print_instruction(this.instructions[i], ast);
 	}
 
 	if (block.terminator == NO_TERMINATOR || block.terminator >= this.terminators.len()) {
@@ -182,21 +265,8 @@ fn void MirProgram.print_block(MirProgram* this, MirBlock block)
 		return;
 	}
 
-	MirTerminator term = this.terminators[block.terminator];
-	log::log("  %s", term.opCode);
-	for (usz opIdx = term.operandsStart; opIdx < term.operandsEnd; opIdx++){
-		MirOperand op = this.operands[opIdx];
-		log::log(" ");
-		switch (op.kind){
-			case MirOperandKind.REGISTER:	log::log("_r%s", op.as.regId);
-			case MirOperandKind.IMM_BOOL:	log::log("%s", op.as.immBool);
-			case MirOperandKind.IMM_INT:	log::log("%s", op.as.immInt);
-			default:						log::log("<?>");
-		}
-	}
-	log::logn("");
+	this.print_terminator(this.terminators[block.terminator], ast);
 }
-
 
 
 

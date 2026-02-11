@@ -42,18 +42,13 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	this.symbolTable.declSymbols.init(&this.allocator, declLen);
 
 	// Fill lists with NO_SYMBOL
+	common::list_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
+	common::list_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
 	for (usz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);
 	}
 
-	for (usz i = 0; i < stmtLen; i++) {
-		this.symbolTable.stmtSymbols.push(NO_SYMBOL);
-	}
-	
-	for (usz i = 0; i < declLen; i++) {
-		this.symbolTable.declSymbols.push(NO_SYMBOL);
-	}
 	this.currentReturnType = make_type(ValueType.NULL);
 	this.returnFound = false;
 	this.currentScopeIdx = 0;

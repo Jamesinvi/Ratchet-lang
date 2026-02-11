@@ -2,6 +2,11 @@
 // Entry-point. Should return true if errors occured
 fn bool program(){
 	int t = 1 + 4;
-	int g = 2 + 32 + 5;
+	int g = 2  + testFunc(t);
+
 	return false;
+}
+
+fn int testFunc(int g){
+	return g + 1;
 }

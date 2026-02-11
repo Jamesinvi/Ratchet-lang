@@ -4,22 +4,24 @@ import parser;
 import log;
 import debug;
 import common;
+import std::collections::list;
 
 struct MirGenerator
 {
 	ProgramAst* inputAst;
-	SymbolTable* symbols;
+	SymbolTable* symbolTable;
 	MirProgram output;
 	DynamicArenaAllocator allocator;
 	MirRegisterID currentReg;
 	MirBlockIdx currentBlock;
+	List{MirOperand} bindings; // Indexed by SymbolIdx
 }
 
 
-fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable* symbols)
+fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable* symbolTable)
 {
 	this.inputAst = inputAst;
-	this.symbols = symbols;
+	this.symbolTable = symbolTable;
 
 	this.allocator = {};
 	this.allocator.init(mem, 1024);
@@ -29,6 +31,9 @@ fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable*
 	this.currentBlock = 0;
 
 	this.output.init(&this.allocator, 1024);
+	this.bindings.init(&this.allocator, this.symbolTable.symbols.len());
+
+	common::list_fill{MirOperand}(&this.bindings, placeHolderOperand, this.symbolTable.symbols.len());
 
 }
 
@@ -46,12 +51,15 @@ fn void MirGenerator.run(MirGenerator* this)
 		}
 	}
 
-	this.output.print(this.inputAst, this.symbols);
+	this.output.print(this.inputAst, this.symbolTable);
 }
 
 fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 {
 	debug::@log_mir("lowering func: '%s'", this.inputAst.names[decl.fnDecl.nameIdx]);
+
+	// clear out all temporaries and operands 
+	common::list_set_values{MirOperand}(&this.bindings, placeHolderOperand);
 
 	Stmt funcBody = this.inputAst.statements[decl.fnDecl.body];
 	BlockStmt bodyBlock = funcBody.blockStmt;
@@ -121,11 +129,13 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 	this.output.operands.push({.kind = MirOperandKind.PLACE, .as.placeIdx = placeIdx});
 	OperandIdx end = this.output.operands.len();
 
-	SymbolIdx stmtSymbolIdx = this.symbols.stmtSymbols[stmtIdx];
-	CompTypeInfo storeType = this.symbols.exprTypes[stmt.varDecl.init];
-	if (stmtSymbolIdx < this.symbols.symbols.len()) {
-		storeType = this.symbols.symbols[stmtSymbolIdx].type;
+	SymbolIdx stmtSymbolIdx = this.symbolTable.stmtSymbols[stmtIdx];
+	CompTypeInfo storeType = this.symbolTable.exprTypes[stmt.varDecl.init];
+	if (stmtSymbolIdx < this.symbolTable.symbols.len()) {
+		storeType = this.symbolTable.symbols[stmtSymbolIdx].type;
 	}
+
+	this.bindings[stmtSymbolIdx] = initValue;
 
 	MirInstruction storeInst = {
 		.opCode = MirOpCode.STORE,
@@ -163,7 +173,7 @@ fn void MirGenerator.lower_return(MirGenerator* this, StmtIdx stmtIdx)
 fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.inputAst.expressions[exprIdx];
-	debug::@log_mir("lowering expr: '%s'", exprIdx);
+	debug::@log_mir("lowering expr: '%s'", expr.kind);
 
 	switch (expr.kind)
 	{
@@ -171,6 +181,7 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 		case ExprKind.FLOAT:			return {.kind = MirOperandKind.IMM_FLOAT, 	.as.immFloat = expr.floatLiteral};
 		case ExprKind.DOUBLE:			return {.kind = MirOperandKind.IMM_DOUBLE, 	.as.immDouble = expr.doubleLiteral};
 		case ExprKind.BOOL:				return {.kind = MirOperandKind.IMM_BOOL, 	.as.immBool = expr.boolLiteral};
+		case ExprKind.NULL:				return {.kind = MirOperandKind.IMM_NULL, 	.as.immInt = 0};
 	
 		case ExprKind.BINARY:
 		{
@@ -183,8 +194,8 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 
 			OperandIdx end = this.output.operands.len();
 			MirInstruction inst = {
-				.opCode = MirOpCode.ADD,
-				.type = this.symbols.exprTypes[exprIdx],
+				.opCode = ast_to_mir_op(expr.binary.op),
+				.type = this.symbolTable.exprTypes[exprIdx],
 				.result = resultReg,
 				.operandsStart = start,
 				.operandsEnd = end,
@@ -192,6 +203,37 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			};
 			this.output.instructions.push(inst);
 			return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+		}
+		case ExprKind.CALL:
+		{
+			MirRegisterID resultReg = this.currentReg++;
+			OperandIdx start = this.output.operands.len();
+			ExprIdx calleeIdx = expr.call.callee;
+			SymbolIdx calleeSymbolIdx = this.symbolTable.exprSymbols[calleeIdx];
+			Symbol calleeSymbol = this.symbolTable.symbols[calleeSymbolIdx];
+			MirOperand callee = {.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = (DeclIdx)calleeSymbol.idx};
+			this.output.operands.push(callee);
+			for(ExprIdx i = expr.call.argsStart; i < expr.call.argsEnd;i++){
+				MirOperand arg = this.lower_expr(this.inputAst.args[i]);
+				this.output.operands.push(arg);
+			}
+			OperandIdx end = this.output.operands.len();
+			MirInstruction inst = {
+				.opCode = MirOpCode.CALL,
+				.type = this.symbolTable.exprTypes[exprIdx],
+				.result = resultReg,
+				.operandsStart = start,
+				.operandsEnd = end,
+				.sourceExprIdx = exprIdx,
+			};
+			this.output.instructions.push(inst);
+			return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+		}
+		case ExprKind.VAR:
+		{
+			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
+			MirOperand variable = this.bindings[varExprSymbolIdx];
+			return variable;
 		}
 		default:
 			return {.kind = MirOperandKind.REGISTER, .as.regId = NO_REG};
