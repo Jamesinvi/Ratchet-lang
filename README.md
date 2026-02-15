@@ -23,16 +23,16 @@ The long-term runtime direction is interpreted execution first, with a planned *
 This document is the main language overview for now.
 
 ## Sections
-1. [Design Goals] [#design-goals]
-2. [Syntax Basics] [#syntax-basics]
-3. [Types] [#types]
-4. [Functions] [#functions]
-5. [Values and Heap-Allocated References] [#values-and-heap-allocated-references]
-6. [Arrays] [#arrays]
-7. [Borrow Parameters] [#borrow-parameters]
-8. [Structs and Methods] [#structs-and-methods]
-9. [Interfaces] [#interfaces]
-10. **[Examples] [#examples]**
+1. [Design Goals](#design-goals)
+2. [Syntax Basics](#syntax-basics)
+3. [Types](#types)
+4. [Functions](#functions)
+5. [Values and Heap-Allocated References](#values-and-heap-allocated-references)
+6. [Arrays](#arrays)
+7. [Borrow Parameters](#borrow-parameters)
+8. [Structs and Methods](#tructs-and-methods)
+9. [Interfaces](#interfaces)
+10. **[Examples](#examples)**
 
 [#design-goals]: #design-goals
 [#syntax-basics]: #syntax-basics
