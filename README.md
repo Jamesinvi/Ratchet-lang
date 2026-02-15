@@ -1,6 +1,6 @@
 # Ratchet Language
 
-**Ratchet** is an imperative language with familiar C-like syntax that sits between low-level systems languages and high-level scripting languages.
+**Ratchet** is a simple, imperative, strongly typed language with familiar C-like syntax that sits between low-level systems languages and high-level scripting languages.
 
 The main idea is simple: make storage and lifetime choices explicit **per variable**. Instead of hiding allocation behavior behind runtime defaults, Ratchet makes it visible in types so you can reason about where data lives.
 
