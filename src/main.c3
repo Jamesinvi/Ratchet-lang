@@ -48,7 +48,7 @@ fn int main(String[] args)
         log::errlogn("Parse error");
         return 1;
     }
-	//parser.outputAst.print();
+	parser.outputAst.print();
 
 
 	SemanticAnalyzer semanticAnalyzer = {};

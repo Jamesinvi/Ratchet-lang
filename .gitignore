@@ -1,5 +1,9 @@
 build/
 out/
 
+
+## Misc
+ratchet_compiler_migration_plan.md
+
 ## MacOS
 main.dSYM/

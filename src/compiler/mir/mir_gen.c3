@@ -106,6 +106,7 @@ fn void MirGenerator.lower_stmt(MirGenerator* this, StmtIdx stmtIdx)
 	{
 		case StmtKind.DECL:		this.lower_var_decl(stmtIdx);
 		case StmtKind.RETURN:	this.lower_return(stmtIdx);
+		case StmtKind.EXPR:		this.lower_expr(stmt.exprStmt);
 		default: 				break;
 	}
 }
@@ -151,6 +152,7 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 fn void MirGenerator.lower_return(MirGenerator* this, StmtIdx stmtIdx)
 {
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
+	debug::@log_mir("lowering return: '%s'", this.inputAst.names[stmt.varDecl.nameIdx]);
 	OperandIdx start = this.output.operands.len();
 
 	if (stmt.retStmt.value != parser::NO_IDX) {
@@ -206,28 +208,12 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 		}
 		case ExprKind.CALL:
 		{
-			MirRegisterID resultReg = this.currentReg++;
-			OperandIdx start = this.output.operands.len();
-			ExprIdx calleeIdx = expr.call.callee;
-			SymbolIdx calleeSymbolIdx = this.symbolTable.exprSymbols[calleeIdx];
-			Symbol calleeSymbol = this.symbolTable.symbols[calleeSymbolIdx];
-			MirOperand callee = {.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = (DeclIdx)calleeSymbol.idx};
-			this.output.operands.push(callee);
-			for(ExprIdx i = expr.call.argsStart; i < expr.call.argsEnd;i++){
-				MirOperand arg = this.lower_expr(this.inputAst.args[i]);
-				this.output.operands.push(arg);
+			CallTarget target = this.symbolTable.callTargets[exprIdx];
+			switch (target.kind){
+				case CallTargetKind.FREE_FUN: return this.lower_free_fun(exprIdx);
+				case CallTargetKind.METHOD:   return this.lower_method(exprIdx);
+				default:                      return this.lower_free_fun(exprIdx);
 			}
-			OperandIdx end = this.output.operands.len();
-			MirInstruction inst = {
-				.opCode = MirOpCode.CALL,
-				.type = this.symbolTable.exprTypes[exprIdx],
-				.result = resultReg,
-				.operandsStart = start,
-				.operandsEnd = end,
-				.sourceExprIdx = exprIdx,
-			};
-			this.output.instructions.push(inst);
-			return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
 		}
 		case ExprKind.VAR:
 		{
@@ -241,5 +227,76 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 
 }
 
+fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprIdx)
+{
+	Expr* callExpr = &this.inputAst.expressions[callExprIdx];
+	MirRegisterID resultReg = this.currentReg++;
+	OperandIdx start = this.output.operands.len();
+
+	CallTarget target = this.symbolTable.callTargets[callExprIdx];
+	assert(target.kind == CallTargetKind.FREE_FUN);
+
+	DeclIdx fnDeclIdx = target.fnDeclIdx;
+	MirOperand callee = {.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = fnDeclIdx};
+	this.output.operands.push(callee);
+
+	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
+		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
+		this.output.operands.push(arg);
+	}
+
+	OperandIdx end = this.output.operands.len();
+	MirInstruction inst = {
+		.opCode = MirOpCode.CALL,
+		.type = this.symbolTable.exprTypes[callExprIdx],
+		.result = resultReg,
+		.operandsStart = start,
+		.operandsEnd = end,
+		.sourceExprIdx = callExprIdx,
+	};
+	this.output.instructions.push(inst);
+	return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+}
 
 
+fn MirOperand MirGenerator.lower_method(MirGenerator* this, ExprIdx callExprIdx)
+{
+	Expr* callExpr = &this.inputAst.expressions[callExprIdx];
+	MirRegisterID resultReg = this.currentReg++;
+	OperandIdx start = this.output.operands.len();
+
+	// Methods currently use a separate (structDeclIdx, methodIdx) target space.
+	// Keep the callee placeholder for now, and encode receiver as arg0.
+	this.output.operands.push({.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = parser::NO_IDX});
+
+	ExprIdx receiverExprIdx = callExpr.call.memberCaller;
+	if (receiverExprIdx == parser::NO_IDX) {
+		Expr* calleeExpr = &this.inputAst.expressions[callExpr.call.callee];
+		if (calleeExpr.kind == ExprKind.MEMBER) {
+			receiverExprIdx = calleeExpr.member.base;
+		}
+	}
+
+	MirOperand receiver = placeHolderOperand;
+	if (receiverExprIdx != parser::NO_IDX) {
+		receiver = this.lower_expr(receiverExprIdx);
+	}
+	this.output.operands.push(receiver);
+
+	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
+		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
+		this.output.operands.push(arg);
+	}
+
+	OperandIdx end = this.output.operands.len();
+	MirInstruction inst = {
+		.opCode = MirOpCode.CALL,
+		.type = this.symbolTable.exprTypes[callExprIdx],
+		.result = resultReg,
+		.operandsStart = start,
+		.operandsEnd = end,
+		.sourceExprIdx = callExprIdx,
+	};
+	this.output.instructions.push(inst);
+	return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+}

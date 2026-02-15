@@ -29,7 +29,31 @@ struct SymbolTable
     List{CompTypeInfo} exprTypes; 	// index by ExprIdx
     List{SymbolIdx} stmtSymbols; 	// index by StmtIdx
     List{SymbolIdx} declSymbols; 	// index by DeclIdx
+    List{CallTarget} callTargets;	// index by ExprIdx
     List{Scope} scopes;         	// name -> SymbolIdx
+}
+
+
+enum CallTargetKind : char
+{
+	INVALID,
+	FREE_FUN,
+	METHOD,
+}
+
+struct CallTarget
+{
+	CallTargetKind kind;
+	union {
+		DeclIdx fnDeclIdx;
+		MethodId methodId;
+	}
+}
+
+struct MethodId
+{
+	DeclIdx structDeclIdx;
+	int methodIdx;
 }
 
 enum ErrorKind : char (String asStr)

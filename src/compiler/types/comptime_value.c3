@@ -7,9 +7,9 @@ const NOT_STRUCT = uint.max;
 
 struct CompTypeInfo
 {
+    uint structTypeIndex;       // uint.max is reserved for non-structs
     ValueType type;
     ValueType refToType;        // Will be ValueType.NULL when not it's not a reference
-    uint structTypeIndex;       // uint.max is reserved for non-structs
 }
 
 

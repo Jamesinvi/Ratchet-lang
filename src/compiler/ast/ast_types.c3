@@ -127,7 +127,7 @@ enum UnOp  : char (String asStr)
 
 struct ExprUnary    { UnOp op;           ExprIdx rhs; }
 struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
-struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd; }
+struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd;  ExprIdx memberCaller;}
 struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
 struct ExprNew		{ TypeAst type; }
 
