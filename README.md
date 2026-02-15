@@ -66,7 +66,7 @@ Ratchet uses familiar C-like structure.
 
 Quick look:
 
-```ratchet
+```cpp
 int score = 42;
 if (score > 10) {
     echo score;
@@ -95,7 +95,7 @@ if (score > 10) {
 
 One complete function example:
 
-```ratchet
+```cpp
 fn int clamp(int value, int minV, int maxV) {
     if (value < minV) {
         return minV;
@@ -116,7 +116,7 @@ fn bool program() {
 
 General shape:
 
-```ratchet
+```cpp
 fn <return-type> <name>(<typed-params>) {
     // body
 }
@@ -140,7 +140,7 @@ Ratchet makes storage mode explicit in type spelling.
 
 Quick examples:
 
-```ratchet
+```cpp
 int  a = 5;   // stack value (copied)
 int& b = {5}; // heap-allocated, GC-tracked
 int* c = {5}; // heap-allocated, non-GC-tracked
@@ -156,7 +156,7 @@ Notes:
 
 Array forms (using `Vec2`):
 
-```ratchet
+```cpp
 Vec2[4] a = Vec2[4];          // stack-allocated array, size must be known at compile time
 Vec2[]& c = new Vec2[4]&;     // GC-tracked array reference
 Vec2[]* d = new Vec2[4]*;     // non-GC-tracked array reference
@@ -178,7 +178,7 @@ Intent:
 
 Syntax:
 
-```ratchet
+```cpp
 struct Vec2 {
     float x;
     float y;
@@ -195,7 +195,7 @@ fn null translate(inout Vec2 v, float dx, float dy) {
 
 `struct` values are still plain value types.
 
-```ratchet
+```cpp
 struct Vec2 {
     float x;
     float y;
@@ -206,7 +206,7 @@ Methods are intended as an alternative call style over free functions, not a sep
 
 Conceptual sugar direction:
 
-```ratchet
+```cpp
 // method style
 method null translate(float dx, float dy)
 
@@ -219,7 +219,7 @@ fn null Vec2_translate(inout Vec2 self, float dx, float dy)
 
 Interfaces are part of the language direction as compile-time contracts.
 
-```ratchet
+```cpp
 interface HasPosition {
     field float x;
     field float y;
@@ -235,7 +235,7 @@ interface HasPosition {
 
 ### 1) Smallest program shape
 
-```ratchet
+```cpp
 fn bool program() {
     echo 1;
     return true;
@@ -244,7 +244,7 @@ fn bool program() {
 
 ### 2) Variables and expressions
 
-```ratchet
+```cpp
 fn bool program() {
     int a = 10;
     int b = 20;
@@ -258,7 +258,7 @@ fn bool program() {
 
 ### 3) Struct and method (`Vec2`)
 
-```ratchet
+```cpp
 struct Vec2 {
     float x;
     float y;
@@ -278,7 +278,7 @@ fn bool program() {
 
 ### 4) Heap-allocated references
 
-```ratchet
+```cpp
 struct Enemy {
     int hp;
 }
