@@ -21,7 +21,6 @@ fn ushort get_type_size(CompTypeInfo info)
         case ValueType.DOUBLE:      return double.sizeof;
         case ValueType.BOOL:        return bool.sizeof;
         case ValueType.REF:      	nextcase;
-        case ValueType.BORROW_REF:  nextcase;
         case ValueType.PTR:   		return uptr.sizeof;
         case ValueType.STRUCT:      return globals::structTypes[info.structTypeIndex].sizeInBytes;
         default:                    return 0;

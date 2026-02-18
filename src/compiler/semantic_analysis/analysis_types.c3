@@ -25,12 +25,13 @@ struct Symbol
 struct SymbolTable
 {
 	List{Symbol} symbols;
-    List{SymbolIdx} exprSymbols; 	// index by ExprIdx
-    List{CompTypeInfo} exprTypes; 	// index by ExprIdx
-    List{SymbolIdx} stmtSymbols; 	// index by StmtIdx
-    List{SymbolIdx} declSymbols; 	// index by DeclIdx
-    List{CallTarget} callTargets;	// index by ExprIdx
-    List{Scope} scopes;         	// name -> SymbolIdx
+    List{SymbolIdx} exprSymbols; 		// index by ExprIdx
+    List{CompTypeInfo} exprTypes; 		// index by ExprIdx
+    List{SymbolIdx} stmtSymbols; 		// index by StmtIdx
+    List{SymbolIdx} declSymbols; 		// index by DeclIdx
+    List{CallTarget} callTargets;		// index by ExprIdx
+    List{ExprIdx} callReceiverExpr; 	// index by ExprIdx (NO_IDX when absent)
+    List{Scope} scopes;         		// name -> SymbolIdx
 }
 
 
@@ -44,10 +45,7 @@ enum CallTargetKind : char
 struct CallTarget
 {
 	CallTargetKind kind;
-	union {
-		DeclIdx fnDeclIdx;
-		MethodId methodId;
-	}
+	DeclIdx fnDeclIdx;
 }
 
 struct MethodId

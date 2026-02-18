@@ -19,10 +19,18 @@ enum DeclKind : char
 struct ProgramAst
 {
     List{Decl}      declarations;
-    List{Stmt}      statements;      // global statement list indexed by nodes
-    List{Expr}      expressions;     // global expression list indexed by nodes
-    List{String}    names;           // global name list indexed by nodes
-	List{ExprIdx}	args;			 // global function argument list, indices into expression list
+    List{Stmt}      statements;         // global statement list indexed by nodes
+    List{Expr}      expressions;        // global expression list indexed by nodes
+    List{String}    names;              // global name list indexed by nodes
+	List{ExprIdx}	args;			    // global function argument list, indices into expression list
+    DeclIdx         loweredMethodsStart;// From this idx onwards, you'll find only methods lowered to functions (in "declarations")
+}
+
+enum ParamPassMode : char
+{
+    VALUE,
+    IN,
+    INOUT,
 }
 
 struct ParamAst
@@ -30,6 +38,7 @@ struct ParamAst
     TypeAst type;
     NameIdx nameIdx;
     Span span;
+    ParamPassMode passMode;
 }
 
 struct FieldAst
@@ -51,6 +60,7 @@ struct FnDeclAst
     NameIdx nameIdx;
     List{ParamAst} params;
     StmtIdx body;
+    bool isDesugaredResult;
 }
 
 struct MethodDeclAst 
@@ -60,6 +70,7 @@ struct MethodDeclAst
 	DeclIdx structIdx;
     List{ParamAst} params;
     StmtIdx body;
+    DeclIdx loweredFormIdx;  // Gets filled in as last step of parser
 }
 
 
@@ -96,7 +107,7 @@ enum ExprKind : char
     MEMBER,     // a.b
     NEW,        // new
     GROUP,      // (x) optional; often you skip this and just use Span
-    THIS,       // used in methods to get borrowed ref
+    THIS,       // used in methods to reference current receiver
 }
 
 enum BinOp : char (String asStr)
@@ -114,7 +125,7 @@ enum BinOp : char (String asStr)
     AND         = "and", 
     OR          = "or",
     AS          = "as",
-    ASSIGN      = "assign",
+    STORE       = "store",
 }
 
 enum UnOp  : char (String asStr)
@@ -249,13 +260,20 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 	{
 		case DeclKind.FUNCTION:
 		{
+            if(decl.fnDecl.isDesugaredResult) return;
 			String funcName = this.names[decl.fnDecl.nameIdx];
 			String retType = this.names[decl.fnDecl.returnType.nameIdx];
 			this.print_indent(indent);
 			log::log("fn %s(", funcName);
-			foreach(&param : decl.fnDecl.params){
+			foreach(counter, &param : decl.fnDecl.params){
+                if(counter > 0) log::log(", ");
 				String paramName = this.names[param.nameIdx];
 				String paramType = this.names[param.type.nameIdx];
+                switch(param.passMode){
+                    case ParamPassMode.IN:     log::log("in ");
+                    case ParamPassMode.INOUT:  log::log("inout ");
+                    default: break;
+                }
 				log::log("<%s> %s", paramType, paramName);
 			}
 			log::logn(") returns <%s>", retType);

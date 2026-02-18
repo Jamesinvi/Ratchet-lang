@@ -241,7 +241,6 @@ fn void Chunk.print_constant(Chunk* this, int offset){
         case ValueType.FLOAT:       log::log("%f", @as(float, bytes,));  
         case ValueType.DOUBLE:      log::log("%f", @as(double, bytes,));  
         case ValueType.BOOL:        log::log("%s", @as(bool, bytes,));
-		case ValueType.BORROW_REF:log::log("struct, change to print");  
         case ValueType.STRUCT:      log::log("struct, change to print");
         case ValueType.NULL:        log::log("NULL");
         case ValueType.REF:      nextcase;

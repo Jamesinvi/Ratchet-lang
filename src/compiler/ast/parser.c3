@@ -18,6 +18,7 @@ struct Parser
     ProgramAst outputAst;
     bool hadError;
     bool panicMode;
+    List{DeclIdx} structs;
 	DynamicArenaAllocator allocator;
 }
 
@@ -37,6 +38,9 @@ fn void Parser.init(Parser* this)
     this.outputAst = {};
     this.outputAst.init(&this.allocator);
 
+    this.structs = {};
+    this.structs.init(&this.allocator);
+
     this.predeclare_structs();
     this.predeclare_functions();
 }
@@ -54,6 +58,7 @@ fn void? Parser.parse(Parser* parser)
     while (!parser.match(TokenType.EOF)) {
         parser.declaration();
     }
+    parser.desugar_methods();
 }
 
 // ---------- Declarations & statements ----------
@@ -266,6 +271,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 			method.returnType = retType;
 			method.nameIdx = methodNameIdx;
 			method.structIdx = declIdx;
+            method.loweredFormIdx = NO_IDX;
 			// parse params + body
 			this.consume(TokenType.LEFT_PAREN, "Expected '(' after method name");
 			this.fill_fun_params(&method.params);
@@ -283,6 +289,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
     if (rightBraceExpected != 0) {
         this.error("Expected '}' after struct fields");
     }
+    this.structs.push(declIdx);
     return declIdx;
 }
 
@@ -428,6 +435,7 @@ fn ParamAst Parser.fun_param(Parser* this)
     param.type = type;
     param.nameIdx = nameIdx;
     param.span = {.line = this.previous.line};
+    param.passMode = ParamPassMode.VALUE;
 
     return param;
 }
@@ -450,8 +458,13 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 fn ExprIdx Parser.call(Parser* this, ExprIdx lhs)
 {
     Expr expr = {.kind = ExprKind.CALL};
-    expr.call = {};
-    expr.call.callee = lhs;
+    expr.call = {.callee = lhs, .memberCaller = NO_IDX};
+    if (lhs < this.outputAst.expressions.len()) {
+        Expr* calleeExpr = &this.outputAst.expressions[lhs];
+        if (calleeExpr.kind == ExprKind.MEMBER) {
+            expr.call.memberCaller = calleeExpr.member.base;
+        }
+    }
     this.fill_call_args(&expr.call);
     ExprIdx exprIdx = this.push_expr_get_idx(&expr);
     return exprIdx;
@@ -622,7 +635,7 @@ fn ExprIdx Parser.binary(Parser* this, ExprIdx lhs)
         case TokenType.GREATER_EQUAL: op = BinOp.GREATER_EQ;
         case TokenType.LESS:          op = BinOp.LESS;
         case TokenType.LESS_EQUAL:    op = BinOp.LESS_EQ;
-        case TokenType.EQUAL:         op = BinOp.ASSIGN;
+        case TokenType.EQUAL:         op = BinOp.STORE;
         default:                      op = BinOp.AS;
     }
     Expr expr = {.kind = ExprKind.BINARY};

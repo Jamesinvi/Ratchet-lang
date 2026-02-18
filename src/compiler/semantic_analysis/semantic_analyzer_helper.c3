@@ -86,7 +86,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			String typeName = this.ast.names[input.nameIdx];
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
-			result.type = ValueType.BORROW_REF;
+			result.type = ValueType.REF;
 			
 			usz? structTypeIdx = globals::structNamesToIdx.get(typeName);
 			if (catch err = structTypeIdx) {

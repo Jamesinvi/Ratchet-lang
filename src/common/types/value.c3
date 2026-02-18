@@ -10,7 +10,6 @@ enum ValueType : char
     STRUCT,
     REF,
     PTR,
-	BORROW_REF,			// implicit "this" for methods
 }
 
 // For future me: This macro is very simple:

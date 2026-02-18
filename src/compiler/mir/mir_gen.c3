@@ -116,27 +116,36 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 {
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
 	debug::@log_mir("lowering var decl: '%s'", this.inputAst.names[stmt.varDecl.nameIdx]);
-	if (stmt.varDecl.init == parser::NO_IDX) {
-		return;
-	}
-	MirOperand initValue = this.lower_expr(stmt.varDecl.init);
-
-	MirPlaceIdx placeIdx = this.output.places.len();
-	MirPlace place = {.idx = placeIdx, .sourceNameIdx = stmt.varDecl.nameIdx};
-	this.output.places.push(place);
-
-	OperandIdx start = this.output.operands.len();
-	this.output.operands.push(initValue);
-	this.output.operands.push({.kind = MirOperandKind.PLACE, .as.placeIdx = placeIdx});
-	OperandIdx end = this.output.operands.len();
 
 	SymbolIdx stmtSymbolIdx = this.symbolTable.stmtSymbols[stmtIdx];
+	MirPlace newPlace = {.baseSymbolIdx = stmtSymbolIdx, .projectionIdx = NO_PROJECTION};
+	MirPlaceIdx placeIdx = this.push_place_get_idx(&newPlace);
+	MirOperand operand = {.kind = MirOperandKind.PLACE, .as.placeIdx = placeIdx};
+
+	this.bindings[stmtSymbolIdx] = operand;
+	if (stmt.varDecl.init != parser::NO_IDX) {
+		this.lower_var_init(stmtIdx, stmtSymbolIdx);
+	}
+}
+
+
+fn void MirGenerator.lower_var_init(MirGenerator* this, StmtIdx stmtIdx, SymbolIdx stmtSymbolIdx)
+{
+
+	Stmt* stmt = &this.inputAst.statements[stmtIdx];
+	debug::@log_mir("lowering var init: '%s'", this.inputAst.names[stmt.varDecl.nameIdx]);
+
 	CompTypeInfo storeType = this.symbolTable.exprTypes[stmt.varDecl.init];
 	if (stmtSymbolIdx < this.symbolTable.symbols.len()) {
 		storeType = this.symbolTable.symbols[stmtSymbolIdx].type;
 	}
+	MirOperand initValue = this.lower_expr(stmt.varDecl.init);
+	MirOperand placeOperand = this.bindings[stmtSymbolIdx];
+	OperandIdx start = this.output.operands.len();
+	this.output.operands.push(placeOperand);
+	this.output.operands.push(initValue);
+	OperandIdx end = this.output.operands.len();
 
-	this.bindings[stmtSymbolIdx] = initValue;
 
 	MirInstruction storeInst = {
 		.opCode = MirOpCode.STORE,
@@ -187,16 +196,24 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 	
 		case ExprKind.BINARY:
 		{
-			MirOperand lhs = this.lower_expr(expr.binary.lhs);
+			MirOpCode opCode = ast_to_mir_op(expr.binary.op);
 			MirOperand rhs = this.lower_expr(expr.binary.rhs);
-			MirRegisterID resultReg = this.currentReg++;
+			MirOperand lhs;
+			MirRegisterID resultReg;
+			if(opCode == MirOpCode.STORE){
+				lhs = this.lower_place(expr.binary.lhs);
+				resultReg = NO_REG;
+			}else{
+				lhs = this.lower_expr(expr.binary.lhs);
+				resultReg = this.currentReg++;
+			}
 			OperandIdx start = this.output.operands.len();
 			this.output.operands.push(lhs);
 			this.output.operands.push(rhs);
 
 			OperandIdx end = this.output.operands.len();
 			MirInstruction inst = {
-				.opCode = ast_to_mir_op(expr.binary.op),
+				.opCode = opCode,
 				.type = this.symbolTable.exprTypes[exprIdx],
 				.result = resultReg,
 				.operandsStart = start,
@@ -209,20 +226,35 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 		case ExprKind.CALL:
 		{
 			CallTarget target = this.symbolTable.callTargets[exprIdx];
-			switch (target.kind){
-				case CallTargetKind.FREE_FUN: return this.lower_free_fun(exprIdx);
-				case CallTargetKind.METHOD:   return this.lower_method(exprIdx);
-				default:                      return this.lower_free_fun(exprIdx);
-			}
+			assert(target.kind == CallTargetKind.FREE_FUN);
+			return this.lower_free_fun(exprIdx);
 		}
 		case ExprKind.VAR:
 		{
+
 			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			MirOperand variable = this.bindings[varExprSymbolIdx];
-			return variable;
+			CompTypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
+			MirOperand place = this.bindings[varExprSymbolIdx];
+			assert(place.kind == MirOperandKind.PLACE);
+			MirRegisterID resultReg = this.currentReg++;
+			OperandIdx start = this.output.operands.len();
+			this.output.operands.push(place);
+			OperandIdx end = this.output.operands.len();
+
+			MirInstruction inst = {
+				.opCode = MirOpCode.LOAD,
+				.type = varExprType,
+				.result = resultReg,
+				.operandsStart = start,
+				.operandsEnd = end,
+				.sourceExprIdx = exprIdx,
+			};
+			this.output.instructions.push(inst);
+			return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
 		}
-		default:
+		default:{
 			return {.kind = MirOperandKind.REGISTER, .as.regId = NO_REG};
+		}
 	}
 
 }
@@ -240,6 +272,14 @@ fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprId
 	MirOperand callee = {.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = fnDeclIdx};
 	this.output.operands.push(callee);
 
+	// Receiver is inserted as arg0 for method calls lowered to free functions.
+	ExprIdx receiverExprIdx = this.symbolTable.callReceiverExpr[callExprIdx];
+
+	if (receiverExprIdx != parser::NO_IDX) {
+		MirOperand receiver = this.lower_expr(receiverExprIdx);
+		this.output.operands.push(receiver);
+	} 
+
 	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
 		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
 		this.output.operands.push(arg);
@@ -258,45 +298,47 @@ fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprId
 	return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
 }
 
-
-fn MirOperand MirGenerator.lower_method(MirGenerator* this, ExprIdx callExprIdx)
+fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 {
-	Expr* callExpr = &this.inputAst.expressions[callExprIdx];
-	MirRegisterID resultReg = this.currentReg++;
-	OperandIdx start = this.output.operands.len();
+	Expr* expr = &this.inputAst.expressions[exprIdx];
+	switch (expr.kind) {
+		case ExprKind.VAR:
+		{
+			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
+			assert(symbolIdx < this.bindings.len());
+			MirOperand place = this.bindings[symbolIdx];
+			assert(place.kind == MirOperandKind.PLACE);
+			return place;
+		}
+		case ExprKind.MEMBER:
+		{
+			MirOperand basePlaceOperand = this.lower_place(expr.member.base);
+			assert(basePlaceOperand.kind == MirOperandKind.PLACE);
+			MirPlace basePlace = this.output.places[basePlaceOperand.as.placeIdx];
 
-	// Methods currently use a separate (structDeclIdx, methodIdx) target space.
-	// Keep the callee placeholder for now, and encode receiver as arg0.
-	this.output.operands.push({.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = parser::NO_IDX});
+			// Each projection is part of a chain str.foo.bar.x
+			//										   ↑   ↑  ↑_ stores index to 'bar'
+			//										   |   |_ stores index to 'foo'
+			//										   |_ index is NO_PROJECTION
+			// Projection chains are stored backwards: newest node points to previous one.
+			// This lets places share common prefixes (e.g. `a.x` reused by `a.x.y`).
+			MirProjection projection = {
+				.fieldIdx = expr.member.memberIdx,
+				.prevProjectionIdx = basePlace.projectionIdx,
+			};
+			MirProjectionIdx projectionIdx = this.push_projection_get_idx(&projection);
 
-	ExprIdx receiverExprIdx = callExpr.call.memberCaller;
-	if (receiverExprIdx == parser::NO_IDX) {
-		Expr* calleeExpr = &this.inputAst.expressions[callExpr.call.callee];
-		if (calleeExpr.kind == ExprKind.MEMBER) {
-			receiverExprIdx = calleeExpr.member.base;
+			MirPlace memberPlace = {
+				.baseSymbolIdx = basePlace.baseSymbolIdx,
+				.projectionIdx = projectionIdx,
+			};
+			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
+			return {.kind = MirOperandKind.PLACE, .as.placeIdx = placeIdx};
+		}
+		default:
+		{
+			unreachable("Unsupported lvalue expression in lower_place");
 		}
 	}
 
-	MirOperand receiver = placeHolderOperand;
-	if (receiverExprIdx != parser::NO_IDX) {
-		receiver = this.lower_expr(receiverExprIdx);
-	}
-	this.output.operands.push(receiver);
-
-	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
-		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
-		this.output.operands.push(arg);
-	}
-
-	OperandIdx end = this.output.operands.len();
-	MirInstruction inst = {
-		.opCode = MirOpCode.CALL,
-		.type = this.symbolTable.exprTypes[callExprIdx],
-		.result = resultReg,
-		.operandsStart = start,
-		.operandsEnd = end,
-		.sourceExprIdx = callExprIdx,
-	};
-	this.output.instructions.push(inst);
-	return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
 }

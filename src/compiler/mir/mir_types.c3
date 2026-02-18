@@ -1,16 +1,20 @@
 module mir;
 import parser;
+import common;
 import std::collections::list;
 import log;
 
 alias MirRegisterID = int;
 alias MirBlockIdx = usz;
 alias MirPlaceIdx = usz;
+alias MirProjectionIdx = usz;
 alias MirInstructionIdx = usz;
 alias MirTerminatorIdx = usz;
 alias OperandIdx = usz;
+
 const NO_REG = -1;
 const NO_TERMINATOR = usz.max;
+const NO_PROJECTION = usz.max;
 
 bitstruct MirRegisterFlags : char
 {
@@ -41,10 +45,9 @@ enum MirOpCode : char (String asStr)
 	AND 		= "and",
 	OR 			= "or",
 	AS 			= "as",
-	ASSIGN 		= "assign",
+	STORE 		= "store",
 	CALL  		= "call",
 	LOAD 		= "load",
-	STORE 		= "store",
 }
 
 enum MirTerminatorOp : char (String asStr)
@@ -99,7 +102,14 @@ struct MirInstruction
 struct MirPlace
 {
 	usz idx;
-	NameIdx sourceNameIdx;
+	SymbolIdx baseSymbolIdx;
+	MirProjectionIdx projectionIdx;
+}
+
+struct MirProjection
+{
+	NameIdx fieldIdx;
+	MirProjectionIdx prevProjectionIdx;		// Each projection stores index to previous projection in the chain (NO_PROJECTION for first projection!)
 }
 
 struct MirTerminator
@@ -131,6 +141,7 @@ struct MirProgram
 	List{MirTerminator} terminators;
 	List{MirBlock} blocks;
 	List{MirPlace} places;
+	List{MirProjection} projections;
 	List{MirOperand} operands;
 }
 
@@ -141,6 +152,7 @@ fn void MirProgram.init(MirProgram* this, Allocator allocator, usz size)
 	this.terminators.init(allocator, size);
 	this.blocks.init(allocator, size);
 	this.places.init(allocator, size);
+	this.projections.init(allocator, size);
 	this.operands.init(allocator, size);
 }
 
@@ -158,15 +170,35 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 		SymbolIdx symbolIdx = symbols.declSymbols[fun.sourceDeclIdx];
 		if (symbolIdx < symbols.symbols.len()) {
 			Symbol funSymbol = symbols.symbols[symbolIdx];
-			log::logn("function %s -> %s", ast.names[funDecl.nameIdx], funSymbol.type.type);
+			log::log("function ");
+			this.print_decl_function_name(fun.sourceDeclIdx, ast);
+			log::logn(" -> %s", funSymbol.type.type);
 		} else {
-			log::logn("function %s -> %s", ast.names[funDecl.nameIdx], ast.names[funDecl.returnType.nameIdx]);
+			log::log("function ");
+			this.print_decl_function_name(fun.sourceDeclIdx, ast);
+			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx]);
 		}
 		for(usz i = fun.blocksStart; i < fun.blocksEnd; i++){
 			this.print_block(this.blocks[i], ast);
 		}
 	}
 	log::logn("-----------------------------");
+}
+
+fn void MirProgram.print_decl_function_name(MirProgram* this, DeclIdx declIdx, ProgramAst* ast)
+{
+	if (declIdx >= ast.declarations.len() || ast.declarations[declIdx].kind != DeclKind.FUNCTION) {
+		log::log("<fn?>");
+		return;
+	}
+	FnDeclAst* fnDecl = &ast.declarations[declIdx].fnDecl;
+	if (fnDecl.params.len() > 0 && fnDecl.params[0].type.tokenType == TokenType.THIS) {
+		String structName = ast.names[fnDecl.params[0].type.nameIdx];
+		String methodName = ast.names[fnDecl.nameIdx];
+		log::log("%s.%s", structName, methodName);
+		return;
+	}
+	log::log("%s", ast.names[fnDecl.nameIdx]);
 }
 
 
@@ -189,12 +221,7 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 		case MirOperandKind.FUNCTION:
 		{
 			DeclIdx declIdx = op.as.fnCalleeIdx;
-			if (declIdx < ast.declarations.len() && ast.declarations[declIdx].kind == DeclKind.FUNCTION) {
-				NameIdx fnNameIdx = ast.declarations[declIdx].fnDecl.nameIdx;
-				log::log("%s", ast.names[fnNameIdx]);
-			} else {
-				log::log("<fn?>");
-			}
+			this.print_decl_function_name(declIdx, ast);
 		}
 		default:
 			log::log("<?>");
@@ -267,6 +294,4 @@ fn void MirProgram.print_block(MirProgram* this, MirBlock block, ProgramAst* ast
 
 	this.print_terminator(this.terminators[block.terminator], ast);
 }
-
-
 

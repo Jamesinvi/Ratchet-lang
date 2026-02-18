@@ -41,6 +41,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	this.symbolTable.stmtSymbols.init(&this.allocator, stmtLen);
 	this.symbolTable.declSymbols.init(&this.allocator, declLen);
 	this.symbolTable.callTargets.init(&this.allocator, exprLen);
+	this.symbolTable.callReceiverExpr.init(&this.allocator, exprLen);
 
 	// Fill lists with defaults
 	common::list_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
@@ -49,6 +50,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);
 		this.symbolTable.callTargets.push({});
+		this.symbolTable.callReceiverExpr.push(parser::NO_IDX);
 	}
 
 
@@ -91,7 +93,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	}
 
 
-	for (usz i = 0; i < this.ast.declarations.len(); i++){
+	for (usz i = 0; i < this.ast.loweredMethodsStart; i++){
 		Decl* decl = &this.ast.declarations[i];
 		switch (decl.kind)
 		{
@@ -185,12 +187,15 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
 		}
 	}
 
-	// Add extra info to the symbol table, useful in later passes
-	this.symbolTable.callTargets[callExprIdx].kind = CallTargetKind.METHOD;
-	this.symbolTable.callTargets[callExprIdx].methodId = {.structDeclIdx = structDeclIdx, .methodIdx = (int)methodIdx};
+	
+	MethodDeclAst* method = &structDecl.structDecl.methods[methodIdx];
+	assert(method.loweredFormIdx != parser::NO_IDX);
+	// Lower method to free function
+	this.symbolTable.callTargets[callExprIdx].kind = CallTargetKind.FREE_FUN;
+	this.symbolTable.callTargets[callExprIdx].fnDeclIdx = method.loweredFormIdx;
 
-	MethodDeclAst* methodDecl = &structDecl.structDecl.methods[methodIdx];
-	*out = this.create_type_from_ast(&methodDecl.returnType, span);
+
+	*out = this.create_type_from_ast(&method.returnType, span);
 	return true;
 }
 
@@ -439,8 +444,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 fn bool SemanticAnalyzer.is_struct_ref_like(SemanticAnalyzer* this, CompTypeInfo info)
 {
 	return (info.type == ValueType.REF ||
-			info.type == ValueType.PTR ||
-			info.type == ValueType.BORROW_REF) &&
+			info.type == ValueType.PTR) &&
 			info.refToType == ValueType.STRUCT;
 }
 
@@ -576,7 +580,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, make_type(ValueType.BOOL), expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
-		case BinOp.ASSIGN:
+		case BinOp.STORE:
 			if (!parser::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
@@ -603,6 +607,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_this(SemanticAnalyzer* this, ExprIdx
 fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.ast.expressions[exprIdx];
+	this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 	// Method calls: resolve against struct methods before treating as free function calls.
 	Expr* calleeExpr = &this.ast.expressions[expr.call.callee];
 	if (calleeExpr.kind == ExprKind.MEMBER) {
@@ -617,6 +622,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 			String methodName = this.ast.names[calleeExpr.member.memberIdx];
 			TypeResult resolved = {};
 			if (this.try_resolve_method_call(structDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved)) {
+				this.symbolTable.callReceiverExpr[exprIdx] = calleeExpr.member.base;
 				return resolved;
 			}
 		}
@@ -625,6 +631,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		String methodName = this.ast.names[calleeExpr.varExpr];
 		TypeResult resolved = {};
 		if (this.try_resolve_method_call(this.currentStructDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved)) {
+			this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 			return resolved;
 		}
 	}
@@ -647,6 +654,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		// Add extra info to the symbol table, useful in later passes
 		this.symbolTable.callTargets[exprIdx].kind = CallTargetKind.FREE_FUN;
 		this.symbolTable.callTargets[exprIdx].fnDeclIdx = this.symbolTable.symbols[symbolIdx].idx;
+		this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 
 		return type_ok(this.symbolTable.symbols[symbolIdx].type);
 	}

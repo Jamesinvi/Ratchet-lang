@@ -180,7 +180,61 @@ fn void Parser.predeclare_functions(Parser* this)
     }
 }
 
+ 
+fn void Parser.desugar_methods(Parser* this)
+{
+    this.outputAst.loweredMethodsStart = this.outputAst.declarations.len();
+    foreach(structDeclIdx : this.structs){
+        Decl* decl = &this.outputAst.declarations[structDeclIdx];
+        foreach (methodIdx, &method : decl.structDecl.methods) {
+            // Lowered methods keep parser-lifetime allocations.
+            List{ParamAst} paramsCopy = {};
+            paramsCopy.init(&this.allocator, method.params.len() + 1);
 
+            // Add the implicit receiver as arg0 so call lowering can pass it explicitly.
+            ParamAst selfParam = {
+                .type = {.tokenType = TokenType.THIS, .nameIdx = decl.structDecl.nameIdx},
+                .nameIdx = this.push_name_get_idx("self"),
+                .span = {},
+                .passMode = ParamPassMode.IN,
+            };
+            paramsCopy.push(selfParam);
+            paramsCopy.add_all(&method.params);
+
+            @pool()
+            {
+                String mangledMethodName = this.mangle_method_name(structDeclIdx, (int)methodIdx, tmem);
+                NameIdx newNameIdx = this.push_name_get_idx(mangledMethodName);
+                FnDeclAst fnEquivalent = {
+                    .returnType = method.returnType,
+                    .nameIdx = newNameIdx,
+                    .params = paramsCopy,
+                    .body = method.body,
+                    .isDesugaredResult = true,
+                };
+                 Decl newFnDecl = {
+                    .kind = DeclKind.FUNCTION,
+                    .fnDecl = fnEquivalent,
+                };
+                DeclIdx newFunDeclIdx = this.push_decl_get_idx(&newFnDecl);
+                method.loweredFormIdx = newFunDeclIdx;
+
+            };
+        }
+    }
+}
+
+
+
+fn String Parser.mangle_method_name(Parser* this, DeclIdx structDeclIdx, int methodIdx, Allocator allocator)
+{
+    Decl* structDecl = &this.outputAst.declarations[structDeclIdx];
+    MethodDeclAst* methodDecl = &structDecl.structDecl.methods[methodIdx];
+    String structName = this.outputAst.names[structDecl.structDecl.nameIdx];
+    String methodName = this.outputAst.names[methodDecl.nameIdx];
+
+    return string::format(allocator, "%s_%s", structName, methodName);
+}
 
 fn void Parser.predeclare_natives(Parser* this)
 {
