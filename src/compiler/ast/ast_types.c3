@@ -112,26 +112,26 @@ enum ExprKind : char
 
 enum BinOp : char (String asStr)
 {
-    ADD         { "add"},
-    SUB         { "sub"}, 
-    MUL         { "mul"}, 
-    DIV         { "div"}, 
-    EQ          { "eq"}, 
-    NEQ         { "noteq"}, 
-    LESS        { "less"}, 
-    LESS_EQ     { "lesseq"}, 
-    GREATER     { "greater"}, 
-    GREATER_EQ  { "greatereq"}, 
-    AND         { "and"}, 
-    OR          { "or"},
-    AS          { "as"},
-    STORE       { "store"},
+    ADD         { "add" },
+    SUB         { "sub" }, 
+    MUL         { "mul" }, 
+    DIV         { "div" }, 
+    EQ          { "eq" }, 
+    NEQ         { "noteq" }, 
+    LESS        { "less" }, 
+    LESS_EQ     { "lesseq" }, 
+    GREATER     { "greater" }, 
+    GREATER_EQ  { "greatereq" }, 
+    AND         { "and" }, 
+    OR          { "or" },
+    AS          { "as" },
+    STORE       { "store" },
 }
 
 enum UnOp  : char (String asStr)
 { 
-    NEG         { "neg"},
-    NOT         { "not"},
+    NEG         { "neg" },
+    NOT         { "not" },
 }
 
 
