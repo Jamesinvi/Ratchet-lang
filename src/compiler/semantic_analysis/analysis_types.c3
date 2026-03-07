@@ -56,10 +56,10 @@ struct MethodId
 
 enum ErrorKind : char (String asStr)
 {
-	TYPE_MISMATCH	= "Type mismatch",
-	INVALID_TYPE	= "Invalid type",
-	UNDECLARED_NAME	= "Undeclared name",
-	NO_RETURN		= "No return",
+	TYPE_MISMATCH	{ "Type mismatch" },
+	INVALID_TYPE	{ "Invalid type" },
+	UNDECLARED_NAME { "Undeclared name" },
+	NO_RETURN		{ "No return" },
 }
 
 struct TypeResult

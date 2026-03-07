@@ -32,43 +32,43 @@ struct MirRegister
 
 enum MirOpCode : char (String asStr)
 {
-	ADD			= "add",
-	SUB			= "sub",
-	MUL 		= "mul",
-	DIV 		= "div",
-	EQ 			= "eq",
-	NEQ 		= "noteq",
-	LESS 		= "less",
-	LESS_EQ		= "lesseq",
-	GREATER 	= "greater",
-	GREATER_EQ 	= "greatereq",
-	AND 		= "and",
-	OR 			= "or",
-	AS 			= "as",
-	STORE 		= "store",
-	CALL  		= "call",
-	LOAD 		= "load",
+	ADD			{ "add" },
+	SUB			{ "sub" },
+	MUL 		{ "mul" },
+	DIV 		{ "div" },
+	EQ 			{ "eq" },
+	NEQ 		{ "noteq" },
+	LESS 		{ "less" },
+	LESS_EQ		{ "lesseq" },
+	GREATER 	{ "greater" },
+	GREATER_EQ 	{ "greatereq" },
+	AND 		{ "and" },
+	OR 			{ "or" },
+	AS 			{ "as" },
+	STORE 		{ "store" },
+	CALL  		{ "call" },
+	LOAD 		{ "load" },
 }
 
 enum MirTerminatorOp : char (String asStr)
 {
-	JUMP		= "jump",
-	BRANCH		= "branch",
-	RETURN 		= "return",
+	JUMP		{ "jump" },
+	BRANCH		{ "branch" },
+	RETURN 		{ "return" },
 }
 
 enum MirOperandKind : char (String asStr)
 {
-	INVALID		= "invalid!",
-	REGISTER 	= "reg",
-	PLACE 		= "place",
-	IMM_INT 	= "imm_i",
-	IMM_FLOAT 	= "imm_f",
-	IMM_DOUBLE  = "imm_d",
-	IMM_BOOL 	= "imm_b",
-	IMM_NULL 	= "null",
-	BLOCK 		= "block",
-	FUNCTION 	= "fn",
+	INVALID		{ "invalid!" },
+	REGISTER 	{ "reg" },
+	PLACE 		{ "place" },
+	IMM_INT 	{ "imm_i" },
+	IMM_FLOAT 	{ "imm_f" },
+	IMM_DOUBLE  { "imm_d" },
+	IMM_BOOL 	{ "imm_b" },
+	IMM_NULL 	{ "null" },
+	BLOCK 		{ "block" },
+	FUNCTION 	{ "fn" },
 }
 
 
