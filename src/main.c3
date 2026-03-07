@@ -72,8 +72,6 @@ fn int main(String[] args)
 	mirGen.init(&parser.outputAst, &semanticAnalyzer.symbolTable);
 	mirGen.run();
 
-
-
     return 0;
 }
 

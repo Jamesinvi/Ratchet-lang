@@ -67,7 +67,22 @@ fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 	MirFunction loweredFunc = {.sourceDeclIdx = index};
 	loweredFunc.blocksStart = this.output.blocks.len();
 
-	MirBlockIdx blockIdx = this.output.blocks.len();
+	// Parameters behave like pre-existing locals at function entry.
+	DeclParamRange paramRange = this.symbolTable.declParamRanges[index];
+	for (usz i = paramRange.start; i < paramRange.end; i++) {
+		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[i];
+		MirPlace paramPlace = {
+			.baseSymbolIdx = paramSymbolIdx,
+			.projectionIdx = NO_PROJECTION,
+		};
+		MirPlaceIdx placeIdx = this.push_place_get_idx(&paramPlace);
+		this.bindings[paramSymbolIdx] = {
+			.kind = MirOperandKind.PLACE,
+			.placeIdx = placeIdx,
+		};
+	}
+
+    MirBlockIdx blockIdx = this.output.blocks.len();
 	MirBlock block = {
 		.idx = blockIdx,
 		.instructionsStart = this.output.instructions.len(),
@@ -81,7 +96,7 @@ fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 		this.lower_stmt(stmtIdx);
 	}
 
-	MirBlock* loweredBlock = &this.output.blocks[blockIdx];
+	MirBlock* loweredBlock = &this.output.blocks[this.currentBlock];
 	loweredBlock.instructionsEnd = this.output.instructions.len();
 	if (loweredBlock.terminator == NO_TERMINATOR) {
 		MirTerminator defaultTerm = {
@@ -89,10 +104,9 @@ fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 			.operandsStart = this.output.operands.len(),
 			.operandsEnd = this.output.operands.len(),
 		};
-		loweredBlock.terminator = this.output.terminators.len();
-		this.output.terminators.push(defaultTerm);
+		loweredBlock.terminator = this.push_terminator_get_idx(&defaultTerm);
 	}
-	loweredFunc.blocksEnd = loweredFunc.blocksStart + 1;
+	loweredFunc.blocksEnd = this.output.blocks.len();
 
 	this.output.functions.push(loweredFunc);
 }
@@ -105,10 +119,108 @@ fn void MirGenerator.lower_stmt(MirGenerator* this, StmtIdx stmtIdx)
 	switch(stmt.kind)
 	{
 		case StmtKind.DECL:		this.lower_var_decl(stmtIdx);
+		case StmtKind.IF:		this.lower_if(stmtIdx);
 		case StmtKind.RETURN:	this.lower_return(stmtIdx);
 		case StmtKind.EXPR:		this.lower_expr(stmt.exprStmt);
 		default: 				break;
 	}
+}
+
+fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
+{
+	Stmt* stmt = &this.inputAst.statements[stmtIdx];
+	BlockStmt* thenStmt = &this.inputAst.statements[stmt.ifStmt.thenBlock].blockStmt;
+	bool hasElse = stmt.ifStmt.elseBlock != parser::NO_IDX;
+	BlockStmt* elseStmt = null;
+	if (hasElse) {
+		elseStmt = &this.inputAst.statements[stmt.ifStmt.elseBlock].blockStmt;
+	}
+
+	MirBlockIdx branchBlockIdx = this.currentBlock;
+	MirOperand condOperand = this.lower_expr(stmt.ifStmt.cond);
+
+	MirBlockIdx thenBlockIdx = this.output.blocks.len();
+	MirBlockIdx falseBlockIdx = thenBlockIdx + 1;
+	MirBlockIdx joinBlockIdx = falseBlockIdx;
+	if (hasElse) {
+		joinBlockIdx = falseBlockIdx + 1;
+	}
+
+	OperandIdx branchStart = this.output.operands.len();
+	this.output.operands.push(condOperand);
+	this.output.operands.push({.kind = MirOperandKind.BLOCK, .blockIdx = thenBlockIdx});
+	this.output.operands.push({.kind = MirOperandKind.BLOCK, .blockIdx = falseBlockIdx});
+	OperandIdx branchEnd = this.output.operands.len();
+
+	MirBlock* branchBlock = &this.output.blocks[branchBlockIdx];
+	branchBlock.instructionsEnd = this.output.instructions.len();
+	MirTerminator branchTerm = {
+		.opCode = MirTerminatorOp.BRANCH,
+		.operandsStart = branchStart,
+		.operandsEnd = branchEnd,
+	};
+	branchBlock.terminator = this.push_terminator_get_idx(&branchTerm);
+
+	MirBlock thenBlock = {
+		.idx = thenBlockIdx,
+		.instructionsStart = this.output.instructions.len(),
+		.instructionsEnd = this.output.instructions.len(),
+		.terminator = NO_TERMINATOR,
+	};
+	this.output.blocks.push(thenBlock);
+	this.currentBlock = thenBlockIdx;
+	foreach(thenStmtIdx : thenStmt.stmts) {
+		this.lower_stmt(thenStmtIdx);
+	}
+	MirBlock* loweredThenBlock = &this.output.blocks[thenBlockIdx];
+	loweredThenBlock.instructionsEnd = this.output.instructions.len();
+	if (loweredThenBlock.terminator == NO_TERMINATOR) {
+		OperandIdx jumpStart = this.output.operands.len();
+		this.output.operands.push({.kind = MirOperandKind.BLOCK, .blockIdx = joinBlockIdx});
+		OperandIdx jumpEnd = this.output.operands.len();
+		MirTerminator jumpTerm = {
+			.opCode = MirTerminatorOp.JUMP,
+			.operandsStart = jumpStart,
+			.operandsEnd = jumpEnd,
+		};
+		loweredThenBlock.terminator = this.push_terminator_get_idx(&jumpTerm);
+	}
+
+	if (hasElse) {
+		MirBlock elseBlock = {
+			.idx = falseBlockIdx,
+			.instructionsStart = this.output.instructions.len(),
+			.instructionsEnd = this.output.instructions.len(),
+			.terminator = NO_TERMINATOR,
+		};
+		this.output.blocks.push(elseBlock);
+		this.currentBlock = falseBlockIdx;
+		foreach(elseStmtIdx : elseStmt.stmts) {
+			this.lower_stmt(elseStmtIdx);
+		}
+		MirBlock* loweredElseBlock = &this.output.blocks[falseBlockIdx];
+		loweredElseBlock.instructionsEnd = this.output.instructions.len();
+		if (loweredElseBlock.terminator == NO_TERMINATOR) {
+			OperandIdx jumpStart = this.output.operands.len();
+			this.output.operands.push({.kind = MirOperandKind.BLOCK, .blockIdx = joinBlockIdx});
+			OperandIdx jumpEnd = this.output.operands.len();
+			MirTerminator jumpTerm = {
+				.opCode = MirTerminatorOp.JUMP,
+				.operandsStart = jumpStart,
+				.operandsEnd = jumpEnd,
+			};
+			loweredElseBlock.terminator = this.push_terminator_get_idx(&jumpTerm);
+		}
+	}
+
+	MirBlock joinBlock = {
+		.idx = joinBlockIdx,
+		.instructionsStart = this.output.instructions.len(),
+		.instructionsEnd = this.output.instructions.len(),
+		.terminator = NO_TERMINATOR,
+	};
+	this.output.blocks.push(joinBlock);
+	this.currentBlock = joinBlockIdx;
 }
 
 
@@ -120,7 +232,7 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 	SymbolIdx stmtSymbolIdx = this.symbolTable.stmtSymbols[stmtIdx];
 	MirPlace newPlace = {.baseSymbolIdx = stmtSymbolIdx, .projectionIdx = NO_PROJECTION};
 	MirPlaceIdx placeIdx = this.push_place_get_idx(&newPlace);
-	MirOperand operand = {.kind = MirOperandKind.PLACE, .as.placeIdx = placeIdx};
+	MirOperand operand = {.kind = MirOperandKind.PLACE, .placeIdx = placeIdx};
 
 	this.bindings[stmtSymbolIdx] = operand;
 	if (stmt.varDecl.init != parser::NO_IDX) {
@@ -162,10 +274,14 @@ fn void MirGenerator.lower_return(MirGenerator* this, StmtIdx stmtIdx)
 {
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
 	debug::@log_mir("lowering return: '%s'", this.inputAst.names[stmt.varDecl.nameIdx]);
-	OperandIdx start = this.output.operands.len();
+	MirOperand returnValue = placeHolderOperand;
 
 	if (stmt.retStmt.value != parser::NO_IDX) {
-		MirOperand returnValue = this.lower_expr(stmt.retStmt.value);
+		returnValue = this.lower_expr(stmt.retStmt.value);
+	}
+	// Only the final return value belongs to the terminator's operand slice.
+	OperandIdx start = this.output.operands.len();
+	if (stmt.retStmt.value != parser::NO_IDX) {
 		this.output.operands.push(returnValue);
 	}
 	OperandIdx end = this.output.operands.len();
@@ -176,8 +292,7 @@ fn void MirGenerator.lower_return(MirGenerator* this, StmtIdx stmtIdx)
 		.operandsEnd = end,
 	};
 
-	MirTerminatorIdx termIdx = this.output.terminators.len();
-	this.output.terminators.push(term);
+	MirTerminatorIdx termIdx = this.push_terminator_get_idx(&term);
 	this.output.blocks[this.currentBlock].terminator = termIdx;
 }
 
@@ -188,11 +303,11 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 
 	switch (expr.kind)
 	{
-		case ExprKind.INT:				return {.kind = MirOperandKind.IMM_INT, 	.as.immInt = expr.intLiteral};
-		case ExprKind.FLOAT:			return {.kind = MirOperandKind.IMM_FLOAT, 	.as.immFloat = expr.floatLiteral};
-		case ExprKind.DOUBLE:			return {.kind = MirOperandKind.IMM_DOUBLE, 	.as.immDouble = expr.doubleLiteral};
-		case ExprKind.BOOL:				return {.kind = MirOperandKind.IMM_BOOL, 	.as.immBool = expr.boolLiteral};
-		case ExprKind.NULL:				return {.kind = MirOperandKind.IMM_NULL, 	.as.immInt = 0};
+		case ExprKind.INT:				return {.kind = MirOperandKind.IMM_INT, 	.immInt = expr.intLiteral};
+		case ExprKind.FLOAT:			return {.kind = MirOperandKind.IMM_FLOAT, 	.immFloat = expr.floatLiteral};
+		case ExprKind.DOUBLE:			return {.kind = MirOperandKind.IMM_DOUBLE, 	.immDouble = expr.doubleLiteral};
+		case ExprKind.BOOL:				return {.kind = MirOperandKind.IMM_BOOL, 	.immBool = expr.boolLiteral};
+		case ExprKind.NULL:				return {.kind = MirOperandKind.IMM_NULL, 	.immInt = 0};
 	
 		case ExprKind.BINARY:
 		{
@@ -221,7 +336,7 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 				.sourceExprIdx = exprIdx,
 			};
 			this.output.instructions.push(inst);
-			return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
 		}
 		case ExprKind.CALL:
 		{
@@ -229,16 +344,15 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			assert(target.kind == CallTargetKind.FREE_FUN);
 			return this.lower_free_fun(exprIdx);
 		}
-		case ExprKind.VAR:
-		{
+			case ExprKind.VAR:
+			{
 
-			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			CompTypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
-			MirOperand place = this.bindings[varExprSymbolIdx];
-			assert(place.kind == MirOperandKind.PLACE);
-			MirRegisterID resultReg = this.currentReg++;
-			OperandIdx start = this.output.operands.len();
-			this.output.operands.push(place);
+				SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
+				CompTypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
+				MirOperand place = this.bindings[varExprSymbolIdx];
+				MirRegisterID resultReg = this.currentReg++;
+				OperandIdx start = this.output.operands.len();
+				this.output.operands.push(place);
 			OperandIdx end = this.output.operands.len();
 
 			MirInstruction inst = {
@@ -250,10 +364,10 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 				.sourceExprIdx = exprIdx,
 			};
 			this.output.instructions.push(inst);
-			return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
 		}
 		default:{
-			return {.kind = MirOperandKind.REGISTER, .as.regId = NO_REG};
+			return {.kind = MirOperandKind.REGISTER, .regId = NO_REG};
 		}
 	}
 
@@ -263,28 +377,34 @@ fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprId
 {
 	Expr* callExpr = &this.inputAst.expressions[callExprIdx];
 	MirRegisterID resultReg = this.currentReg++;
-	OperandIdx start = this.output.operands.len();
 
 	CallTarget target = this.symbolTable.callTargets[callExprIdx];
 	assert(target.kind == CallTargetKind.FREE_FUN);
 
 	DeclIdx fnDeclIdx = target.fnDeclIdx;
-	MirOperand callee = {.kind = MirOperandKind.FUNCTION, .as.fnCalleeIdx = fnDeclIdx};
-	this.output.operands.push(callee);
+	MirOperand callee = {.kind = MirOperandKind.FUNCTION, .fnCalleeIdx = fnDeclIdx};
+
+	List{MirOperand} callOperands = {};
+	callOperands.init(&this.allocator, callExpr.call.argsEnd - callExpr.call.argsStart + 2);
+	callOperands.push(callee);
 
 	// Receiver is inserted as arg0 for method calls lowered to free functions.
 	ExprIdx receiverExprIdx = this.symbolTable.callReceiverExpr[callExprIdx];
 
 	if (receiverExprIdx != parser::NO_IDX) {
 		MirOperand receiver = this.lower_expr(receiverExprIdx);
-		this.output.operands.push(receiver);
+		callOperands.push(receiver);
 	} 
 
 	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
 		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
-		this.output.operands.push(arg);
+		callOperands.push(arg);
 	}
 
+	// Child expressions may have emitted their own operands already; append only the
+	// semantic call operands here so the CALL instruction owns a clean slice.
+	OperandIdx start = this.output.operands.len();
+	this.output.operands.add_all(&callOperands);
 	OperandIdx end = this.output.operands.len();
 	MirInstruction inst = {
 		.opCode = MirOpCode.CALL,
@@ -295,7 +415,7 @@ fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprId
 		.sourceExprIdx = callExprIdx,
 	};
 	this.output.instructions.push(inst);
-	return {.kind = MirOperandKind.REGISTER, .as.regId = resultReg};
+	return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
 }
 
 fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
@@ -314,7 +434,7 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 		{
 			MirOperand basePlaceOperand = this.lower_place(expr.member.base);
 			assert(basePlaceOperand.kind == MirOperandKind.PLACE);
-			MirPlace basePlace = this.output.places[basePlaceOperand.as.placeIdx];
+			MirPlace basePlace = this.output.places[basePlaceOperand.placeIdx];
 
 			// Each projection is part of a chain str.foo.bar.x
 			//										   ↑   ↑  ↑_ stores index to 'bar'
@@ -333,7 +453,7 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 				.projectionIdx = projectionIdx,
 			};
 			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
-			return {.kind = MirOperandKind.PLACE, .as.placeIdx = placeIdx};
+			return {.kind = MirOperandKind.PLACE, .placeIdx = placeIdx};
 		}
 		default:
 		{

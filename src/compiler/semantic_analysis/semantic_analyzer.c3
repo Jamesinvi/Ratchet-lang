@@ -40,12 +40,15 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	this.symbolTable.exprTypes.init(&this.allocator, exprLen);
 	this.symbolTable.stmtSymbols.init(&this.allocator, stmtLen);
 	this.symbolTable.declSymbols.init(&this.allocator, declLen);
+	this.symbolTable.declParamRanges.init(&this.allocator, declLen);
+	this.symbolTable.declParamSymbols.init(&this.allocator, exprLen + stmtLen + declLen);
 	this.symbolTable.callTargets.init(&this.allocator, exprLen);
 	this.symbolTable.callReceiverExpr.init(&this.allocator, exprLen);
 
 	// Fill lists with defaults
 	common::list_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
 	common::list_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
+	common::list_fill{DeclParamRange}(&this.symbolTable.declParamRanges, {}, declLen);
 	for (usz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);
@@ -99,7 +102,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 		{
 			case DeclKind.FUNCTION:
 			{
-				TypeResult declType = this.analyze_fn(&decl.fnDecl);
+				TypeResult declType = this.analyze_fn(&decl.fnDecl, i);
 				if (declType.hadError) {
 					return declType;
 				}
@@ -119,8 +122,9 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	return type_ok(make_type(ValueType.NULL));
 }
 
-fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params)
+fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params, DeclIdx ownerDeclIdx)
 {
+	usz rangeStart = this.symbolTable.declParamSymbols.len();
 	foreach (&param : *params){
 		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
 		if (paramType.hadError) {
@@ -129,8 +133,13 @@ fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{Param
 		SymbolIdx symbolIdx = this.symbolTable.symbols.len();
 		Symbol symbol = { .kind = SymbolKind.PARAM, .idx = (SymbolIdx)param.nameIdx, .type = paramType.value };
 		this.symbolTable.symbols.push(symbol);
+		this.symbolTable.declParamSymbols.push(symbolIdx);
 		this.current_scope().visibleSymbols.push(symbolIdx);
 	}
+	this.symbolTable.declParamRanges[ownerDeclIdx] = {
+		.start = rangeStart,
+		.end = this.symbolTable.declParamSymbols.len(),
+	};
 	return type_ok(make_type(ValueType.NULL));
 }
 
@@ -199,7 +208,7 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
 	return true;
 }
 
-fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnDecl)
+fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnDecl, DeclIdx ownerDeclIdx)
 {
 	Span fnSpan = this.ast.statements[fnDecl.body].span;
 	TypeResult expectedRetType = this.create_type_from_ast(&fnDecl.returnType, fnSpan);
@@ -212,7 +221,7 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 	this.begin_scope(expectedRetType, false);
 	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
 	this.currentStructDeclIdx = parser::NO_IDX;
-	TypeResult paramsType = this.declare_params(&fnDecl.params);
+	TypeResult paramsType = this.declare_params(&fnDecl.params, ownerDeclIdx);
 	if (paramsType.hadError) {
 		return paramsType;
 	}
@@ -248,7 +257,7 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	this.begin_scope(expectedRetType, true);
 	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
 	this.currentStructDeclIdx = methodDecl.structIdx;
-	TypeResult paramsType = this.declare_params(&methodDecl.params);
+	TypeResult paramsType = this.declare_params(&methodDecl.params, methodDecl.loweredFormIdx);
 
 	if (paramsType.hadError) {
 		return paramsType;

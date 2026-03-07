@@ -1,7 +1,7 @@
 module mir;
 import parser;
 
-MirOperand placeHolderOperand =  {.kind = MirOperandKind.INVALID, .as.regId= NO_REG};
+MirOperand placeHolderOperand =  {.kind = MirOperandKind.INVALID, .regId= NO_REG};
 
 fn MirOpCode ast_to_mir_op(BinOp astBinOp) @inline
 {
@@ -21,5 +21,12 @@ fn MirProjectionIdx MirGenerator.push_projection_get_idx(MirGenerator* this, Mir
 {
     MirProjectionIdx index = this.output.projections.len();
     this.output.projections.push(*to_push);
+    return index;
+}
+
+fn MirTerminatorIdx MirGenerator.push_terminator_get_idx(MirGenerator* this, MirTerminator* to_push)
+{
+    MirTerminatorIdx index = this.output.terminators.len();
+    this.output.terminators.push(*to_push);
     return index;
 }

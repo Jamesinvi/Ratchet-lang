@@ -10,6 +10,18 @@ fn bool program(){
 
 	aha.x = 3f + 55f;
 	aha.y = 21f;
+
+	int test = 125;
+
+	tryThis(test)
 	return false;
+}
+
+fn int tryThis(int k){
+	if(k > 120){
+		return 120;
+	}else{
+		return k;
+	}
 }
 

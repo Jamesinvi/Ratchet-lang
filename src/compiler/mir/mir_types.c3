@@ -75,9 +75,10 @@ enum MirOperandKind : char (String asStr)
 struct MirOperand
 {
 	MirOperandKind kind;
-	union as {
+	union {
 		MirRegisterID 	regId;
 		MirPlaceIdx 	placeIdx;
+		MirBlockIdx 	blockIdx;
 		DeclIdx 		fnCalleeIdx;
 		int 			immInt;
 		float 			immFloat;
@@ -181,6 +182,7 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 		for(usz i = fun.blocksStart; i < fun.blocksEnd; i++){
 			this.print_block(this.blocks[i], ast);
 		}
+		log::log("\n");
 	}
 	log::logn("-----------------------------");
 }
@@ -206,21 +208,21 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 {
 	switch (op.kind){
 		case MirOperandKind.REGISTER:
-			if (op.as.regId == NO_REG) {
+			if (op.regId == NO_REG) {
 				log::log("<noreg>");
 			} else {
-				log::log("_r%s", op.as.regId);
+				log::log("_r%s", op.regId);
 			}
-		case MirOperandKind.PLACE:							log::log("_%%%s", op.as.placeIdx);
-		case MirOperandKind.IMM_INT:						log::log("%s", op.as.immInt);
-		case MirOperandKind.IMM_FLOAT:						log::log("%s", op.as.immFloat);
-		case MirOperandKind.IMM_DOUBLE:						log::log("%s", op.as.immDouble);
-		case MirOperandKind.IMM_BOOL:						log::log("%s", op.as.immBool);
+		case MirOperandKind.PLACE:							log::log("_%%%s", 	op.placeIdx);
+		case MirOperandKind.IMM_INT:						log::log("%s", 		op.immInt);
+		case MirOperandKind.IMM_FLOAT:						log::log("%s", 		op.immFloat);
+		case MirOperandKind.IMM_DOUBLE:						log::log("%s", 		op.immDouble);
+		case MirOperandKind.IMM_BOOL:						log::log("%s", 		op.immBool);
 		case MirOperandKind.IMM_NULL:						log::log("null");
-		case MirOperandKind.BLOCK:							log::log("block_%s", op.as.placeIdx);
+		case MirOperandKind.BLOCK:							log::log("block_%s",op.blockIdx);
 		case MirOperandKind.FUNCTION:
 		{
-			DeclIdx declIdx = op.as.fnCalleeIdx;
+			DeclIdx declIdx = op.fnCalleeIdx;
 			this.print_decl_function_name(declIdx, ast);
 		}
 		default:
@@ -294,4 +296,3 @@ fn void MirProgram.print_block(MirProgram* this, MirBlock block, ProgramAst* ast
 
 	this.print_terminator(this.terminators[block.terminator], ast);
 }
-
