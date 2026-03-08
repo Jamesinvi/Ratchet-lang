@@ -28,6 +28,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 {
 	this.ast = ast;
 	this.symbolTable = {};
+	this.scopes = {};
 	this.allocator = {};
 	this.allocator.init(mem, 64 * 1024);
 

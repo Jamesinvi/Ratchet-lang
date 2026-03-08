@@ -1,16 +1,5 @@
-import lexer;
 import parser;
-import common;
-import debug;
-import vm;
-import log;
-import libc;
-import std::collections;
-import std::io::file;
 import main;
-
-alias Lexer = lexer::Lexer;
-alias Parser = parser::Parser;
 
 
 fn void t_00() @test
@@ -81,39 +70,13 @@ fn void t_12() @test
 
 fn void? compile_and_run_file(String filename, String expectedResult)
 {
- 	Lexer lexer ={};
-    Parser parser ={};
-
-	String? file = (String)file::load(mem,filename);
-	if (catch err = file)
-	{
-		// Print the error
-		log::errlogn("Failed to load %s: %s", filename, err);
-		// We return, so that below 'file' will be unwrapped.
-		return io::FILE_NOT_FOUND~;
-	}
-
-	main::initialize_globals();
-	defer main::cleanup_globals();
-
-	lexer.init(file);
-	lexer.parse_tokens();
-	free(file);
-
-    parser.init();
-	defer parser.deinit();
-    if(catch err = parser.parse()){
-		return parser::PARSE_ERROR~;
-    }
-	parser.outputAst.print();
-	SemanticAnalyzer semanticAnalyzer = {};
-	semanticAnalyzer.init(&parser.outputAst);
-	defer semanticAnalyzer.deinit();
-	TypeResult typeResult = semanticAnalyzer.run();
-	if (typeResult.hadError || semanticAnalyzer.errors.len() > 0) {
-		return parser::analyzer::ANALYSIS_ERR~;
-	}
-	if(semanticAnalyzer.errors.len() == 0){
-		log::logn("Compiled successfully");
+	defer main::cleanup();
+	switch (main::compile_file(filename)) {
+		case CompilationResult.NO_ERROR:
+			return;
+		case CompilationResult.PARSE_ERROR:
+			return parser::PARSE_ERROR~;
+		case CompilationResult.ANALYSIS_ERROR:
+			return parser::analyzer::ANALYSIS_ERR~;
 	}
 }

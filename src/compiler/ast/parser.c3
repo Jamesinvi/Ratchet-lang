@@ -59,6 +59,9 @@ fn void? Parser.parse(Parser* parser)
         parser.declaration();
     }
     parser.desugar_methods();
+    if(parser.hadError){
+        return PARSE_ERROR~;
+    }
 }
 
 // ---------- Declarations & statements ----------

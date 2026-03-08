@@ -13,7 +13,7 @@ fn bool program(){
 
 	int test = 125;
 
-	tryThis(test)
+	tryThis(test);
 	return false;
 }
 
