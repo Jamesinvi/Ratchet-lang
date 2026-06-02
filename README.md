@@ -1,49 +1,43 @@
 # Ratchet Language
 
-**Ratchet** is a simple, imperative, strongly typed language with familiar C-like syntax that sits between low-level systems languages and high-level scripting languages.
+**Ratchet** is a small, imperative, strongly typed language with familiar C-like syntax.
 
-The main idea is simple: make storage and lifetime choices explicit **per variable**. Instead of hiding allocation behavior behind runtime defaults, Ratchet makes it visible in types so you can reason about where data lives.
+The goal is to keep the language small but powerful.
+
+The language is designed for tooling and scripting while keeping a strong type system and compile-time checks. It has a GC but the runtime is very different from a standard "GC-ed" language.
+
+Ratchet is built around two ideas:
+
+1. **Explicit memory shape** — values, managed references, manual pointers, and borrows are distinct and visible in the type system.
+2. **Explicit time flow** — long-running behavior can be written with `coroutine` declarations and controlled `wait` points.
+
+Storage and lifetime choices are explicit **per variable**. Instead of hiding allocation behavior behind runtime defaults, Ratchet makes it visible in types so you can reason about where data lives and make less mistakes.
 
 At a high level:
 
-1. `T` is a **stack-allocated value** by default.
+1. `T` is a **stack-allocated value**.
 2. `T&` is a **GC-tracked heap-allocated reference**.
 3. `T*` is a **non-GC heap-allocated reference** with manual lifetime.
 
-That model lets you start with straightforward code, then selectively move specific values to GC-tracked or manual heap storage only where performance and allocation behavior matters.
+This model lets you start with straightforward code, then selectively move specific values to GC-tracked or manual heap storage only where performance and allocation behavior matters.
 
-This split can also improve runtime behavior in mixed workloads. If hot paths are migrated away from GC-tracked storage and into manually managed storage, the collector has fewer objects and references to scan. In practice, that can reduce GC traversal work and make collection pauses smaller or less frequent.
+Ratchet is still being actively built and is **not fully working yet**. The current implementation is moving toward a typed register-based VM. Older proof-of-concept releases may not match the design described here.
 
-This keeps the workflow ergonomic for infrequently ran code, while allowing for more precise control where it matters.
-
-Ratchet is still being actively built and is **not fully working yet**. To try existing pieces, use the `0.0.5` proof-of-concept release, knowing only part of the language works there.
-
-The long-term runtime direction is interpreted execution first, with a planned **JIT** and a possible optional **AOT** path later.
-
-This document is the main language overview for now.
+The runtime direction is interpreted execution first, with a planned **JIT** and a possible optional **AOT** path later.
 
 ## Sections
+
 1. [Design Goals](#design-goals)
 2. [Syntax Basics](#syntax-basics)
 3. [Types](#types)
 4. [Functions](#functions)
-5. [Values and Heap-Allocated References](#values-and-heap-allocated-references)
-6. [Arrays](#arrays)
-7. [Borrow Parameters](#borrow-parameters)
-8. [Structs and Methods](#tructs-and-methods)
-9. [Interfaces](#interfaces)
-10. **[Examples](#examples)**
-
-[#design-goals]: #design-goals
-[#syntax-basics]: #syntax-basics
-[#types]: #types
-[#functions]: #functions
-[#values-and-heap-allocated-references]: #values-and-heap-allocated-references
-[#arrays]: #arrays
-[#borrow-parameters]: #borrow-parameters
-[#structs-and-methods]: #structs-and-methods
-[#interfaces]: #interfaces
-[#examples]: #examples
+5. [Values, References, and Pointers](#values-references-and-pointers)
+6. [Structs and Methods](#structs-and-methods)
+7. [Arrays](#arrays)
+8. [Coroutines](#coroutines)
+9. [Borrow Parameters](#borrow-parameters)
+10. [Examples](#examples)
+11. [Current Status](#current-status)
 
 <a id="design-goals" name="design-goals"></a>
 ## Design Goals
@@ -51,15 +45,15 @@ This document is the main language overview for now.
 1. Keep the language **small**, clear, and easy to embed.
 2. Keep everyday code simple with **value semantics**.
 3. Keep memory behavior explicit in types, so storage and ownership are visible at a glance.
-4. Allow explicit control for cases where memory allocation strategy matters.
-5. Be relatively small and relatively performant compared to similar scripting-oriented languages, especially for high-performance embeddable use cases like games and tools.
+4. Allow explicit control where allocation strategy, lifetime, and runtime behavior matter.
+5. Support long-running stateful behavior without having to create state machines for everything.
 
 <a id="syntax-basics" name="syntax-basics"></a>
 ## Syntax Basics
 
 Ratchet uses familiar C-like structure.
 
-1. Programs are built from `fn` and `struct` declarations.
+1. Programs are built from declarations such as `fn`, `coroutine`, and `struct`.
 2. Statements end with `;`.
 3. Blocks use `{ ... }`.
 4. Variables use `Type name = expression;`.
@@ -83,15 +77,19 @@ if (score > 10) {
 3. `float`
 4. `double`
 5. `string`
-6. `null` (used for no-return function signatures)
+6. `null` for no-return function signatures
 
 ### User types
 
 1. `struct` value types
-2. Heap-allocated reference forms using `&` and `*`
+2. `T&` managed heap references
+3. `T*` manually managed/native pointers
+4. Array forms such as `T[N]`, `T[]&`, and `T[]*`
 
 <a id="functions" name="functions"></a>
 ## Functions
+
+Functions run immediately and complete before returning. A normal `fn` cannot suspend.
 
 One complete function example:
 
@@ -125,36 +123,93 @@ fn <return-type> <name>(<typed-params>) {
 Notes:
 
 1. `null` is used for functions that do not return a value.
-2. Parameters are passed by value unless they are heap-allocated reference types (`T&` or `T*`).
+2. Parameters are passed by value unless they use reference, pointer, or borrow forms.
+3. `wait` is not legal inside a normal function.
 
-<a id="values-and-heap-allocated-references" name="values-and-heap-allocated-references"></a>
-## Values and Heap-Allocated References
+
+<a id="values-references-and-pointers" name="values-references-and-pointers"></a>
+## Values, References, and Pointers
 
 Ratchet makes storage mode explicit in type spelling.
 
 | Form | Meaning | Allocation | Copy behavior |
 | --- | --- | --- | --- |
-| `T` | Value type | Stack/inline (default) | Full value copy |
-| `T&` | GC-managed heap-allocated reference | `new T&` | Reference copy |
-| `T*` | Manual heap-allocated reference | `new T*` | Reference copy |
+| `T` | Value type | Stack/inline by default | Full value copy |
+| `T&` | Managed heap reference | `new T&` | Reference copy |
+| `T*` | Manual/native pointer | `new T*` | Pointer copy |
 
 Quick examples:
 
 ```cpp
-int  a = 5;   // stack value (copied)
-int& b = {5}; // heap-allocated, GC-tracked
-int* c = {5}; // heap-allocated, non-GC-tracked
+int a = 5;                  // value
+int& b = new int& { 5 };    // managed heap reference
+int* c = new int* { 5 };    // manual/native pointer
+free(c);
 ```
 
 Notes:
 
 1. `T`, `T&`, and `T*` are distinct and not implicitly convertible.
-2. `T*` values must be explicitly `free`d.
+2. `T&` participates in Ratchet's managed runtime.
+3. `T*` is for manual/native ownership boundaries and must be handled explicitly.
+
+<a id="coroutines" name="coroutines"></a>
+## Coroutines
+
+A `coroutine` is a named resumable procedure. It is used for behavior that unfolds over time.
+
+A coroutine is **not** a function value and it is controlled through a CoroutineHandle. Operations like starting/canceling the coroutine are done with the handle.
+
+Example:
+
+```cpp
+coroutine regen(Enemy& enemy, float amount) {
+    while (enemy.alive) {
+        enemy.hp = enemy.hp + amount;
+        wait seconds(1.0f);
+    }
+
+    echo "regen stopped";
+}
+
+fn bool program() {
+    Enemy& enemy = new Enemy&();
+    enemy.hp = 0;
+    CoroutineHandle h = start_co regen(enemy, 5.0f);
+
+    // Other code ...
+
+    stop_coroutine(h);
+    // if the program ran for long enough, regen will have regenerated some health.
+    return enemy.hp == 0; // should return true only if the coroutine didn't run properly
+}
+```
+
+Allowed `wait` forms are intentionally controlled by the language/runtime. Planned forms include:
+
+```cpp
+wait seconds(1.0f);
+wait until (self.hp < 50);
+wait event TickEvent as tick;
+```
+
+Coroutine rules:
+
+1. `wait` is only legal inside a `coroutine`.
+2. A `coroutine` cannot be called like a normal function.
+3. Starting a `coroutine` creates a `CoroutineHandle`, used to control scheduling.
+4. A `coroutine` cannot directly wait for another coroutine to finish.
+5. Coroutines may be spawned explicitly by the host/runtime.
+6. Borrowed values such as `in` and `inout` parameters must not escape across a `wait` point.
+
+This keeps coroutines powerful but predictable: they model explicit time flow without allowing arbitrary coroutine composition or hidden waits that make program flow hard to reason about.
+
+`defer` is planned later so cleanup can run when a coroutine finishes or is cancelled.
 
 <a id="arrays" name="arrays"></a>
 ## Arrays
 
-Array forms (using `Vec2`):
+Array forms using `Vec2`:
 
 ```cpp
 Vec2[4] a = Vec2[4];          // stack-allocated array, size must be known at compile time
@@ -163,10 +218,16 @@ Vec2[]* d = new Vec2[4]*;     // non-GC-tracked array reference
 Vec2&[]& e = new Vec2&[5]&;   // GC-tracked array of GC-tracked Vec2 references
 ```
 
+Notes:
+
+1. Fixed-size value arrays require a compile-time known size.
+2. Managed array references are owned by the Ratchet runtime.
+3. Manual/native arrays are explicit lifetime objects.
+
 <a id="borrow-parameters" name="borrow-parameters"></a>
 ## Borrow Parameters
 
-`in` and `inout` are keywords for explicit borrow-style parameter passing in free functions.
+`in` and `inout` are keywords for explicit borrow-style parameter passing in free functions and methods.
 
 Intent:
 
@@ -174,7 +235,8 @@ Intent:
 2. `inout T p` means a **mutable borrow**.
 3. `inout` arguments cannot alias in the same call.
 4. Borrow parameters cannot escape function scope.
-5. This model allows mutation without requiring value copies for large stack values.
+5. Borrow parameters cannot remain live across a coroutine `wait` point.
+6. This model allows mutation without requiring value copies for large value types.
 
 Syntax:
 
@@ -193,7 +255,7 @@ fn null translate(inout Vec2 v, float dx, float dy) {
 <a id="structs-and-methods" name="structs-and-methods"></a>
 ## Structs and Methods
 
-`struct` values are still plain value types.
+`struct` values are plain value types.
 
 ```cpp
 struct Vec2 {
@@ -202,7 +264,7 @@ struct Vec2 {
 }
 ```
 
-Methods are intended as an alternative call style over free functions, not a separate ownership model. In other words, they are **syntax sugar** over the same core parameter-passing rules.
+Methods are intended as an alternative call style over free functions, not a separate ownership model. In other words, they are syntax sugar over the same core parameter-passing rules.
 
 Conceptual sugar direction:
 
@@ -214,21 +276,7 @@ method null translate(float dx, float dy)
 fn null Vec2_translate(inout Vec2 self, float dx, float dy)
 ```
 
-<a id="interfaces" name="interfaces"></a>
-## Interfaces
-
-Interfaces are part of the language direction as compile-time contracts.
-
-```cpp
-interface HasPosition {
-    field float x;
-    field float y;
-
-    method float length2D() {
-        return sqrt(x*x + y*y);
-    }
-}
-```
+Interfaces are currently not part of the active language direction. They may be reconsidered later, but the current design favors concrete structs, free functions, methods, borrow parameters, and coroutines.
 
 <a id="examples" name="examples"></a>
 ## Examples
@@ -256,7 +304,7 @@ fn bool program() {
 }
 ```
 
-### 3) Struct and method (`Vec2`)
+### 3) Struct and method
 
 ```cpp
 struct Vec2 {
@@ -276,18 +324,67 @@ fn bool program() {
 }
 ```
 
-### 4) Heap-allocated references
+### 4) Managed and manual references
 
 ```cpp
 struct Enemy {
     int hp;
+    bool alive;
 }
 
 fn bool program() {
-    Enemy& tracked = new Enemy& { hp = 100 };
-    Enemy* manual = new Enemy* { hp = 50 };
+    Enemy& tracked = new Enemy& { hp = 100, alive = true };
+    Enemy* manual = new Enemy* { hp = 50, alive = true };
 
     free(manual);
     return true;
 }
 ```
+
+### 5) Coroutine-driven behavior
+
+```cpp
+struct Enemy {
+    int hp;
+    bool alive;
+}
+
+coroutine regen(Enemy& enemy, int amount) {
+    while (enemy.alive) {
+        enemy.hp = enemy.hp + amount;
+        wait seconds(1.0f);
+    }
+
+    echo "regen stopped";
+}
+```
+
+### 6) Event wait
+
+```cpp
+struct Hit {
+    int damage;
+}
+
+coroutine shield(Enemy& enemy) {
+    wait event Hit as hit;
+    enemy.hp = enemy.hp - hit.damage;
+}
+```
+
+<a id="current-status" name="current-status"></a>
+## Current Status
+
+Ratchet is experimental and under active development.
+
+Current implementation direction:
+
+1. Migrate the compiler/runtime to the current C3 toolchain.
+2. Restore compilation of simple programs.
+3. Move from the old stack-based VM to a typed register-based VM.
+4. Use raw typed frame storage rather than boxed `Value[]` frames.
+5. Lower parsed and semantically checked code into a simple MIR.
+6. Compile MIR into VM bytecode.
+7. Add coroutines after ordinary functions, calls, scopes, frame layout, and control flow are stable.
+
+Near-term priority is correctness and architectural shape, not micro-optimization. The VM should still be designed around typed registers, known frame offsets, known field offsets, and direct function references so the implementation does not need a major rewrite later.
