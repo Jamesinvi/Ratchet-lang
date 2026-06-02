@@ -5,16 +5,16 @@ import std::collections::list;
 import log;
 
 alias MirRegisterID = int;
-alias MirBlockIdx = usz;
-alias MirPlaceIdx = usz;
-alias MirProjectionIdx = usz;
-alias MirInstructionIdx = usz;
-alias MirTerminatorIdx = usz;
-alias OperandIdx = usz;
+alias MirBlockIdx = sz;
+alias MirPlaceIdx = sz;
+alias MirProjectionIdx = sz;
+alias MirInstructionIdx = sz;
+alias MirTerminatorIdx = sz;
+alias OperandIdx = sz;
 
 const NO_REG = -1;
-const NO_TERMINATOR = usz.max;
-const NO_PROJECTION = usz.max;
+const NO_TERMINATOR = -1;
+const NO_PROJECTION = -1;
 
 bitstruct MirRegisterFlags : char
 {
@@ -102,7 +102,7 @@ struct MirInstruction
 
 struct MirPlace
 {
-	usz idx;
+	sz idx;
 	SymbolIdx baseSymbolIdx;
 	MirProjectionIdx projectionIdx;
 }
@@ -130,8 +130,8 @@ struct MirBlock
 
 struct MirFunction
 {
-	usz blocksStart;
-	usz blocksEnd;
+	sz blocksStart;
+	sz blocksEnd;
 	DeclIdx sourceDeclIdx;
 }
 
@@ -146,7 +146,7 @@ struct MirProgram
 	List{MirOperand} operands;
 }
 
-fn void MirProgram.init(MirProgram* this, Allocator allocator, usz size)
+fn void MirProgram.init(MirProgram* this, Allocator allocator, sz size)
 {
 	this.functions.init(allocator, size);
 	this.instructions.init(allocator, size);
@@ -179,7 +179,7 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 			this.print_decl_function_name(fun.sourceDeclIdx, ast);
 			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx]);
 		}
-		for(usz i = fun.blocksStart; i < fun.blocksEnd; i++){
+		for(sz i = fun.blocksStart; i < fun.blocksEnd; i++){
 			this.print_block(this.blocks[i], ast);
 		}
 		log::log("\n");
@@ -240,7 +240,7 @@ fn void MirProgram.print_instruction(MirProgram* this, MirInstruction inst, Prog
 	if (inst.operandsStart < inst.operandsEnd) {
 		log::log(" ");
 	}
-	for (usz opIdx = inst.operandsStart; opIdx < inst.operandsEnd; opIdx++){
+	for (sz opIdx = inst.operandsStart; opIdx < inst.operandsEnd; opIdx++){
 		if (opIdx > inst.operandsStart) {
 			log::log(", ");
 		}
@@ -260,7 +260,7 @@ fn void MirProgram.print_terminator(MirProgram* this, MirTerminator term, Progra
 	if (term.operandsStart < term.operandsEnd) {
 		log::log(" ");
 	}
-	for (usz opIdx = term.operandsStart; opIdx < term.operandsEnd; opIdx++){
+	for (sz opIdx = term.operandsStart; opIdx < term.operandsEnd; opIdx++){
 		if (opIdx > term.operandsStart) {
 			log::log(", ");
 		}
@@ -281,7 +281,7 @@ fn void MirProgram.print_block(MirProgram* this, MirBlock block, ProgramAst* ast
 		log::logn("block_%s:", block.idx);
 	}
 
-	for (usz i = block.instructionsStart; i < block.instructionsEnd; i++){
+	for (sz i = block.instructionsStart; i < block.instructionsEnd; i++){
 		if (i >= this.instructions.len()) {
 			log::logn("  <bad-inst-idx:%s>", i);
 			continue;

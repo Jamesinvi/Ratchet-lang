@@ -36,7 +36,7 @@ struct Token
 {
     TokenType tokenType;
     int line;
-	usz valueIdx;			// Index in a list of strings
+	sz valueIdx;			// Index in a list of strings
 }
 
 

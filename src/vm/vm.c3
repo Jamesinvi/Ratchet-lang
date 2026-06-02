@@ -9,7 +9,7 @@
 // alias Byte  = char;
 
 // const FRAMES_MAX = 64;
-// const STACK_MAX  = (FRAMES_MAX * Byte.max);
+// const STACK_MAX  = (FRAMES_MAX * Byte::max);
 
 // // Helpers for Math operation macros
 // const OP_LESS    = 0;
@@ -163,13 +163,13 @@
 
 // macro @peek_val(Vm* vm, $Type)
 // {
-//     Byte* src = &vm.stack[vm.stackHead - $Type.sizeof];
+//     Byte* src = &vm.stack[vm.stackHead - $Type::size];
 //     return @unaligned_load(*($Type*)src, $Type.alignof);
 // }
 
 // macro @pop_val(Vm* vm, $Type)
 // {
-//     vm.stackHead -= $Type.sizeof;
+//     vm.stackHead -= $Type::size;
 //     Byte* src = &vm.stack[vm.stackHead];
 //     return @unaligned_load(*($Type*)src, $Type.alignof);
 
@@ -180,7 +180,7 @@
 // {
 //     Byte* dst = &vm.stack[vm.stackHead];
 //     @unaligned_store(*($Type*)dst, value, $Type.alignof);
-//     vm.stackHead += $Type.sizeof;
+//     vm.stackHead += $Type::size;
 // }
 
 // fn RunResult run(Vm* vm)
@@ -536,7 +536,7 @@
 //                 Byte argCount = @read_u8(vm);
 //                 ushort argBytesSize = @read_u16(vm);
 
-//                 ushort funcOffset = (ushort)(vm.stackHead - (ulong)argBytesSize - uptr.sizeof);
+//                 ushort funcOffset = (ushort)(vm.stackHead - (ulong)argBytesSize - uptr::size);
 
 //                 Obj* callee = common::@as(Obj*, &vm.stack[funcOffset]);
 
@@ -553,7 +553,7 @@
 //                         CallFrame* newFrame = &vm.frames[vm.frameCount++];
 //                         newFrame.function = func;
 //                         newFrame.ip = (Byte*)&func.chunk.code[0];
-//                         newFrame.base = funcOffset + uptr.sizeof;
+//                         newFrame.base = funcOffset + uptr::size;
 //                         newFrame.callee = callee;
 
 //                         // Zero initialization on locals
@@ -588,7 +588,7 @@
 //                 ushort retSize = func.returnTypeSize;
 
 //                 Byte* retSrc = &vm.stack[vm.stackHead - retSize];
-//                 ushort calleeOffset = (ushort)(vm.frame.base - uptr.sizeof);
+//                 ushort calleeOffset = (ushort)(vm.frame.base - uptr::size);
 
 //                 vm.frameCount--;
 //                 if (vm.frameCount == 0) return RunResult.OK;

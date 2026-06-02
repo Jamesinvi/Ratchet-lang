@@ -48,26 +48,26 @@ fn void Chunk.debug_print(Chunk* chunk) {
 
     log::logn("======DISASSEMBLY======");
     log::logn("BYTE|LINE |OPCODE              |EXTRA INFO");
-    for (usz offset = 0;offset<chunk.code.len();){
+    for (sz offset = 0;offset<chunk.code.len();){
         offset = dissassemble_instruction(chunk, offset);
     }
     log::logn("======END======");
 }
 
 
-fn Byte read_u8(Chunk* chunk, usz currentOffset)
+fn Byte read_u8(Chunk* chunk, sz currentOffset)
 {
     return chunk.code[currentOffset+1];
 }
 
-fn ushort read_u16(Chunk* chunk, usz currentOffset)
+fn ushort read_u16(Chunk* chunk, sz currentOffset)
 {
     ushort hi = (ushort)chunk.code[currentOffset+1];
     ushort lo = (ushort)chunk.code[currentOffset+2];
     return (ushort)((hi << 8) | lo);
 }
 
-fn usz dissassemble_instruction (Chunk* chunk, usz currentOffset){
+fn sz dissassemble_instruction (Chunk* chunk, sz currentOffset){
     log::log("%04d|%5d|", currentOffset, chunk.lines[currentOffset]);
 
     OpCode instruction = (OpCode)chunk.code[currentOffset];
@@ -155,18 +155,18 @@ fn usz dissassemble_instruction (Chunk* chunk, usz currentOffset){
 
 }
 
-fn usz single_byte_instruction(OpCode instruction, usz currentOffset){
+fn sz single_byte_instruction(OpCode instruction, sz currentOffset){
     log::log("%s\n", instruction);
     return currentOffset + 1;
 }
 
-fn usz pop_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz pop_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     Byte typeSize = read_u8(chunk,currentOffset);
     log::log("%s, %s\n", instruction, typeSize);
     return currentOffset + 2; // opcode + type
 }
 
-fn usz constant_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz constant_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     ushort offset = read_u16(chunk, currentOffset);
     log::log("%s, offset:%d      | val: ", instruction, offset);
     chunk.print_constant(offset);
@@ -175,38 +175,38 @@ fn usz constant_instruction(OpCode instruction, Chunk* chunk, usz currentOffset)
     return currentOffset + 3; // opcode + offset
 }
 
-fn usz increment_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz increment_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     ushort idx = read_u16(chunk, currentOffset);
     log::log("%s, idx:%d\n", instruction, idx);
     return currentOffset + 3; // opcode + index
 }
 
-fn usz local_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz local_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     ushort constantIndex = read_u16(chunk, currentOffset);
     log::log("%s, idx:%d\n",instruction, constantIndex);
     return currentOffset+3; //opcode + index
 }
 
-fn usz call_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz call_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     Byte argCount = read_u8(chunk, currentOffset);
     ushort argsLength = read_u16(chunk, currentOffset + 1);
     log::log("%s, argc:%d, arglen:%s\n", instruction, argCount, argsLength);
     return currentOffset + 4; // opcode + arg count + args length
 }
 
-fn usz single_and_type_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz single_and_type_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     ValueType type = (ValueType) read_u8(chunk, currentOffset);
     log::log("%s, from:%s\n", instruction, type);
     return currentOffset + 2; // opcode + type
 }
 
-fn usz jump_instruction(OpCode instruction, Chunk* chunk, int sign, usz currentOffset){
+fn sz jump_instruction(OpCode instruction, Chunk* chunk, int sign, sz currentOffset){
     ushort jump = read_u16(chunk, currentOffset);
     log::log("%s, from:%d    | to: %d\n", instruction, currentOffset,currentOffset + 3 + (long)sign * jump);
     return currentOffset + 3;  // opcode + jumplen
 }
 
-fn usz property_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz property_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     ushort structIndex = read_u16(chunk, currentOffset);
     ushort localOffset = read_u16(chunk, currentOffset + 2);
     ushort fieldSize = read_u16(chunk, currentOffset+ 4);
@@ -215,7 +215,7 @@ fn usz property_instruction(OpCode instruction, Chunk* chunk, usz currentOffset)
     return currentOffset + 8; // opcode + indx + offset + fieldsize + type
 }
 
-fn usz alloc_ref_instruction(OpCode instruction, Chunk* chunk, usz currentOffset){
+fn sz alloc_ref_instruction(OpCode instruction, Chunk* chunk, sz currentOffset){
     Byte tracked = read_u8(chunk, currentOffset);
     ValueType type = (ValueType) read_u8(chunk, currentOffset + 1);
     ushort size = read_u16(chunk, currentOffset +2);

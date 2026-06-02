@@ -12,13 +12,13 @@ faultdef PARSE_ERROR;
 
 struct Parser
 {
-    List{Token} input;
-    Token* current;
-    Token* previous;
-    ProgramAst outputAst;
-    bool hadError;
-    bool panicMode;
-    List{DeclIdx} structs;
+	List{Token} input;
+	Token* current;
+	Token* previous;
+	ProgramAst outputAst;
+	bool hadError;
+	bool panicMode;
+	List{DeclIdx} structs;
 	DynamicArenaAllocator allocator;
 }
 
@@ -26,23 +26,23 @@ struct Parser
 
 fn void Parser.init(Parser* this)
 {
-	this.allocator = {};
+	this.allocator = { };
 	this.allocator.init(mem, 1024);
-    this.input = globals::tokens;
-    this.hadError = false;
-    this.panicMode = false;
+	this.input = globals::tokens;
+	this.hadError = false;
+	this.panicMode = false;
 
-    this.current = &(this.input[0]);
-    this.previous = this.current;
-	
-    this.outputAst = {};
-    this.outputAst.init(&this.allocator);
+	this.current = &(this.input[0]);
+	this.previous = this.current;
 
-    this.structs = {};
-    this.structs.init(&this.allocator);
+	this.outputAst = { };
+	this.outputAst.init(&this.allocator);
 
-    this.predeclare_structs();
-    this.predeclare_functions();
+	this.structs = { };
+	this.structs.init(&this.allocator);
+
+	this.predeclare_structs();
+	this.predeclare_functions();
 }
 
 fn void Parser.deinit(Parser* this)
@@ -55,166 +55,190 @@ fn void Parser.deinit(Parser* this)
 
 fn void? Parser.parse(Parser* parser)
 {
-    while (!parser.match(TokenType.EOF)) {
-        parser.declaration();
-    }
-    parser.desugar_methods();
-    if(parser.hadError){
-        return PARSE_ERROR~;
-    }
+	while (!parser.match(TokenType.EOF))
+	{
+		parser.declaration();
+	}
+	parser.desugar_methods();
+	if (parser.hadError)
+	{
+		return PARSE_ERROR~;
+	}
 }
 
 // ---------- Declarations & statements ----------
 
 fn void Parser.declaration(Parser* this)
 {
-    if (this.match(TokenType.FN)) {
-        this.fun_declaration();
-    } else if (this.match(TokenType.STRUCT_T)) {
-        this.struct_declaration();
-    } else {
-        this.error("Only function/struct declarations are allowed at top level.");
-        this.advance();
-    }
+	if (this.match(TokenType.FN))
+	{
+		this.fun_declaration();
+	}
+	else if (this.match(TokenType.STRUCT_T))
+	{
+		this.struct_declaration();
+	}
+	else
+	{
+		this.error("Only function/struct declarations are allowed at top level.");
+		this.advance();
+	}
 }
 
 fn StmtIdx Parser.statement(Parser* this)
 {
-    if (this.match(TokenType.ECHO)) {
-        return this.echo_statement();
-    } else if (this.match(TokenType.LEFT_BRACE)) {
-        return this.block();
-    } else if (this.match(TokenType.IF)) {
-        return this.if_statement();
-    } else if (this.match(TokenType.WHILE)) {
-        return this.while_statement();
-    } else if (this.match(TokenType.RETURN)) {
-        return this.return_statement();
-    } else {
-        return this.expression_statement();
-    }
+	if (this.match(TokenType.ECHO))
+	{
+		return this.echo_statement();
+	}
+	else if (this.match(TokenType.LEFT_BRACE))
+	{
+		return this.block();
+	}
+	else if (this.match(TokenType.IF))
+	{
+		return this.if_statement();
+	}
+	else if (this.match(TokenType.WHILE))
+	{
+		return this.while_statement();
+	}
+	else if (this.match(TokenType.RETURN))
+	{
+		return this.return_statement();
+	}
+	else
+	{
+		return this.expression_statement();
+	}
 }
 
 fn StmtIdx Parser.expression_statement(Parser* this)
 {
-    debug::@log_compilation("expression_statement at %s", (this.previous-1).value());
-    int line = this.current.line;
-    ExprIdx exprIdx = this.expression();
-    this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
+	debug::@log_compilation("expression_statement at %s", (this.previous - 1).value());
+	int line        = this.current.line;
+	ExprIdx exprIdx = this.expression();
+	this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
 
-    Stmt stmt = {.kind = StmtKind.EXPR};
-    stmt.span = {.line = line};
-    stmt.exprStmt = exprIdx;
-    return this.push_stmt_get_idx(&stmt);
+	Stmt stmt = { .kind = StmtKind.EXPR };
+	stmt.span = { .line = line };
+	stmt.exprStmt = exprIdx;
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn StmtIdx Parser.echo_statement(Parser* this)
 {
-    debug::@log_compilation("echo_statement at %s", (this.previous-1).value());
-    int line = this.previous.line;
-    ExprIdx exprIdx = this.expression();
-    this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
+	debug::@log_compilation("echo_statement at %s", (this.previous - 1).value());
+	int line        = this.previous.line;
+	ExprIdx exprIdx = this.expression();
+	this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
 
-    Stmt stmt = {.kind = StmtKind.ECHO};
-    stmt.span = {.line = line};
-    stmt.echoStmt = exprIdx;
-    return this.push_stmt_get_idx(&stmt);
+	Stmt stmt = { .kind = StmtKind.ECHO };
+	stmt.span = { .line = line };
+	stmt.echoStmt = exprIdx;
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn StmtIdx Parser.return_statement(Parser* this)
 {
-    debug::@log_compilation("return_statement at %s at %s", this.previous.value(), this.current.value());
-    int line = this.previous.line;
+	debug::@log_compilation("return_statement at %s at %s", this.previous.value(), this.current.value());
+	int line = this.previous.line;
 
-    Stmt stmt = {.kind = StmtKind.RETURN};
-    stmt.span = {.line = line};
+	Stmt stmt = { .kind = StmtKind.RETURN };
+	stmt.span = { .line = line };
 
-    if (this.check(TokenType.SEMICOLON)) {
-        this.consume(TokenType.SEMICOLON, "Expect ';' after return.");
-        stmt.retStmt = {.value = NO_IDX};
-        return this.push_stmt_get_idx(&stmt);
-    }
+	if (this.check(TokenType.SEMICOLON))
+	{
+		this.consume(TokenType.SEMICOLON, "Expect ';' after return.");
+		stmt.retStmt = { .value = NO_IDX };
+		return this.push_stmt_get_idx(&stmt);
+	}
 
-    ExprIdx value = this.expression();
-    this.consume(TokenType.SEMICOLON, "Expect ';' after return.");
-    stmt.retStmt = {.value = value};
-    return this.push_stmt_get_idx(&stmt);
+	ExprIdx value = this.expression();
+	this.consume(TokenType.SEMICOLON, "Expect ';' after return.");
+	stmt.retStmt = { .value = value };
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn StmtIdx Parser.if_statement(Parser* this)
 {
-    debug::@log_compilation("if_statement at %s", this.current.value());
-    int line = this.previous.line;
+	debug::@log_compilation("if_statement at %s", this.current.value());
+	int line = this.previous.line;
 
-    this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
-    ExprIdx condIdx = this.expression();
-    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition."); 
+	this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
+	ExprIdx condIdx = this.expression();
+	this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
 
-    this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'if' condition.");
-    StmtIdx thenIdx = this.block();
+	this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'if' condition.");
+	StmtIdx thenIdx = this.block();
 
-    StmtIdx elseIdx = NO_IDX;
-    if (this.match(TokenType.ELSE)) {
-        this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'else'.");
-        elseIdx = this.block();
-    }
+	StmtIdx elseIdx = NO_IDX;
+	if (this.match(TokenType.ELSE))
+	{
+		this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'else'.");
+		elseIdx = this.block();
+	}
 
-    Stmt stmt = {.kind = StmtKind.IF};
-    stmt.span = {.line = line};
-    stmt.ifStmt = {.cond = condIdx, .thenBlock = thenIdx, .elseBlock = elseIdx};
-    return this.push_stmt_get_idx(&stmt);
+	Stmt stmt = { .kind = StmtKind.IF };
+	stmt.span = { .line = line };
+	stmt.ifStmt = { .cond = condIdx, .thenBlock = thenIdx, .elseBlock = elseIdx };
+	return this.push_stmt_get_idx(&stmt);
 }
 
 
 fn StmtIdx Parser.while_statement(Parser* this)
 {
-    debug::@log_compilation("while_statement at %s", this.current.value());
-    int line = this.previous.line;
+	debug::@log_compilation("while_statement at %s", this.current.value());
+	int line = this.previous.line;
 
-    this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
-    ExprIdx condIdx = this.expression();
-    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition."); 
+	this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+	ExprIdx condIdx = this.expression();
+	this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
 
-    this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'while'");
-    StmtIdx bodyIdx = this.block();
+	this.consume(TokenType.LEFT_BRACE, "Expect '{' after 'while'");
+	StmtIdx bodyIdx = this.block();
 
-    Stmt stmt = {.kind = StmtKind.WHILE};
-    stmt.span = {.line = line};
-    stmt.whileStmt = {.cond = condIdx, .body = bodyIdx};
-    return this.push_stmt_get_idx(&stmt);
+	Stmt stmt = { .kind = StmtKind.WHILE };
+	stmt.span = { .line = line };
+	stmt.whileStmt = { .cond = condIdx, .body = bodyIdx };
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn StmtIdx Parser.block(Parser* this)
 {
-    // assumes '{' was already consumed by the caller
-    Stmt stmt = {.kind = StmtKind.BLOCK};
-    stmt.span = {.line = this.previous.line};
+	// assumes '{' was already consumed by the caller
+	Stmt stmt = { .kind = StmtKind.BLOCK };
+	stmt.span = { .line = this.previous.line };
 
-    BlockStmt blockStmt = {};
-    blockStmt.stmts.init(&this.allocator, 64);
+	BlockStmt blockStmt = { };
+	blockStmt.stmts.init(&this.allocator, 64);
 
-    while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF)) {
-        StmtIdx child = this.statement_or_vardecl_in_block();
-        if (child != NO_IDX) {
-            blockStmt.stmts.push(child);
-        }
-    }
+	while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF))
+	{
+		StmtIdx child = this.statement_or_vardecl_in_block();
+		if (child != NO_IDX)
+		{
+			blockStmt.stmts.push(child);
+		}
+	}
 
-    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after block");
-    stmt.blockStmt = blockStmt;
-    return this.push_stmt_get_idx(&stmt);
+	this.consume(TokenType.RIGHT_BRACE, "Expected '}' after block");
+	stmt.blockStmt = blockStmt;
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn StmtIdx Parser.statement_or_vardecl_in_block(Parser* this)
 {
-    if (this.check_any_type_token()) {
-        return this.var_declaration();
-    }
-    if (this.match(TokenType.FN) || this.match(TokenType.STRUCT_T)) {
-        this.error("Functions/structs are not allowed inside blocks (top-level only).");
-        return NO_IDX;
-    }
-    return this.statement();
+	if (this.check_any_type_token())
+	{
+		return this.var_declaration();
+	}
+	if (this.match(TokenType.FN) || this.match(TokenType.STRUCT_T))
+	{
+		this.error("Functions/structs are not allowed inside blocks (top-level only).");
+		return NO_IDX;
+	}
+	return this.statement();
 }
 
 
@@ -222,59 +246,67 @@ fn StmtIdx Parser.statement_or_vardecl_in_block(Parser* this)
 
 fn DeclIdx Parser.struct_declaration(Parser* this)
 {
-    debug::@log_compilation("struct_declaration at %s", this.current.value());
+	debug::@log_compilation("struct_declaration at %s", this.current.value());
 
-    // struct <name> { <fields> }
-    this.consume(TokenType.IDENTIFIER, "Expected struct name after 'struct'");
-    String name = this.previous.value();
+	// struct <name> { <fields> }
+	this.consume(TokenType.IDENTIFIER, "Expected struct name after 'struct'");
+	String name = this.previous.value();
 
-    // Find the predeclared struct entry (or create one if missing)
-    DeclIdx declIdx;
-    DeclIdx? found = globals::declaredStructs.get(name);
-    if (catch notFound = found) {
-        // Not predeclared (unexpected), create a fresh one
-        Decl decl = {.kind = DeclKind.STRUCT};
-        decl.structDecl = {};
-        decl.structDecl.nameIdx = this.push_name_get_idx(name);
-        decl.structDecl.fields.init(&this.allocator);
-        declIdx = this.push_decl_get_idx(&decl);
-        globals::declaredStructs.set(name, declIdx);
-    } else {
-        declIdx = found;
-    }
+	// Find the predeclared struct entry (or create one if missing)
+	DeclIdx declIdx;
+	DeclIdx? found = globals::declaredStructs.get(name);
+	if (catch notFound = found)
+	{
+		// Not predeclared (unexpected), create a fresh one
+		Decl decl = { .kind = DeclKind.STRUCT };
+		decl.structDecl = { };
+		decl.structDecl.nameIdx = this.push_name_get_idx(name);
+		decl.structDecl.fields.init(&this.allocator);
+		declIdx = this.push_decl_get_idx(&decl);
+		globals::declaredStructs.set(name, declIdx);
+	}
+	else
+	{
+		declIdx = found;
+	}
 
-    Decl* decl = &this.outputAst.declarations[declIdx];
-    if (decl.kind != DeclKind.STRUCT) {
-        this.error("Internal error: struct declaration slot already used by a non-struct.");
-        return declIdx;
-    }
-    // Ensure fields list is initialized
-    decl.structDecl.nameIdx = this.push_name_get_idx(name);
-    decl.structDecl.fields.init(&this.allocator);
-    decl.structDecl.methods.init(&this.allocator);
+	Decl* decl = &this.outputAst.declarations[declIdx];
+	if (decl.kind != DeclKind.STRUCT)
+	{
+		this.error("Internal error: struct declaration slot already used by a non-struct.");
+		return declIdx;
+	}
+	// Ensure fields list is initialized
+	decl.structDecl.nameIdx = this.push_name_get_idx(name);
+	decl.structDecl.fields.init(&this.allocator);
+	decl.structDecl.methods.init(&this.allocator);
 
-    this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name");
+	this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name");
 	int rightBraceExpected = 1;
-    while (rightBraceExpected != 0 && !this.check(TokenType.EOF)) {
-		if(this.check_any_type_token()){
+	while (rightBraceExpected != 0 && !this.check(TokenType.EOF))
+	{
+		if (this.check_any_type_token())
+		{
 			// Parse field: <type> <name> ;
 			TypeAst fieldType = this.parse_type_ast();
 			this.consume(TokenType.IDENTIFIER, "Expected field name.");
 			NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value());
-			FieldAst field = {.type = fieldType, .nameIdx = fieldNameIdx};
-			usz fieldsCount = decl.structDecl.fields.len();
+			FieldAst field       = { .type = fieldType, .nameIdx = fieldNameIdx };
+			sz fieldsCount       = decl.structDecl.fields.len();
 			field.idxInFields = fieldsCount;
 			decl.structDecl.fields.push(field);
 			this.consume(TokenType.SEMICOLON, "Expected ';' after field");
-		}else if (this.match(TokenType.METHOD)){
+		}
+		else if (this.match(TokenType.METHOD))
+		{
 			TypeAst retType = this.parse_type_ast();
 			this.consume(TokenType.IDENTIFIER, "Expected method name.");
 			NameIdx methodNameIdx = this.push_name_get_idx(this.previous.value());
-			MethodDeclAst method = {};
+			MethodDeclAst method  = { };
 			method.returnType = retType;
 			method.nameIdx = methodNameIdx;
 			method.structIdx = declIdx;
-            method.loweredFormIdx = NO_IDX;
+			method.loweredFormIdx = NO_IDX;
 			// parse params + body
 			this.consume(TokenType.LEFT_PAREN, "Expected '(' after method name");
 			this.fill_fun_params(&method.params);
@@ -282,49 +314,57 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 			StmtIdx bodyIdx = this.block(); // block consumes the closing '}'
 			method.body = bodyIdx;
 			decl.structDecl.methods.push(method);
-		}else if (this.match(TokenType.RIGHT_BRACE)){
+		}
+		else if (this.match(TokenType.RIGHT_BRACE))
+		{
 			rightBraceExpected--;
-		}else{
+		}
+		else
+		{
 			this.error("Unexpected token in struct body.");
 			this.advance();
 		}
-    }
-    if (rightBraceExpected != 0) {
-        this.error("Expected '}' after struct fields");
-    }
-    this.structs.push(declIdx);
-    return declIdx;
+	}
+	if (rightBraceExpected != 0)
+	{
+		this.error("Expected '}' after struct fields");
+	}
+	this.structs.push(declIdx);
+	return declIdx;
 }
 
 fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
 {
-    debug::@log_compilation("dot at %s at %s", this.previous.value(), this.current.value());
+	debug::@log_compilation("dot at %s at %s", this.previous.value(), this.current.value());
 
-    String memberName = this.current.value();
-    this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
-    
-    NameIdx nameIdx = this.push_name_get_idx(memberName);
+	String memberName = this.current.value();
+	this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
 
-    Expr expr = {.kind = ExprKind.MEMBER};
-    expr.span = {.line = this.previous.line};
-    expr.member = {.base = lhs, .memberIdx = nameIdx};
-    ExprIdx index = this.push_expr_get_idx(&expr);
+	NameIdx nameIdx = this.push_name_get_idx(memberName);
+
+	Expr expr = { .kind = ExprKind.MEMBER };
+	expr.span = { .line = this.previous.line };
+	expr.member = { .base = lhs, .memberIdx = nameIdx };
+	ExprIdx index = this.push_expr_get_idx(&expr);
 	// Method call?
-    if (this.match(TokenType.LEFT_PAREN)) {
-        return this.call(index);
-    }
-    return index;
+
+
+	if (this.match(TokenType.LEFT_PAREN))
+	{
+		return this.call(index);
+	}
+	return index;
 }
 
 fn ExprIdx Parser.this_kwrd(Parser* this)
 {
-    debug::@log_compilation("this_kwrd at %s", this.previous.value(), this.current.value());
+	debug::@log_compilation("this_kwrd at %s", this.previous.value(), this.current.value());
 
-    String memberName = this.current.value();
-    Expr expr = {.kind = ExprKind.THIS};
-    expr.span = {.line = this.previous.line};
-    ExprIdx index = this.push_expr_get_idx(&expr);
-    return index;
+	String memberName = this.current.value();
+	Expr expr         = { .kind = ExprKind.THIS };
+	expr.span = { .line = this.previous.line };
+	ExprIdx index = this.push_expr_get_idx(&expr);
+	return index;
 }
 
 
@@ -332,361 +372,380 @@ fn ExprIdx Parser.this_kwrd(Parser* this)
 
 fn StmtIdx Parser.var_declaration(Parser* this)
 {
-    debug::@log_compilation("var_declaration at %s", this.current.value());
-    int line = this.current.line;
+	debug::@log_compilation("var_declaration at %s", this.current.value());
+	int line = this.current.line;
 
-    TypeAst type = this.parse_type_ast();
-    this.consume(TokenType.IDENTIFIER, "Expected variable name");
-    NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
+	TypeAst type = this.parse_type_ast();
+	this.consume(TokenType.IDENTIFIER, "Expected variable name");
+	NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
 
-    ExprIdx initIdx = NO_IDX;
-    if (this.match(TokenType.EQUAL)) {
-        initIdx = this.expression();
-    }
+	ExprIdx initIdx = NO_IDX;
+	if (this.match(TokenType.EQUAL))
+	{
+		initIdx = this.expression();
+	}
 
-    this.consume(TokenType.SEMICOLON, "Expected ';' after declaration");
+	this.consume(TokenType.SEMICOLON, "Expected ';' after declaration");
 
-    Stmt stmt = {.kind = StmtKind.DECL};
-    stmt.span = {.line = line};
-    stmt.varDecl = {.type = type, .nameIdx = nameIdx, .init = initIdx};
-    return this.push_stmt_get_idx(&stmt);
+	Stmt stmt = { .kind = StmtKind.DECL };
+	stmt.span = { .line = line };
+	stmt.varDecl = { .type = type, .nameIdx = nameIdx, .init = initIdx };
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn ExprIdx Parser.variable(Parser* this)
 {
-    debug::@log_compilation("variable at %s", this.previous.value());
-    NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
-    Expr expr = {.kind = ExprKind.VAR, .varExpr = nameIdx};
-    expr.span = {.line = this.previous.line};
-    return this.push_expr_get_idx(&expr);
+	debug::@log_compilation("variable at %s", this.previous.value());
+	NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
+	Expr expr       = { .kind = ExprKind.VAR, .varExpr = nameIdx };
+	expr.span = { .line = this.previous.line };
+	return this.push_expr_get_idx(&expr);
 }
 
 // ---------- Functions & calls ----------
 
 fn DeclIdx Parser.fun_declaration(Parser* this)
 {
-    debug::@log_compilation("fun_declaration at %s", this.current.value());
+	debug::@log_compilation("fun_declaration at %s", this.current.value());
 
-    // return type
-    TypeAst ret = this.parse_type_ast(); // consumes it
+	// return type
+	TypeAst ret = this.parse_type_ast(); // consumes it
 
-    // function name
-    this.consume(TokenType.IDENTIFIER, "Expected function name after return type");
-    String fnName = this.previous.value();
+	// function name
+	this.consume(TokenType.IDENTIFIER, "Expected function name after return type");
+	String fnName = this.previous.value();
 
-    // must exist from predeclaration
-    DeclIdx? declIdxOpt = globals::declaredFunctions.get(fnName);
-    if (catch notFound = declIdxOpt) {
-        this.error("No function pre-declared with name at %s", fnName);
-        return NO_IDX;
-    }
+	// must exist from predeclaration
+	DeclIdx? declIdxOpt = globals::declaredFunctions.get(fnName);
+	if (catch notFound = declIdxOpt)
+	{
+		this.error("No function pre-declared with name at %s", fnName);
+		return NO_IDX;
+	}
 
-    DeclIdx declIdx = declIdxOpt;
-    Decl* decl = &this.outputAst.declarations[declIdx];
+	DeclIdx declIdx = declIdxOpt;
+	Decl* decl      = &this.outputAst.declarations[declIdx];
 
-    // sanity
-    if (decl.kind != DeclKind.FUNCTION) {
-        this.error("Internal error: predecl for at %s isn't a function decl", fnName);
-        return NO_IDX;
-    }
+	// sanity
+	if (decl.kind != DeclKind.FUNCTION)
+	{
+		this.error("Internal error: predecl for at %s isn't a function decl", fnName);
+		return NO_IDX;
+	}
 
-    // fill missing pieces
-    decl.fnDecl.returnType = ret;
+	// fill missing pieces
+	decl.fnDecl.returnType = ret;
 
-    // parse params + body
-    this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
-    this.fill_fun_params(&decl.fnDecl.params);
+	// parse params + body
+	this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
+	this.fill_fun_params(&decl.fnDecl.params);
 
-    this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
-    StmtIdx bodyIdx = this.block(); // block consumes the closing '}'
-    decl.fnDecl.body = bodyIdx;
+	this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
+	StmtIdx bodyIdx = this.block(); // block consumes the closing '}'
+	decl.fnDecl.body = bodyIdx;
 
-    return declIdx;
+	return declIdx;
 }
 
 
 fn void Parser.fill_fun_params(Parser* this, List{ParamAst}* params)
 {
-    // assumes '(' has already been consumed
-    // ensure list is initialized
-    params.init(&this.allocator);
+	// assumes '(' has already been consumed
+	// ensure list is initialized
+	params.init(&this.allocator);
 
-    if (!this.check(TokenType.RIGHT_PAREN))
-    {
-        do {
-            ParamAst p = this.fun_param();
-            if (params.len() >= Byte.max) {
-                this.error("Can't have more than 255 parameters");
-                break;
-            }
-            params.push(p);
-        } while (this.match(TokenType.COMMA));
-    }
+	if (!this.check(TokenType.RIGHT_PAREN))
+	{
+		do
+		{
+			ParamAst p = this.fun_param();
+			if (params.len() >= Byte::max)
+			{
+				this.error("Can't have more than 255 parameters");
+				break;
+			}
+			params.push(p);
+		} while (this.match(TokenType.COMMA));
+	}
 
-    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters");
+	this.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters");
 }
 
 
 fn ParamAst Parser.fun_param(Parser* this)
 {
-    ParamAst param = {};
-    TypeAst type = this.parse_type_ast();
-    
-    this.consume(TokenType.IDENTIFIER, "Expected parameter name");
-    
-    NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
-    param.type = type;
-    param.nameIdx = nameIdx;
-    param.span = {.line = this.previous.line};
-    param.passMode = ParamPassMode.VALUE;
+	ParamAst param = { };
+	TypeAst type   = this.parse_type_ast();
 
-    return param;
+	this.consume(TokenType.IDENTIFIER, "Expected parameter name");
+
+	NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
+	param.type = type;
+	param.nameIdx = nameIdx;
+	param.span = { .line = this.previous.line };
+	param.passMode = ParamPassMode.VALUE;
+
+	return param;
 }
 
 
 fn TypeAst Parser.parse_type_ast(Parser* this)
 {
-    // expects current token is some type token
-    if (!this.match_any_type_token())
-    {
-        this.error("Expected type");
-        return {.tokenType = TokenType.NULL, .nameIdx = 0};
-    }
+	// expects current token is some type token
+	if (!this.match_any_type_token())
+	{
+		this.error("Expected type");
+		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+	}
 
-    // match_any_type_token advanced, so `previous` is the type token
-    NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
-    return {.tokenType = this.previous.tokenType, .nameIdx = typeNameIdx};
+	// match_any_type_token advanced, so `previous` is the type token
+	NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
+	return { .tokenType = this.previous.tokenType, .nameIdx = typeNameIdx };
 }
 
 fn ExprIdx Parser.call(Parser* this, ExprIdx lhs)
 {
-    Expr expr = {.kind = ExprKind.CALL};
-    expr.call = {.callee = lhs, .memberCaller = NO_IDX};
-    if (lhs < this.outputAst.expressions.len()) {
-        Expr* calleeExpr = &this.outputAst.expressions[lhs];
-        if (calleeExpr.kind == ExprKind.MEMBER) {
-            expr.call.memberCaller = calleeExpr.member.base;
-        }
-    }
-    this.fill_call_args(&expr.call);
-    ExprIdx exprIdx = this.push_expr_get_idx(&expr);
-    return exprIdx;
+	Expr expr = { .kind = ExprKind.CALL };
+	expr.call = { .callee = lhs, .memberCaller = NO_IDX };
+	if (lhs < this.outputAst.expressions.len())
+	{
+		Expr* calleeExpr = &this.outputAst.expressions[lhs];
+		if (calleeExpr.kind == ExprKind.MEMBER)
+		{
+			expr.call.memberCaller = calleeExpr.member.base;
+		}
+	}
+	this.fill_call_args(&expr.call);
+	ExprIdx exprIdx = this.push_expr_get_idx(&expr);
+	return exprIdx;
 }
 
 fn void Parser.fill_call_args(Parser* this, ExprCall* exprCall)
 {
-    // We're CALLING a function, so we allow expressions as arguments
-    // Consume as many as we can find.
+	// We're CALLING a function, so we allow expressions as arguments
+	// Consume as many as we can find.
 	exprCall.argsStart = this.outputAst.args.len();
 	int arityCounter = 0;
-    if (!this.check(TokenType.RIGHT_PAREN)) {
-        do {
-            ExprIdx argExprIdx = this.expression();
-            if (arityCounter >= Byte.max) {
-                this.error("Can't have more than 255 arguments");
-            }
-            this.outputAst.args.push(argExprIdx);
+	if (!this.check(TokenType.RIGHT_PAREN))
+	{
+		do
+		{
+			ExprIdx argExprIdx = this.expression();
+			if (arityCounter >= Byte::max)
+			{
+				this.error("Can't have more than 255 arguments");
+			}
+			this.outputAst.args.push(argExprIdx);
 			arityCounter++;
-            // Remove all arguments from the type stack
-        } while (this.match(TokenType.COMMA));
-    }
+			// Remove all arguments from the type stack
+		} while (this.match(TokenType.COMMA));
+	}
 	exprCall.argsEnd = exprCall.argsStart + arityCounter;
 
-    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+	this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
 }
 
 // ---------- Expressions & precedence ----------
 
 fn ExprIdx Parser.expression(Parser* this)
 {
-    return this.parse_precedence(Precedence.ASSIGNMENT);
+	return this.parse_precedence(Precedence.ASSIGNMENT);
 }
 
 fn ExprIdx Parser.new_expr(Parser* this)
 {
-    debug::@log_compilation("new_expr at %s", this.previous.value());
+	debug::@log_compilation("new_expr at %s", this.previous.value());
 	TypeAst targetType = this.parse_type_ast();
-    Expr expr = { .kind = ExprKind.NEW};
-    expr.span = {.line = this.previous.line};
-	expr.new = {.type = targetType};
-    ExprIdx index = this.push_expr_get_idx(&expr);
-    return index;
-
+	Expr expr          = { .kind = ExprKind.NEW };
+	expr.span = { .line = this.previous.line };
+	expr.new = { .type = targetType };
+	ExprIdx index = this.push_expr_get_idx(&expr);
+	return index;
 }
 
 fn ExprIdx Parser.as(Parser* this, ExprIdx lhs)
 {
-    // Parse a type on the RHS of `as` (e.g., expr as string)
-    TypeAst targetType = this.parse_type_ast();
-    // Represent the type as a synthetic VAR node holding the type name for now.
-    Expr typeExpr = {.kind = ExprKind.VAR, .varExpr = targetType.nameIdx};
-    typeExpr.span = {.line = this.previous.line};
-    ExprIdx rhs = this.push_expr_get_idx(&typeExpr);
+	// Parse a type on the RHS of `as` (e.g., expr as string)
+	TypeAst targetType = this.parse_type_ast();
+	// Represent the type as a synthetic VAR node holding the type name for now.
 
-    Expr expr = { .kind = ExprKind.BINARY};
-    expr.span = { .line = this.previous.line};
-    expr.binary = { .op = BinOp.AS, .lhs = lhs, .rhs = rhs};
-    return this.push_expr_get_idx(&expr);
+
+	Expr typeExpr = { .kind = ExprKind.VAR, .varExpr = targetType.nameIdx };
+	typeExpr.span = { .line = this.previous.line };
+	ExprIdx rhs = this.push_expr_get_idx(&typeExpr);
+
+	Expr expr = { .kind = ExprKind.BINARY };
+	expr.span = { .line = this.previous.line };
+	expr.binary = { .op = BinOp.AS, .lhs = lhs, .rhs = rhs };
+	return this.push_expr_get_idx(&expr);
 }
 
 fn ExprIdx Parser.and(Parser* this, ExprIdx lhs)
 {
-    ExprIdx rhs = this.parse_precedence(Precedence.AND);
-    Expr expr = { .kind = ExprKind.BINARY};
-    expr.span = { .line = this.previous.line};
-    expr.binary = { .op = BinOp.AND, .lhs = lhs, .rhs = rhs};
-    ExprIdx index = this.push_expr_get_idx(&expr);
-    return index;
+	ExprIdx rhs = this.parse_precedence(Precedence.AND);
+	Expr expr   = { .kind = ExprKind.BINARY };
+	expr.span = { .line = this.previous.line };
+	expr.binary = { .op = BinOp.AND, .lhs = lhs, .rhs = rhs };
+	ExprIdx index = this.push_expr_get_idx(&expr);
+	return index;
 }
 
 fn ExprIdx Parser.or(Parser* this, ExprIdx lhs)
 {
-    // left operand (bool) is on top
-    ExprIdx rhs = this.parse_precedence(Precedence.OR);
-    Expr expr = { .kind = ExprKind.BINARY};
-    expr.span = { .line = this.previous.line};
-    expr.binary = { .op = BinOp.OR, .lhs = lhs, .rhs = rhs};
-    ExprIdx index = this.push_expr_get_idx(&expr);
-    return index;
+	// left operand (bool) is on top
+	ExprIdx rhs = this.parse_precedence(Precedence.OR);
+	Expr expr   = { .kind = ExprKind.BINARY };
+	expr.span = { .line = this.previous.line };
+	expr.binary = { .op = BinOp.OR, .lhs = lhs, .rhs = rhs };
+	ExprIdx index = this.push_expr_get_idx(&expr);
+	return index;
 }
 
 fn ExprIdx Parser.grouping(Parser* this)
 {
-    ExprIdx rhs = this.expression();
-    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after expression");
-    return rhs;
+	ExprIdx rhs = this.expression();
+	this.consume(TokenType.RIGHT_PAREN, "Expected ')' after expression");
+	return rhs;
 }
 
 
 fn ExprIdx Parser.number(Parser* this)
 {
-    debug::@log_compilation("number at %s", this.previous.value());
-    Expr expr;
-    switch (this.previous.tokenType) {
-        case TokenType.INTEGER:
-            int? ival = String.to_int(this.previous.value());
-			if(catch notParsable = ival) {
+	debug::@log_compilation("number at %s", this.previous.value());
+	Expr expr;
+	switch (this.previous.tokenType)
+	{
+		case TokenType.INTEGER:
+			int? ival = String.to_int(this.previous.value());
+			if (catch notParsable = ival)
+			{
 				this.error("%s is not an valid int", this.previous.value());
 				return NO_IDX;
 			}
-            expr = {.kind = ExprKind.INT, .intLiteral = ival};
-        case TokenType.FLOAT:
-            float? fval = String.to_float(this.previous.value());
-			if(catch notParsable = fval) {
+			expr = { .kind = ExprKind.INT, .intLiteral = ival };
+		case TokenType.FLOAT:
+			float? fval = String.to_float(this.previous.value());
+			if (catch notParsable = fval)
+			{
 				this.error("%s is not an valid float", this.previous.value());
 				return NO_IDX;
 			}
-            expr = {.kind = ExprKind.FLOAT, .floatLiteral = fval};
-        case TokenType.DOUBLE:
-            double? dval = String.to_double(this.previous.value());
-			if(catch notParsable = dval) {
+			expr = { .kind = ExprKind.FLOAT, .floatLiteral = fval };
+		case TokenType.DOUBLE:
+			double? dval = String.to_double(this.previous.value());
+			if (catch notParsable = dval)
+			{
 				this.error("%s is not an valid double", this.previous.value());
 				return NO_IDX;
 			}
-            expr = {.kind = ExprKind.DOUBLE, .doubleLiteral = dval};
-        default:
-            this.error("Unknown type at %s", this.previous.value());
-    }
-    expr.span = {.line = this.previous.line};
-    return this.push_expr_get_idx(&expr);
+			expr = { .kind = ExprKind.DOUBLE, .doubleLiteral = dval };
+		default:
+			this.error("Unknown type at %s", this.previous.value());
+	}
+	expr.span = { .line = this.previous.line };
+	return this.push_expr_get_idx(&expr);
 }
 
 fn ExprIdx Parser.string(Parser* this)
 {
-    String source = this.previous.value();
-    NameIdx nameIdx = this.push_name_get_idx(source);
-    Expr expr = {.kind = ExprKind.STRING, .stringLiteral = nameIdx};
-    ExprIdx exprIdx = this.push_expr_get_idx(&expr);
-    return exprIdx;
+	String source   = this.previous.value();
+	NameIdx nameIdx = this.push_name_get_idx(source);
+	Expr expr       = { .kind = ExprKind.STRING, .stringLiteral = nameIdx };
+	ExprIdx exprIdx = this.push_expr_get_idx(&expr);
+	return exprIdx;
 }
 
 fn ExprIdx Parser.unary(Parser* this)
 {
-    int operatorLine = this.previous.line;
-    TokenType opTokType = this.previous.tokenType;
+	int operatorLine    = this.previous.line;
+	TokenType opTokType = this.previous.tokenType;
 
-    ExprIdx rhsIdx = this.parse_precedence(Precedence.UNARY);
-    UnOp opType;
+	ExprIdx rhsIdx = this.parse_precedence(Precedence.UNARY);
+	UnOp opType;
 
-    switch (opTokType) {
-        case TokenType.MINUS:       opType = UnOp.NEG;
-        case TokenType.BANG:        opType = UnOp.NOT;
-        default:                    this.error("Unsupported operator");
-    }
-    Expr expr = {.kind = ExprKind.UNARY};
-    expr.span = {.line = operatorLine };
-    expr.unary = {.op = opType, .rhs = rhsIdx};
-    return this.push_expr_get_idx(&expr);
+	switch (opTokType)
+	{
+		case TokenType.MINUS: opType = UnOp.NEG;
+		case TokenType.BANG: opType = UnOp.NOT;
+		default: this.error("Unsupported operator");
+	}
+	Expr expr = { .kind = ExprKind.UNARY };
+	expr.span = { .line = operatorLine };
+	expr.unary = { .op = opType, .rhs = rhsIdx };
+	return this.push_expr_get_idx(&expr);
 }
 
 
 fn ExprIdx Parser.binary(Parser* this, ExprIdx lhs)
 {
-    TokenType   operatorType = this.previous.tokenType;
-    ParseRule* rule = get_rule(operatorType);
-    ExprIdx rhs = this.parse_precedence((Precedence)(rule.precedence + 1));
-    BinOp op;
+	TokenType operatorType = this.previous.tokenType;
+	ParseRule* rule        = get_rule(operatorType);
+	ExprIdx rhs            = this.parse_precedence((Precedence)(rule.precedence.ordinal + 1));
+	BinOp op;
 
-    switch (operatorType) {
-        case TokenType.PLUS:          op = BinOp.ADD;
-        case TokenType.MINUS:         op = BinOp.SUB;
-        case TokenType.STAR:          op = BinOp.MUL;
-        case TokenType.SLASH:         op = BinOp.DIV;
-        case TokenType.BANG_EQUAL:    op = BinOp.NEQ;
-        case TokenType.EQUAL_EQUAL:   op = BinOp.EQ;
-        case TokenType.GREATER:       op = BinOp.GREATER;
-        case TokenType.GREATER_EQUAL: op = BinOp.GREATER_EQ;
-        case TokenType.LESS:          op = BinOp.LESS;
-        case TokenType.LESS_EQUAL:    op = BinOp.LESS_EQ;
-        case TokenType.EQUAL:         op = BinOp.STORE;
-        default:                      op = BinOp.AS;
-    }
-    Expr expr = {.kind = ExprKind.BINARY};
-    expr.span = {.line = this.previous.line};
-    expr.binary = {.op = op, .lhs = lhs, .rhs = rhs };
-    ExprIdx index = this.push_expr_get_idx(&expr);
-    return index;
+	switch (operatorType)
+	{
+		case TokenType.PLUS: op = BinOp.ADD;
+		case TokenType.MINUS: op = BinOp.SUB;
+		case TokenType.STAR: op = BinOp.MUL;
+		case TokenType.SLASH: op = BinOp.DIV;
+		case TokenType.BANG_EQUAL: op = BinOp.NEQ;
+		case TokenType.EQUAL_EQUAL: op = BinOp.EQ;
+		case TokenType.GREATER: op = BinOp.GREATER;
+		case TokenType.GREATER_EQUAL: op = BinOp.GREATER_EQ;
+		case TokenType.LESS: op = BinOp.LESS;
+		case TokenType.LESS_EQUAL: op = BinOp.LESS_EQ;
+		case TokenType.EQUAL: op = BinOp.STORE;
+		default: op = BinOp.AS;
+	}
+	Expr expr = { .kind = ExprKind.BINARY };
+	expr.span = { .line = this.previous.line };
+	expr.binary = { .op = op, .lhs = lhs, .rhs = rhs };
+	ExprIdx index = this.push_expr_get_idx(&expr);
+	return index;
 }
 
 fn ExprIdx Parser.literal_true(Parser* this)
 {
-    Expr expr = {.kind = ExprKind.BOOL, .boolLiteral = true };
-    expr.span.line = this.previous.line;
-    return this.push_expr_get_idx(&expr);
+	Expr expr = { .kind = ExprKind.BOOL, .boolLiteral = true };
+	expr.span.line = this.previous.line;
+	return this.push_expr_get_idx(&expr);
 }
 
 fn ExprIdx Parser.literal_false(Parser* this)
 {
-    Expr expr = {.kind = ExprKind.BOOL, .boolLiteral = false };
-    expr.span.line = this.previous.line;
-    return this.push_expr_get_idx(&expr);;
+	Expr expr = { .kind = ExprKind.BOOL, .boolLiteral = false };
+	expr.span.line = this.previous.line;
+	return this.push_expr_get_idx(&expr);
 }
 
 fn ExprIdx Parser.literal_null(Parser* this)
 {
-    Expr expr = {.kind = ExprKind.NULL};
-    expr.span.line = this.previous.line;
-    return this.push_expr_get_idx(&expr);
+	Expr expr = { .kind = ExprKind.NULL };
+	expr.span.line = this.previous.line;
+	return this.push_expr_get_idx(&expr);
 }
 
 // ---------- Precedence engine ----------
 
 fn ExprIdx Parser.parse_precedence(Parser* this, Precedence precedence)
 {
-    this.advance();
-    PrefixFn prefixRule = get_rule(this.previous.tokenType).prefix;
-    if (prefixRule == null) {
-        this.error("Expected expression");
-        return NO_IDX;
-    }
+	this.advance();
+	PrefixFn prefixRule = get_rule(this.previous.tokenType).prefix;
+	if (prefixRule == null)
+	{
+		this.error("Expected expression");
+		return NO_IDX;
+	}
 
-    ExprIdx lastIdx = prefixRule(this);
+	ExprIdx lastIdx = prefixRule(this);
 
-    while (precedence <= get_rule(this.current.tokenType).precedence) {
-        this.advance();
-        InfixFn infixRule = get_rule(this.previous.tokenType).infix;
-        lastIdx = infixRule(this, lastIdx);
-    }
+	while (precedence <= get_rule(this.current.tokenType).precedence)
+	{
+		this.advance();
+		InfixFn infixRule = get_rule(this.previous.tokenType).infix;
+		lastIdx = infixRule(this, lastIdx);
+	}
 
-    return lastIdx;
+	return lastIdx;
 }

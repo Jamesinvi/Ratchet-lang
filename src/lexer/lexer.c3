@@ -143,7 +143,7 @@ fn char Lexer.peek_at(Lexer* this, int distance) {
 fn void Lexer.add_token(Lexer* this, TokenType tokenType) {
     String lexeme = "";
 	lexeme = String.copy(this.input[this.start .. this.current -1], &globals::allocator);
-	usz tokenValueIdx = globals::tokenValues.len();
+	sz tokenValueIdx = globals::tokenValues.len();
 	assert(this.start <= this.current);
 	assert(this.current <= this.input.len);
 	globals::tokenValues.push(lexeme);

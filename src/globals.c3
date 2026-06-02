@@ -20,17 +20,17 @@ HashMap{String, DeclIdx} declaredStructs;
 HashMap{String, DeclIdx} declaredFunctions;
 
 // This map maps a struct name to its index in structTypes
-HashMap{String, usz} structNamesToIdx;
+HashMap{String, sz} structNamesToIdx;
 List{CompStructTypeInfo} structTypes;
-
 
 
 fn void initialize_globals()
 {
-	if(globalsInitialized){
+	if (globalsInitialized)
+	{
 		return;
 	}
-	allocator = {};
+	allocator = { };
 	allocator.init(mem, 64 * 1024);
 	tokens.init(&globals::allocator, 1024);
 	tokenValues.init(&globals::allocator, 1024);
@@ -38,19 +38,19 @@ fn void initialize_globals()
 	declaredFunctions.init(&globals::allocator, 128);
 	structNamesToIdx.init(&globals::allocator, 64);
 	structTypes.init(&globals::allocator, 64);
-	compilationCtx = {};
+	compilationCtx = { };
 	globalsInitialized = true;
 }
 
 fn void cleanup_globals()
 {
 	allocator.free();
-	tokens = {};
-	tokenValues = {};
-	declaredStructs = {};
-	declaredFunctions = {};
-	structNamesToIdx = {};
-	structTypes = {};
+	tokens = { };
+	tokenValues = { };
+	declaredStructs = { };
+	declaredFunctions = { };
+	structNamesToIdx = { };
+	structTypes = { };
 	compilationCtx.deinit();
 
 	globalsInitialized = false;

@@ -50,9 +50,9 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 				result.type = (lastChar == '&') ? ValueType.REF : ValueType.PTR;
 				result.refToType = ValueType.STRUCT;
-				usz? structTypeIdx = globals::structNamesToIdx.get(baseName);
+				sz? structTypeIdx = globals::structNamesToIdx.get(baseName);
 				if (catch err = structTypeIdx) {
-					usz nextIdx = globals::structTypes.len();
+					sz nextIdx = globals::structTypes.len();
 					CompStructTypeInfo structInfo = {};
 					globals::structTypes.push(structInfo);
 					String nameCopy = String.copy(baseName, &this.allocator);
@@ -68,9 +68,9 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.STRUCT;
-			usz? structTypeIdx = globals::structNamesToIdx.get(typeName);
+			sz? structTypeIdx = globals::structNamesToIdx.get(typeName);
 			if (catch err = structTypeIdx) {
-				usz nextIdx = globals::structTypes.len();
+				sz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
 				String nameCopy = String.copy(typeName, &this.allocator);
@@ -88,9 +88,9 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.REF;
 			
-			usz? structTypeIdx = globals::structNamesToIdx.get(typeName);
+			sz? structTypeIdx = globals::structNamesToIdx.get(typeName);
 			if (catch err = structTypeIdx) {
-				usz nextIdx = globals::structTypes.len();
+				sz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
 				String nameCopy = String.copy(typeName, &this.allocator);
@@ -113,7 +113,7 @@ fn CompTypeInfo make_type(ValueType type)
 	return info;
 }
 
-fn CompTypeInfo make_ref_type(ValueType refToType, uint structIndex)
+fn CompTypeInfo make_ref_type(ValueType refToType, sz structIndex)
 {
 	CompTypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex };
 	return info;

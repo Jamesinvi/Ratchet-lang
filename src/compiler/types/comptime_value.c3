@@ -3,11 +3,11 @@ import common;
 import globals;
 import std::io;
 
-const NOT_STRUCT = uint.max;
+const NOT_STRUCT = -1;
 
 struct CompTypeInfo
 {
-    uint structTypeIndex;       // uint.max is reserved for non-structs
+    sz structTypeIndex;         // -1 is reserved for non-structs
     ValueType type;
     ValueType refToType;        // Will be ValueType.NULL when not it's not a reference
 }
@@ -16,12 +16,12 @@ struct CompTypeInfo
 fn ushort get_type_size(CompTypeInfo info)
 {
     switch (info.type) {
-        case ValueType.INT:         return int.sizeof;
-        case ValueType.FLOAT:       return float.sizeof;
-        case ValueType.DOUBLE:      return double.sizeof;
-        case ValueType.BOOL:        return bool.sizeof;
+        case ValueType.INT:         return int::size;
+        case ValueType.FLOAT:       return float::size;
+        case ValueType.DOUBLE:      return double::size;
+        case ValueType.BOOL:        return bool::size;
         case ValueType.REF:      	nextcase;
-        case ValueType.PTR:   		return uptr.sizeof;
+        case ValueType.PTR:   		return uptr::size;
         case ValueType.STRUCT:      return globals::structTypes[info.structTypeIndex].sizeInBytes;
         default:                    return 0;
     }
@@ -32,7 +32,7 @@ fn CompTypeInfo pointee_from_ref(CompTypeInfo r)
     CompTypeInfo out = {};
     out.type = r.refToType;
     out.refToType = ValueType.NULL;
-    out.structTypeIndex = (out.type == ValueType.STRUCT) ? r.structTypeIndex : uint.max;
+    out.structTypeIndex = (out.type == ValueType.STRUCT) ? r.structTypeIndex : NOT_STRUCT;
     return out;
 }
 

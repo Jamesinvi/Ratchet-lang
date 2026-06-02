@@ -69,7 +69,7 @@ fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 
 	// Parameters behave like pre-existing locals at function entry.
 	DeclParamRange paramRange = this.symbolTable.declParamRanges[index];
-	for (usz i = paramRange.start; i < paramRange.end; i++) {
+	for (sz i = paramRange.start; i < paramRange.end; i++) {
 		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[i];
 		MirPlace paramPlace = {
 			.baseSymbolIdx = paramSymbolIdx,

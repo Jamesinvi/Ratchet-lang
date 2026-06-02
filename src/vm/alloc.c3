@@ -2,12 +2,13 @@ module vm::memory;
 import common;
 import std::collections;
 import log;
-alias FreeSlotsStack = common::stack::Stack{ulong};
+import std::core::mem::alloc;
+alias FreeSlotsStack = common::stack::Stack{sz};
 
 struct HeapTracker
 {
     List{Obj*} objects;
-    HashSet{ulong} usedSlots;
+    HashSet{sz} usedSlots;
     FreeSlotsStack freeSlots;
     String name;
     TrackingAllocator allocator;
@@ -40,12 +41,12 @@ fn void HeapTracker.free(HeapTracker* this){
 }
 
 fn void HeapTracker.track_alloc(HeapTracker* this, Obj* trackedObj){
-    ulong allocIndex = trackedObj.allocIndex;
-    if(allocIndex!= ulong.max && this.usedSlots.contains(allocIndex) ){
+    sz allocIndex = trackedObj.allocIndex;
+    if(allocIndex!= common::UNTRACKED_ALLOC && this.usedSlots.contains(allocIndex) ){
         return;
     }
 
-    ulong index = 0;
+    sz index = 0;
     if(this.freeSlots.size == 0){
         index = this.objects.size;
         this.objects.push(trackedObj);
@@ -57,8 +58,8 @@ fn void HeapTracker.track_alloc(HeapTracker* this, Obj* trackedObj){
     trackedObj.allocIndex = index;
 }
 
-fn void* HeapTracker.alloc(HeapTracker* this, usz size){
-    return allocator::calloc(&this.allocator, size);
+fn void* HeapTracker.alloc(HeapTracker* this, sz size){
+    return alloc::calloc(&this.allocator, size);
 }
 
 
@@ -70,7 +71,7 @@ fn void HeapTracker.release_obj(HeapTracker* this, Obj* trackedObj){
 }
 
 fn void HeapTracker.retain_obj(HeapTracker* this, Obj* trackedObj){
-    if(trackedObj.allocIndex==ulong.max){
+    if(trackedObj.allocIndex==common::UNTRACKED_ALLOC){
         this.track_alloc(trackedObj);
     }
     trackedObj.refCounter++;

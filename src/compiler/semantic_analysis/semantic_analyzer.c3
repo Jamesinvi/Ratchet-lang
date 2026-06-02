@@ -18,7 +18,7 @@ struct SemanticAnalyzer
 	List{TypeResult} errors;
 	Stack{Scope} scopes;
 	bool returnFound;
-	usz currentScopeIdx;
+	sz currentScopeIdx;
 	DeclIdx currentStructDeclIdx;
 	DynamicArenaAllocator allocator;
 
@@ -33,9 +33,9 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	this.allocator.init(mem, 64 * 1024);
 
 	this.errors.init(&this.allocator);
-	usz exprLen = this.ast.expressions.len();
-	usz stmtLen = this.ast.statements.len();
-	usz declLen = this.ast.declarations.len();
+	sz exprLen = this.ast.expressions.len();
+	sz stmtLen = this.ast.statements.len();
+	sz declLen = this.ast.declarations.len();
 	this.symbolTable.symbols.init(&this.allocator, exprLen + stmtLen + declLen);
 	this.symbolTable.exprSymbols.init(&this.allocator, exprLen);
 	this.symbolTable.exprTypes.init(&this.allocator, exprLen);
@@ -50,7 +50,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	common::list_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
 	common::list_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
 	common::list_fill{DeclParamRange}(&this.symbolTable.declParamRanges, {}, declLen);
-	for (usz i = 0; i < exprLen; i++) {
+	for (sz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);
 		this.symbolTable.callTargets.push({});
@@ -66,7 +66,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 
 fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
 {
-	for(usz i = 0; i < this.scopes.size; i++){
+	for(sz i = 0; i < this.scopes.size; i++){
 		this.scopes.items[i].deinit();
 	}
 	this.scopes.free();
@@ -80,7 +80,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	this.begin_scope(globalReturnType, false);
 
 	// Predeclare function symbols with return types.
-	for (usz i = 0; i < this.ast.declarations.len(); i++){
+	for (sz i = 0; i < this.ast.declarations.len(); i++){
 		Decl* decl = &this.ast.declarations[i];
 		if (decl.kind == DeclKind.FUNCTION) {
 			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
@@ -97,7 +97,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	}
 
 
-	for (usz i = 0; i < this.ast.loweredMethodsStart; i++){
+	for (sz i = 0; i < this.ast.loweredMethodsStart; i++){
 		Decl* decl = &this.ast.declarations[i];
 		switch (decl.kind)
 		{
@@ -125,7 +125,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 
 fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params, DeclIdx ownerDeclIdx)
 {
-	usz rangeStart = this.symbolTable.declParamSymbols.len();
+	sz rangeStart = this.symbolTable.declParamSymbols.len();
 	foreach (&param : *params){
 		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
 		if (paramType.hadError) {
@@ -146,14 +146,14 @@ fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{Param
 
 fn void SemanticAnalyzer.begin_scope(SemanticAnalyzer* this, TypeResult returnType, bool insideMethod)
 {
-	usz enclosingIdx = 0;
+	sz enclosingIdx = 0;
 	if (this.scopes.size > 0) {
 		enclosingIdx = this.currentScopeIdx;
 	}
 	Scope scope = {.depth = this.scopes.size, .enclosingIdx = enclosingIdx };
 	scope.init(returnType, insideMethod);
 	this.scopes.push(scope);
-	this.currentScopeIdx = (usz)this.scopes.size - 1;
+	this.currentScopeIdx = this.scopes.size - 1;
 }
 
 fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
@@ -162,7 +162,7 @@ fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
 	popped.visibleSymbols.free();
 	debug::@log_analysis("exiting scope");
 	if (this.scopes.size > 0) {
-		this.currentScopeIdx = (usz)this.scopes.size - 1;
+		this.currentScopeIdx = this.scopes.size - 1;
 	}
 }
 
@@ -183,12 +183,12 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
 		return false;
 	}
 	
-	usz methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
+	sz methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
 	if (methodIdx == parser::NO_IDX) {
 		return false;
 	}
 
-	for(usz i = call.argsStart; i < call.argsEnd; i++) {
+	for(sz i = call.argsStart; i < call.argsEnd; i++) {
 		ExprIdx argExprIdx = this.ast.args[i];
 		TypeResult argType = this.analyze_expr(argExprIdx);
 		if (argType.hadError) {
@@ -281,7 +281,7 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	return type_ok(expectedRetType.value);
 }
 
-fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, uint structTypeIndex)
+fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, sz structTypeIndex)
 {
 	// Search for a struct that has the same structTypeIndex 
 	foreach(idx, &decl : this.ast.declarations){
@@ -292,7 +292,7 @@ fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, uint st
 		if (!globals::structNamesToIdx.has_key(structName)) {
 			continue;
 		}
-		usz? indexInStructNames = globals::structNamesToIdx.get(structName);
+		sz? indexInStructNames = globals::structNamesToIdx.get(structName);
 		if (catch err = indexInStructNames) {
 			continue;
 		}
@@ -303,9 +303,9 @@ fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, uint st
 	return parser::NO_IDX;
 }
 
-fn usz SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* structDecl, String name)
+fn sz SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* structDecl, String name)
 {
-	for (usz i = 0; i < structDecl.methods.len(); i++){
+	for (sz i = 0; i < structDecl.methods.len(); i++){
 		MethodDeclAst* method = &structDecl.methods[i];
 		String methodName = this.ast.names[method.nameIdx];
 		if (common::string_equals(methodName, name)) {
@@ -460,12 +460,12 @@ fn bool SemanticAnalyzer.is_struct_ref_like(SemanticAnalyzer* this, CompTypeInfo
 
 fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, String name, SymbolIdx* outSymbolIdx)
 {
-	usz scopeIdx = this.currentScopeIdx;
+	sz scopeIdx = this.currentScopeIdx;
 	
 	// Start from the current scope's visible symbols and traverse upwards, looking for a match
 	while (scopeIdx!=0){
 		Stack{SymbolIdx}* visibleSymbols = &this.scopes.items[scopeIdx].visibleSymbols;
-		for (isz i = (isz)visibleSymbols.size - 1; i >= 0; i--){
+		for (sz i = (sz)visibleSymbols.size - 1; i >= 0; i--){
 			SymbolIdx symbolIdx = visibleSymbols.items[i];
 			Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 			if (symbol.kind == SymbolKind.LOCAL) {
@@ -489,7 +489,7 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Stri
 		scopeIdx = this.scopes.items[scopeIdx].enclosingIdx;
 	}
 	Stack{SymbolIdx}* globalScopeSymbols = &this.scopes.items[0].visibleSymbols;
-	for (isz i = (isz)globalScopeSymbols.size - 1; i >= 0; i--){
+	for (sz i = (sz)globalScopeSymbols.size - 1; i >= 0; i--){
 		SymbolIdx symbolIdx = globalScopeSymbols.items[i];
 		Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 		if (symbol.kind == SymbolKind.FUNCTION) {
@@ -651,7 +651,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		return calleeType;
 	}
 
-	for(usz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
+	for(sz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
 		ExprIdx argExprIdx = this.ast.args[i];
 		TypeResult argType = this.analyze_expr(argExprIdx);
 		if (argType.hadError) {

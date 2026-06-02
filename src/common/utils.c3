@@ -19,16 +19,16 @@ fn bool string_equals(String s1, String s2) @inline{
     return s1.len == s2.len && s1 == s2;
 }
 
-fn void list_fill(List{Type}* list, Type val, usz maxSize) <Type>
+fn void list_fill(List{Type}* list, Type val, sz maxSize) <Type>
 {
-    for(usz i = 0; i < maxSize; i++){
+    for(sz i = 0; i < maxSize; i++){
         list.push(val);
     }
 }
 
 fn void list_set_values(List{Type}* list, Type val) <Type>
 {
-    for(usz i = 0; i < list.len(); i++){
+    for(sz i = 0; i < list.len(); i++){
         (*list)[i] = val;
     }
 }

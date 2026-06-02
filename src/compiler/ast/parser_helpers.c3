@@ -118,7 +118,7 @@ fn void Parser.emit_program_call(Parser* this)
 
 fn ushort Parser.ensure_constant(Parser* this, int constantIndex)
 {
-    if (constantIndex > ushort.max) {
+    if (constantIndex > ushort::max) {
         this.error("Too many constants in one chunk");
         return 0;
     }
@@ -133,7 +133,7 @@ fn void Parser.predeclare_structs(Parser* this)
 	assert(globals::declaredStructs.table.len > 0);
 
     // Look for patterns: struct <name>
-    for (usz i = 0; i < this.input.len() - 2; i++) {
+    for (sz i = 0; i < this.input.len() - 2; i++) {
         Token* t = &this.input[i];
         if (t.tokenType == TokenType.STRUCT_T) {
 			int scopeCloseExpected = 1;
@@ -160,7 +160,7 @@ fn void Parser.predeclare_structs(Parser* this)
 fn void Parser.predeclare_functions(Parser* this)
 {
     // Look for patterns: fn <type> <identifier>
-    for (usz i = 0; i < this.input.len() - 2; i++) {
+    for (sz i = 0; i < this.input.len() - 2; i++) {
         Token* t = &this.input[i];
         if (t.tokenType == TokenType.FN) {
             Token* typeTok = &this.input[i + 1];

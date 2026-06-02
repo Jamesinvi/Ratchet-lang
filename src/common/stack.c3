@@ -2,8 +2,8 @@ module common::stack <Type>;
 
 struct Stack
 {
-    int capacity;
-    int size;
+    sz capacity;
+    sz size;
     Type* items;
 }
 
@@ -12,7 +12,7 @@ fn void Stack.push(Stack* this, Type element) @inline
     if (this.capacity == this.size)
     {
         this.capacity = this.capacity ? this.capacity * 2 : 16;
-        this.items = realloc(this.items, Type.sizeof * this.capacity);
+        this.items = realloc(this.items, Type::size * this.capacity);
     }
     this.items[this.size++] = element;
 }

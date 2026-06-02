@@ -3,12 +3,12 @@ import common;
 import log;
 import std::collections::list;
 
-alias NameIdx = usz;
-alias ExprIdx = usz;
-alias DeclIdx = usz;
-alias StmtIdx = usz;
+alias NameIdx = sz;
+alias ExprIdx = sz;
+alias DeclIdx = sz;
+alias StmtIdx = sz;
 
-const NO_IDX = usz.max;
+const NO_IDX = -1;
 
 enum DeclKind : char
 {
@@ -45,7 +45,7 @@ struct FieldAst
 {
     TypeAst type;
     NameIdx nameIdx;
-	usz idxInFields;		// index in the StructDeclAst field list
+	sz idxInFields;		// index in the StructDeclAst field list
 }
 
 struct TypeAst
@@ -431,7 +431,7 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
             this.print_expression(&this.expressions[expr.call.callee]);
             log::log("(");
 			int counter = 0;
-			for(usz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
+			for(sz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
                 if (counter > 0) log::log(", ");
 				ExprIdx argExprIdx = this.args[i];
                 this.print_expression(&this.expressions[argExprIdx]);

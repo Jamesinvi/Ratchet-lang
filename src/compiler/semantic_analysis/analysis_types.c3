@@ -4,8 +4,8 @@ import common;
 import debug;
 
 
-alias SymbolIdx = usz;
-const NO_SYMBOL = usz.max;
+alias SymbolIdx = sz;
+const NO_SYMBOL = -1;
 
 enum SymbolKind : char
 {
@@ -24,22 +24,22 @@ struct Symbol
 
 struct DeclParamRange
 {
-	usz start;
-	usz end;
+	sz start;
+	sz end;
 }
 
 struct SymbolTable
 {
 	List{Symbol} symbols;
-    List{SymbolIdx} exprSymbols; 		  // index by ExprIdx
-    List{CompTypeInfo} exprTypes; 		  // index by ExprIdx
-    List{SymbolIdx} stmtSymbols; 		  // index by StmtIdx
-    List{SymbolIdx} declSymbols; 		  // index by DeclIdx
-    List{DeclParamRange} declParamRanges; // index by DeclIdx
-    List{SymbolIdx} declParamSymbols;     // flat storage for function param symbols
-    List{CallTarget} callTargets;		  // index by ExprIdx
-    List{ExprIdx} callReceiverExpr; 	  // index by ExprIdx (NO_IDX when absent)
-    List{Scope} scopes;         		  // name -> SymbolIdx
+	List{SymbolIdx} exprSymbols; 			// index by ExprIdx
+	List{CompTypeInfo} exprTypes; 			// index by ExprIdx
+	List{SymbolIdx} stmtSymbols; 			// index by StmtIdx
+	List{SymbolIdx} declSymbols; 			// index by DeclIdx
+	List{DeclParamRange} declParamRanges; 	// index by DeclIdx
+	List{SymbolIdx} declParamSymbols; 		// flat storage for function param symbols
+	List{CallTarget} callTargets; 			// index by ExprIdx
+	List{ExprIdx} callReceiverExpr; 		// index by ExprIdx (NO_IDX when absent)
+	List{Scope} scopes; 					// name -> SymbolIdx
 }
 
 
@@ -64,10 +64,10 @@ struct MethodId
 
 enum ErrorKind : char (String asStr)
 {
-	TYPE_MISMATCH	{ "Type mismatch" },
-	INVALID_TYPE	{ "Invalid type" },
+	TYPE_MISMATCH   { "Type mismatch" },
+	INVALID_TYPE    { "Invalid type" },
 	UNDECLARED_NAME { "Undeclared name" },
-	NO_RETURN		{ "No return" },
+	NO_RETURN       { "No return" },
 }
 
 struct TypeResult
@@ -81,16 +81,22 @@ struct TypeResult
 
 fn TypeResult type_ok(CompTypeInfo expected)
 {
-	TypeResult result = {};
+	TypeResult result = { };
 	result.value = expected;
 	result.expected = expected;
 	result.hadError = false;
 	return result;
 }
 
-fn TypeResult SemanticAnalyzer.type_error(SemanticAnalyzer* this, ErrorKind kind, CompTypeInfo value, CompTypeInfo expected, Span span)
+fn TypeResult SemanticAnalyzer.type_error(
+	SemanticAnalyzer* this,
+	ErrorKind kind,
+	CompTypeInfo value,
+	CompTypeInfo expected,
+	Span span
+)
 {
-	TypeResult result = {};
+	TypeResult result = { };
 	result.hadError = true;
 	result.value = value;
 	result.expected = expected;
@@ -102,15 +108,16 @@ fn TypeResult SemanticAnalyzer.type_error(SemanticAnalyzer* this, ErrorKind kind
 
 struct Scope
 {
-    TypeResult returnType;
-    usz enclosingIdx;
-	usz depth;
+	TypeResult returnType;
+	sz enclosingIdx;
+	sz depth;
 	bool insideMethod;
 	Stack{SymbolIdx} visibleSymbols;
 }
 
-fn void Scope.init(Scope* this, TypeResult returnType, bool insideMethod){
-    debug::@log_analysis("initializing new scope");
+fn void Scope.init(Scope* this, TypeResult returnType, bool insideMethod)
+{
+	debug::@log_analysis("initializing new scope");
 	this.returnType = returnType;
 	this.insideMethod = insideMethod;
 }

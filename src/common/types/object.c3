@@ -4,6 +4,8 @@ import std::collections::list;
 
 alias NativeFn = fn double();
 
+const UNTRACKED_ALLOC = -1;
+
 // -------- ENUMS -----------
 
 enum ObjType : Byte
@@ -21,7 +23,7 @@ struct Obj @align(16)
     ObjType type;
     bool isConstant;
     int refCounter;
-    ulong allocIndex;
+    sz allocIndex;
 }
 
 struct ObjString
@@ -81,7 +83,7 @@ fn ObjFunction* create_obj_function(String name, bool isConstant, ValueType retu
     ObjString* stringObj = create_obj_string(name, isConstant);
     object.returnType = returnType;
     object.returnTypeSize = returnSize;
-    object.obj.allocIndex = ulong.max;
+    object.obj.allocIndex = UNTRACKED_ALLOC;
     object.obj.type = ObjType.FUNCTION;
     object.name = stringObj;
     object.chunk.init();
@@ -94,7 +96,7 @@ fn ObjString* create_obj_string(String source, bool isConstant){
 
     object.obj.type = ObjType.STRING;
     object.str = String.copy(source, mem);
-    object.obj.allocIndex = ulong.max;
+    object.obj.allocIndex = UNTRACKED_ALLOC;
     object.obj.isConstant=isConstant;
     return object;
 }
@@ -108,7 +110,7 @@ fn ObjRef* create_obj_ref(bool isConstant, ValueType refTo, ushort sizeInBytes, 
     object.sizeInBytes =  sizeInBytes;
     object.refTo = refTo;
     object.data = data;
-    object.obj.allocIndex = ulong.max;
+    object.obj.allocIndex = UNTRACKED_ALLOC;
     object.obj.isConstant=isConstant;
     return object;
 }
@@ -124,8 +126,8 @@ fn ObjNative* create_obj_native(NativeFn* function){
 }
 
 fn void Obj.debug_print(Obj* this) {
-    io::printf("%s, ", ObjType.names[this.type.ordinal]);
-    if(this.allocIndex < ulong.max){
+    io::printf("%s, ", this.type);
+    if(this.allocIndex < UNTRACKED_ALLOC){
         io::printf("%d", this.allocIndex);
     }else{
         io::printf("untracked");
