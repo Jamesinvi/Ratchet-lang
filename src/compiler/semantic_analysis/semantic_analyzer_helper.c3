@@ -35,7 +35,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.BOOL_REF_NOGC:	{ result.type = ValueType.PTR; result.refToType = ValueType.BOOL; }
 		case TokenType.IDENTIFIER:
 		{
-			String typeName = this.ast.names[input.nameIdx];
+			String typeName = this.ast.names[input.nameIdx].text();
 			if (typeName.len == 0){
 				return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			} 
@@ -45,7 +45,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			// Ref or Ptr type to structs
 			if (lastChar == '&' || lastChar == '*') {
 				if (typeName.len < 2) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
-				String baseName = typeName.[0 .. typeName.len - 1];
+				String baseName = typeName.[0 .. typeName.len - 2];
 				DeclIdx? found = globals::declaredStructs.get(baseName);
 				if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 				result.type = (lastChar == '&') ? ValueType.REF : ValueType.PTR;
@@ -55,7 +55,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 					sz nextIdx = globals::structTypes.len();
 					CompStructTypeInfo structInfo = {};
 					globals::structTypes.push(structInfo);
-					String nameCopy = String.copy(baseName, &this.allocator);
+					String nameCopy = String.copy(baseName, &globals::allocator);
 					globals::structNamesToIdx[nameCopy] = nextIdx;
 					result.structTypeIndex = (uint)nextIdx;
 				} else {
@@ -73,7 +73,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				sz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
-				String nameCopy = String.copy(typeName, &this.allocator);
+				String nameCopy = String.copy(typeName, &globals::allocator);
 				globals::structNamesToIdx[nameCopy] = nextIdx;
 				result.structTypeIndex = (uint)nextIdx;
 			} else {
@@ -83,7 +83,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		}
 		case TokenType.THIS:			
 		{
-			String typeName = this.ast.names[input.nameIdx];
+			String typeName = this.ast.names[input.nameIdx].text();
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.REF;
@@ -93,7 +93,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				sz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
-				String nameCopy = String.copy(typeName, &this.allocator);
+				String nameCopy = String.copy(typeName, &globals::allocator);
 				globals::structNamesToIdx[nameCopy] = nextIdx;
 				result.structTypeIndex = (uint)nextIdx;
 			}else{

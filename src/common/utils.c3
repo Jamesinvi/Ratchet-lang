@@ -15,10 +15,6 @@ fn bool is_ref_char(char c) @inline{
     return (c == '&' || c == '*');
 }
 
-fn bool string_equals(String s1, String s2) @inline{
-    return s1.len == s2.len && s1 == s2;
-}
-
 fn void list_fill(List{Type}* list, Type val, sz maxSize) <Type>
 {
     for(sz i = 0; i < maxSize; i++){

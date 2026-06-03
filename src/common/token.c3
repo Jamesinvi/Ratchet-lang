@@ -36,13 +36,13 @@ struct Token
 {
     TokenType tokenType;
     int line;
-	sz valueIdx;			// Index in a list of strings
+	InternedString string;
 }
 
 
-fn String Token.value(Token* this)
+fn String Token.value(Token* this) @inline
 {
-	return globals::tokenValues[this.valueIdx];
+	return this.string.text();
 }
 
 Keyword[*] keywords = {

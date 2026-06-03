@@ -177,7 +177,7 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 		} else {
 			log::log("function ");
 			this.print_decl_function_name(fun.sourceDeclIdx, ast);
-			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx]);
+			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx].text());
 		}
 		for(sz i = fun.blocksStart; i < fun.blocksEnd; i++){
 			this.print_block(this.blocks[i], ast);
@@ -195,12 +195,12 @@ fn void MirProgram.print_decl_function_name(MirProgram* this, DeclIdx declIdx, P
 	}
 	FnDeclAst* fnDecl = &ast.declarations[declIdx].fnDecl;
 	if (fnDecl.params.len() > 0 && fnDecl.params[0].type.tokenType == TokenType.THIS) {
-		String structName = ast.names[fnDecl.params[0].type.nameIdx];
-		String methodName = ast.names[fnDecl.nameIdx];
-		log::log("%s.%s", structName, methodName);
+		InternedString structName = ast.names[fnDecl.params[0].type.nameIdx];
+		InternedString methodName = ast.names[fnDecl.nameIdx];
+		log::log("%s.%s", structName.text(), methodName.text());
 		return;
 	}
-	log::log("%s", ast.names[fnDecl.nameIdx]);
+	log::log("%s", ast.names[fnDecl.nameIdx].text());
 }
 
 

@@ -10,7 +10,7 @@ fn int main(String[] args)
     }
 	String filename = args[1];
 
-	compile_file(filename);
+	CompilationResult result = compile_file(filename);
 	cleanup();
-    return 0;
+    return (int)result;
 }

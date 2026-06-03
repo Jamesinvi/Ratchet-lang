@@ -53,12 +53,12 @@ If semantic analysis accepts a program that is inside the backend subset, MIR lo
 ## Explicit Non-Goals
 
 - arrays
-- interfaces
 - general `in`
 - general `inout`
 - generics
 - multifile programs
 - function overloading
+- coroutines
 - GC
 - AOT
 

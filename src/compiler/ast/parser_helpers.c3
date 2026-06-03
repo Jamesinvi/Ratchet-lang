@@ -228,12 +228,11 @@ fn void Parser.desugar_methods(Parser* this)
 
 fn String Parser.mangle_method_name(Parser* this, DeclIdx structDeclIdx, int methodIdx, Allocator allocator)
 {
-    Decl* structDecl = &this.outputAst.declarations[structDeclIdx];
-    MethodDeclAst* methodDecl = &structDecl.structDecl.methods[methodIdx];
-    String structName = this.outputAst.names[structDecl.structDecl.nameIdx];
-    String methodName = this.outputAst.names[methodDecl.nameIdx];
-
-    return string::format(allocator, "%s_%s", structName, methodName);
+    Decl* decl = &this.outputAst.declarations[structDeclIdx];
+    MethodDeclAst* methodDecl = &decl.structDecl.methods[methodIdx];
+    InternedString structNameId = this.outputAst.names[decl.structDecl.nameIdx];
+    InternedString methodNameId = this.outputAst.names[methodDecl.nameIdx];
+    return string::format(allocator, "%s_%s", structNameId.text(), methodNameId.text());
 }
 
 fn void Parser.predeclare_natives(Parser* this)
@@ -254,8 +253,8 @@ fn DeclIdx Parser.push_decl_get_idx(Parser* this, Decl* decl){
 
 fn NameIdx Parser.push_name_get_idx(Parser* this, String toCopy){
     NameIdx index = this.outputAst.names.len();
-    String copy = String.copy(toCopy, &this.allocator);
-    this.outputAst.names.push(copy);
+    InternedString stringId = globals::internedSourceStrings.get_or_intern(toCopy);
+    this.outputAst.names.push(stringId);
 	assert(this.outputAst.names.len() == index + 1);
     return index;
 }

@@ -21,7 +21,7 @@ struct ProgramAst
     List{Decl}      declarations;
     List{Stmt}      statements;         // global statement list indexed by nodes
     List{Expr}      expressions;        // global expression list indexed by nodes
-    List{String}    names;              // global name list indexed by nodes
+    List{InternedString}  names;        // global name list indexed by nodes.
 	List{ExprIdx}	args;			    // global function argument list, indices into expression list
     DeclIdx         loweredMethodsStart;// From this idx onwards, you'll find only methods lowered to functions (in "declarations")
 }
@@ -212,9 +212,6 @@ fn void ProgramAst.init(ProgramAst* this, Allocator allocator)
 
 fn void ProgramAst.free(ProgramAst* this, Allocator allocator)
 {
-	foreach(name : this.names){
-		name.free(allocator);
-	}
 	foreach(decl : this.declarations){
 		if(decl.kind == DeclKind.STRUCT){
 			foreach(method : decl.structDecl.methods){
@@ -261,22 +258,22 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 		case DeclKind.FUNCTION:
 		{
             if(decl.fnDecl.isDesugaredResult) return;
-			String funcName = this.names[decl.fnDecl.nameIdx];
-			String retType = this.names[decl.fnDecl.returnType.nameIdx];
+			InternedString funcName = this.names[decl.fnDecl.nameIdx];
+			InternedString retType = this.names[decl.fnDecl.returnType.nameIdx];
 			this.print_indent(indent);
-			log::log("fn %s(", funcName);
+			log::log("fn %s(", funcName.text());
 			foreach(counter, &param : decl.fnDecl.params){
                 if(counter > 0) log::log(", ");
-				String paramName = this.names[param.nameIdx];
-				String paramType = this.names[param.type.nameIdx];
+				InternedString paramName = this.names[param.nameIdx];
+				InternedString paramType = this.names[param.type.nameIdx];
                 switch(param.passMode){
                     case ParamPassMode.IN:     log::log("in ");
                     case ParamPassMode.INOUT:  log::log("inout ");
                     default: break;
                 }
-				log::log("<%s> %s", paramType, paramName);
+				log::log("<%s> %s", paramType.text(), paramName.text());
 			}
-			log::logn(") returns <%s>", retType);
+			log::logn(") returns <%s>", retType.text());
 
 			Stmt* stmt = &this.statements[decl.fnDecl.body];
 			this.print_statement(stmt, indent + 2);
@@ -284,28 +281,28 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 				
 		case DeclKind.STRUCT:
 		{
-			String structName = this.names[decl.structDecl.nameIdx];
+			InternedString structName = this.names[decl.structDecl.nameIdx];
 			this.print_indent(indent);
-			log::logn("struct %s \n{", structName);
+			log::logn("struct %s \n{", structName.text());
 			foreach(&field : decl.structDecl.fields){
-				String fieldName = this.names[field.nameIdx];
-				String fieldType = this.names[field.type.nameIdx];
+				InternedString fieldName = this.names[field.nameIdx];
+				InternedString fieldType = this.names[field.type.nameIdx];
 				this.print_indent(indent+2);
-				log::logn("<%s> %s", fieldType, fieldName);
+				log::logn("<%s> %s", fieldType.text(), fieldName.text());
 			}
 			foreach(&method : decl.structDecl.methods){
-				String methodName = this.names[method.nameIdx];
-				String retType = this.names[method.returnType.nameIdx];
+				InternedString methodName = this.names[method.nameIdx];
+				InternedString retType = this.names[method.returnType.nameIdx];
 				Decl structAtIdx = this.declarations[method.structIdx];
 				this.print_indent(indent+2);
-				log::log("method <%s> %s (", retType, methodName);
+				log::log("method <%s> %s (", retType.text(), methodName.text());
 				foreach(idx, &param : method.params){
 					if(idx > 0) log::log(", ");
-					String paramName = this.names[param.nameIdx];
-					String paramType = this.names[param.type.nameIdx];
-					log::log("<%s> %s", paramType, paramName);
+					InternedString paramName = this.names[param.nameIdx];
+					InternedString paramType = this.names[param.type.nameIdx];
+					log::log("<%s> %s", paramType.text(), paramName.text());
 				}
-				log::logn(") returns <%s>", retType);
+				log::logn(") returns <%s>", retType.text());
 				Stmt* stmt = &this.statements[method.body];
 				this.print_statement(stmt, indent + 2);
 			}
@@ -346,9 +343,9 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
         case StmtKind.DECL:
         {
             this.print_indent(indent);
-            String typeName = this.names[stmt.varDecl.type.nameIdx];
-            String name = this.names[stmt.varDecl.nameIdx];
-            log::log("<%s> %s", typeName, name);
+            InternedString typeName = this.names[stmt.varDecl.type.nameIdx];
+            InternedString name = this.names[stmt.varDecl.nameIdx];
+            log::log("<%s> %s", typeName.text(), name.text());
             if (stmt.varDecl.init != NO_IDX) {
                 log::log(" = ");
                 this.print_expression(&this.expressions[stmt.varDecl.init]);
@@ -409,9 +406,9 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         case ExprKind.DOUBLE:           log::log("<double> %s", expr.doubleLiteral);
         case ExprKind.BOOL:             log::log("<bool> %s", expr.boolLiteral);
         case ExprKind.NULL:             log::log("<null>");
-        case ExprKind.STRING:           log::log("\"%s\"", this.names[expr.stringLiteral]);
+        case ExprKind.STRING:           log::log("\"%s\"", this.names[expr.stringLiteral].text());
 		case ExprKind.THIS:             log::log("@this");
-        case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr]);
+        case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr].text());
         case ExprKind.UNARY:
         {
             log::log("%s", expr.unary.op.asStr);
@@ -442,14 +439,14 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         case ExprKind.MEMBER:
         {
             this.print_expression(&this.expressions[expr.member.base]);
-            String member = this.names[expr.member.memberIdx];
-            log::log(".%s", member);
+            InternedString member = this.names[expr.member.memberIdx];
+            log::log(".%s", member.text());
         }
         case ExprKind.NEW:
         {
             log::log("new");
-			String typeName = this.names[expr.new.type.nameIdx];
-			log::log("<%s>", typeName);
+			InternedString typeName = this.names[expr.new.type.nameIdx];
+			log::log("<%s>", typeName.text());
         }
         case ExprKind.GROUP:            log::log("(<group>)");
         default:                        log::log("<?expr?>");

@@ -13,7 +13,7 @@ DynamicArenaAllocator allocator;
 
 CompilationContext compilationCtx;
 List{Token} tokens;
-List{String} tokenValues;
+StringInterner internedSourceStrings;
 
 // This map is used by the parser so the user can't define the same struct twice
 HashMap{String, DeclIdx} declaredStructs;
@@ -31,9 +31,10 @@ fn void initialize_globals()
 		return;
 	}
 	allocator = { };
+	internedSourceStrings = { };
 	allocator.init(mem, 64 * 1024);
 	tokens.init(&globals::allocator, 1024);
-	tokenValues.init(&globals::allocator, 1024);
+	internedSourceStrings.init(&globals::allocator, 1024);
 	declaredStructs.init(&globals::allocator, 64);
 	declaredFunctions.init(&globals::allocator, 128);
 	structNamesToIdx.init(&globals::allocator, 64);
@@ -46,11 +47,11 @@ fn void cleanup_globals()
 {
 	allocator.free();
 	tokens = { };
-	tokenValues = { };
 	declaredStructs = { };
 	declaredFunctions = { };
 	structNamesToIdx = { };
 	structTypes = { };
+	internedSourceStrings = { };
 	compilationCtx.deinit();
 
 	globalsInitialized = false;
