@@ -9,8 +9,8 @@ import log;
 fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFunc)
 {
 	// Clear the bindings
-	this.mirRegToRegister.clear();
-	this.symbolToRegister.clear();
+	this.mirRegToOffset.clear();
+	this.symbolToOffset.clear();
 	int maxMirReg = compiler::mir::NO_REG;
 	// We need to firnd the instruction iwth the highest "result" register index
 	for(sz i = mirFunc.blocksStart; i<mirFunc.blocksEnd;i++){
@@ -23,8 +23,8 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 		}	
 	}
 	// Fill the lists with invalid bytecode registers, they will be bound as soon as they're needed
-	common::list_fill{short}(&this.mirRegToRegister, runtime::NO_BC_REG, (sz)maxMirReg +1 );
-	common::list_fill{short}(&this.symbolToRegister, runtime::NO_BC_REG, (sz)this.symbolTable.symbols.len() +1);
+	common::list_fill{short}(&this.mirRegToOffset, runtime::NO_OFFSET, (sz)maxMirReg +1 );
+	common::list_fill{short}(&this.symbolToOffset, runtime::NO_OFFSET, (sz)this.symbolTable.symbols.len() +1);
 }
 
 fn BCFunctionIdx BCGenerator.push_func_get_idx(BCGenerator* this, BCFunction* func){
@@ -34,9 +34,54 @@ fn BCFunctionIdx BCGenerator.push_func_get_idx(BCGenerator* this, BCFunction* fu
     return index;
 }
 
-fn BCBlockIdx BCGenerator.push_block_get_idx(BCGenerator* this, BCBlock* block){
-    BCBlockIdx index = this.bcOutput.blocks.len();
-	block.idx = index;
-    this.bcOutput.blocks.push(*block);
-    return index;
+
+fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolIdx)
+{
+	short offset = this.symbolToOffset[symbolIdx];
+	// If we already have a binding then use it, else we need to create one
+	if (offset == runtime::NO_OFFSET) {
+		offset = this.localFrameOffset;
+		this.symbolToOffset[symbolIdx] = offset;
+		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
+		short size = (short)compiler::get_type_size(sym.type);
+		BCFrameSlot slot = {
+			.symbolIdx = symbolIdx,
+			.offset = offset,
+			.size = size,
+			.type = sym.type.type,
+		};
+
+		this.localFrameOffset += size;
+		this.bcOutput.functionFrameSlots.push(slot);
+	}
+	return offset;
+}
+
+
+fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegisterID mirRegId, CompTypeInfo type)
+{
+	if (mirRegId == compiler::mir::NO_REG) {
+		return runtime::NO_OFFSET;
+	}
+
+    short offset = this.mirRegToOffset[mirRegId];
+	// If we already have a binding then use it, else we need to create one
+    if (offset == runtime::NO_OFFSET) {
+        offset = this.localFrameOffset;
+        this.mirRegToOffset[mirRegId] = offset;
+
+        short size = (short)compiler::get_type_size(type);
+
+        BCFrameSlot slot = {
+            .symbolIdx = compiler::analyzer::NO_SYMBOL,
+            .offset = offset,
+            .size = size,
+            .type = type.type,
+        };
+
+        this.localFrameOffset += size;
+        this.bcOutput.functionFrameSlots.push(slot);
+    }
+
+    return offset;
 }

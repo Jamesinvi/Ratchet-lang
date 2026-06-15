@@ -4,23 +4,14 @@ import std::collections::list;
 import common;
 import log;
 
-alias BCRegisterID = short;
 alias BCFunctionIdx = sz;
 alias BCBlockIdx = sz;
 alias BCInstructionIdx = sz;
-alias BCPlaceIdx = sz;
 alias BCProjectionIdx = sz;
-alias BCTerminatorIdx = sz;
 alias BCFrameSlotIdx = sz;
 
-const NO_BC_REG = -1;
+const NO_OFFSET = -1;
 
-enum BCTerminatorOpCode : char (String asStr)
-{
-	JUMP		{ "jump" },
-	BRANCH		{ "branch" },
-	RETURN 		{ "return" },
-}
 
 enum BCOpCode : char (String asStr)
 {
@@ -33,7 +24,6 @@ enum BCOpCode : char (String asStr)
 	MULI	{ "mul_i" },
 	MULF	{ "mul_f" },
 	MULD	{ "mul_d" },
-	RET		{ "ret"},
 	MOVI	{ "mov_i" },
 	MOVF	{ "mov_f" },
 	MOVD	{ "mov_d" },
@@ -43,6 +33,9 @@ enum BCOpCode : char (String asStr)
 	STORI	{ "stor_i" },
 	STORF	{ "stor_f" },
 	STORD	{ "stor_d" },
+	JUMP	{ "jump" },
+	BRANCH	{ "branch" },
+	RETURN 	{ "return" },
 }
 
 enum BCOperandKind : char (String asStr)
@@ -61,64 +54,36 @@ enum BCOperandKind : char (String asStr)
 
 struct BCInstruction
 {
-    BCOpCode opCode;
-	BCRegisterID dest;
-	BCRegisterID left;
-	BCRegisterID right;
-    BCOperandKind immKind;
+	short 		destOffset;
+	short 		leftOffset;
+	short 		rightOffset;
     union {
         int immInt;
         float immFloat;
         double immDouble;
         bool immBool;
     }
-
+    BCOpCode 	opCode;
+    BCOperandKind immKind;
 }
 
 struct BCFunction
 {
-	BCFunctionIdx 	idx;
-	SymbolIdx 		symbol;
-	BCBlockIdx 		blocksStart; 
-	BCBlockIdx 		blocksEnd; 
-	BCFrameSlotIdx 	layoutStart;
-	BCFrameSlotIdx 	layoutEnd;
+	BCFunctionIdx 		idx;
+	SymbolIdx 			symbolIdx;
+	BCFrameSlotIdx 		layoutStart;
+	BCFrameSlotIdx 		layoutEnd;
+	BCInstructionIdx	instructionsStart;
+	BCInstructionIdx	instructionsEnd;
 }
 
 struct BCFrameSlot
 {
-	SymbolIdx 		symbol;
-	BCRegisterID 	register;
+	SymbolIdx 		symbolIdx;
+	short			sloIdx;
 	short 			offset;
 	short 			size;
 	ValueType 		type;
-}
-
-struct BCBlock
-{
-	BCBlockIdx 			idx;
-	BCInstructionIdx 	instructionsStart;
-	BCInstructionIdx 	instructionsEnd;
-	BCTerminatorIdx 	terminator;
-}
-
-struct BCRegister
-{
-	ValueType 			type;
-	BCRegisterID 		id;
-	// uint				flags;
-	// Additional runtime stuff maybe
-}
-
-
-struct BCOperand
-{
-	int placeholder;
-}
-
-struct BClace
-{
-	int placeholder;
 }
 
 struct BCProjection
@@ -126,17 +91,11 @@ struct BCProjection
 	int placeholder;
 }
 
-struct BCTerminator
-{
-	BCTerminatorOpCode opCode;
-}
-
 
 struct BCProgram
 {
 	List{BCFunction}	functions;
 	List{BCFrameSlot} 	functionFrameSlots;
-	List{BCBlock}		blocks;
 	List{BCInstruction} instructions;
 	DynamicArenaAllocator allocator;
 }
@@ -147,7 +106,6 @@ fn void BCProgram.init(BCProgram* this)
 	this.allocator.init(mem, 1024);
 	this.functions.init(&this.allocator);
 	this.functionFrameSlots.init(&this.allocator);
-	this.blocks.init(&this.allocator);
 	this.instructions.init(&this.allocator);
 }
 
@@ -161,7 +119,7 @@ fn void BCProgram.print(BCProgram* this)
 	log::logn("---------- BYTECODE ----------");
 	foreach (&fun : this.functions)
 	{
-			log::logn("function_%s symbol=%s", fun.idx, fun.symbol);
+			log::logn("function_%s symbolIdx=%s", fun.idx, fun.symbolIdx);
 		log::logn("  frame_slots:");
 		for (sz slotIdx = fun.layoutStart; slotIdx < fun.layoutEnd; slotIdx++) {
 			if (slotIdx >= this.functionFrameSlots.len()) {
@@ -170,12 +128,13 @@ fn void BCProgram.print(BCProgram* this)
 			}
 			this.print_frame_slot(slotIdx, this.functionFrameSlots[slotIdx]);
 		}
-		for (sz blockIdx = fun.blocksStart; blockIdx < fun.blocksEnd; blockIdx++) {
-			if (blockIdx >= this.blocks.len()) {
-				log::logn("  <bad-block-idx:%s>", blockIdx);
+		for (sz instIdx = fun.instructionsStart; instIdx < fun.instructionsEnd; instIdx++) {
+			if (instIdx >= this.instructions.len()) {
+				log::logn("    <bad-inst-idx:%s>", instIdx);
 				continue;
 			}
-			this.print_block(this.blocks[blockIdx]);
+			log::log("    %s: ", instIdx);
+			this.print_instruction(this.instructions[instIdx]);
 		}
 		log::logn("");
 	}
@@ -185,34 +144,24 @@ fn void BCProgram.print(BCProgram* this)
 fn void BCProgram.print_frame_slot(BCProgram* this, BCFrameSlotIdx idx, BCFrameSlot slot)
 {
 	log::log("    [%s] ", idx);
-	this.print_register(slot.register);
-	log::logn(" symbol=%s type=%s offset=%s size=%s", slot.symbol, slot.type, slot.offset, slot.size);
-}
-
-fn void BCProgram.print_block(BCProgram* this, BCBlock block)
-{
-	log::logn("  block_%s:", block.idx);
-	for (sz instIdx = block.instructionsStart; instIdx < block.instructionsEnd; instIdx++) {
-		if (instIdx >= this.instructions.len()) {
-			log::logn("    <bad-inst-idx:%s>", instIdx);
-			continue;
-		}
-		log::log("    %s: ", instIdx);
-		this.print_instruction(this.instructions[instIdx]);
-	}
+	log::log("r%s", idx);
+	log::logn(" symbolIdx:%s type:%s offset:%s size:%s", slot.symbolIdx, slot.type, slot.offset, slot.size);
 }
 
 fn void BCProgram.print_instruction(BCProgram* this, BCInstruction inst)
 {
 	log::log("%s ", inst.opCode.asStr);
-	this.print_register(inst.dest);
-	if (inst.left != NO_BC_REG) {
+	if (inst.destOffset != NO_OFFSET) {
 		log::log(", ");
-		this.print_register(inst.left);
+		this.print_offset(inst.destOffset);
 	}
-	if (inst.right != NO_BC_REG) {
+	if (inst.leftOffset != NO_OFFSET) {
 		log::log(", ");
-		this.print_register(inst.right);
+		this.print_offset(inst.leftOffset);
+	}
+	if (inst.rightOffset != NO_OFFSET) {
+		log::log(", ");
+		this.print_offset(inst.rightOffset);
 	}
 	if (inst.immKind != BCOperandKind.INVALID) {
 		log::log(", ");
@@ -220,14 +169,9 @@ fn void BCProgram.print_instruction(BCProgram* this, BCInstruction inst)
 	}
 	log::logn("");
 }
-
-fn void BCProgram.print_register(BCProgram* this, BCRegisterID reg)
+fn void BCProgram.print_offset(BCProgram* this, short offset)
 {
-	if (reg == NO_BC_REG) {
-		log::log("<noreg>");
-		return;
-	}
-	log::log("r%s", reg);
+	log::log("offset:%s", offset);
 }
 
 fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)

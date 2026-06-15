@@ -34,7 +34,6 @@ enum RunResult
 struct Vm
 {
     Byte[STACK_MAX] stack;
-	int[32]  intRegisters;
 	BCProgram* 		program;
     ushort stackHead;
     int frameCount;
@@ -57,18 +56,32 @@ fn RunResult run(Vm* vm)
     vm.instruction = &vm.program.instructions[0];
 	while(vm.running)
 	{
+		log::logn("%s", vm.instruction.opCode);
 		switch(vm.instruction.opCode)
 		{
-			case BCOpCode.CONSTI:
-				vm.intRegisters[vm.instruction.dest] = vm.instruction.immInt;
+			case BCOpCode.CONSTI:	
+			{
+    			int* dst = (int*)&vm.stack[vm.instruction.destOffset];
+				mem::store(dst, vm.instruction.immInt, int::alignment);
+			}
 			case BCOpCode.MOVI:
-					vm.intRegisters[vm.instruction.dest] = vm.intRegisters[vm.instruction.left];
+			{
+    			int* dst = (int*)&vm.stack[vm.instruction.destOffset];
+    			int* src = (int*)&vm.stack[vm.instruction.leftOffset];
+				int value = mem::load(src, int::alignment);
+				mem::store(dst, value, int::alignment);
+			}
 			case BCOpCode.ADDI:
-				vm.intRegisters[vm.instruction.dest] = vm.intRegisters[vm.instruction.left] + vm.intRegisters[vm.instruction.right];
-			case BCOpCode.STORI:
-				vm.intRegisters[vm.instruction.dest] = vm.intRegisters[vm.instruction.left];
-			case BCOpCode.RET:
-				vm.running = false; // Placeholder
+			{
+    			int* dst = (int*)&vm.stack[vm.instruction.destOffset];
+    			int* left = (int*)&vm.stack[vm.instruction.leftOffset];
+    			int* right = (int*)&vm.stack[vm.instruction.rightOffset];
+				int leftVal = mem::load(left, int::alignment);
+				int rightVal = mem::load(right, int::alignment);
+				mem::store(dst, leftVal+ rightVal, int::alignment);
+			}
+			case BCOpCode.RETURN:
+				vm.running = false;
 			default:
 				log::errlog("%s not currently supported", vm.instruction.opCode);
 				return RunResult.RUNTIME_ERR;
@@ -77,12 +90,10 @@ fn RunResult run(Vm* vm)
 			vm.instruction++;
 		}
 	}
-	for	(sz i = 0; i< 32; i++)
-	{
-		log::log("%s |", vm.intRegisters[i]);
-	}
-	log::log("\n");
 
+	int* src = (int*)&vm.stack[16];
+	int value = mem::load(src, int::alignment);
+	log::logn("%s", value);
 	return RunResult.OK;
 }
 
