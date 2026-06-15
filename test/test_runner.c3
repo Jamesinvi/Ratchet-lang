@@ -1,4 +1,4 @@
-import parser;
+import compiler;
 import main;
 
 
@@ -68,15 +68,20 @@ fn void t_12() @test
 }
 
 
+faultdef UNKNOWN_ERROR;
 fn void? compile_and_run_file(String filename, String expectedResult)
 {
 	defer main::cleanup();
-	switch (main::compile_file(filename)) {
-		case CompilationResult.NO_ERROR:
+	main::CompilationResult result = main::compile_file(filename);
+	switch (result.outcome) 
+	{
+		case main::CompilationOutcome.NO_ERROR:
 			return;
-		case CompilationResult.PARSE_ERROR:
-			return parser::PARSE_ERROR~;
-		case CompilationResult.ANALYSIS_ERROR:
-			return parser::analyzer::ANALYSIS_ERR~;
+		case main::CompilationOutcome.PARSE_ERROR:
+			return compiler::parser::PARSE_ERROR~;
+		case main::CompilationOutcome.ANALYSIS_ERROR:
+			return compiler::analyzer::ANALYSIS_ERR~;
+		default:
+			return UNKNOWN_ERROR~;
 	}
 }

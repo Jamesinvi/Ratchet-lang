@@ -1,8 +1,8 @@
 module main;
 
 import lexer;
-import parser;
-import mir;
+import runtime;
+import compiler;
 import common;
 import debug;
 import vm;
@@ -14,14 +14,20 @@ import std::io::file;
 
 alias Lexer = lexer::Lexer;
 alias Parser = parser::Parser;
-alias Chunk = common::Chunk;
 alias compilationCtx = globals::compilationCtx;
 
-enum CompilationResult : int
+enum CompilationOutcome : int
 {
 	NO_ERROR,
 	PARSE_ERROR,
 	ANALYSIS_ERROR,
+	MIR_ERROR,
+}
+
+struct CompilationResult
+{
+	CompilationOutcome outcome;
+	BCProgram*		   compiledProgram;
 }
 
 struct CompilationContext
@@ -30,6 +36,8 @@ struct CompilationContext
 	Parser 				parser;
 	SemanticAnalyzer	analyzer;
 	MirGenerator		mirGen;
+	BCGenerator 		byteCodeGen;
+	BCProgram			compiledProgram;
 }
 
 fn void CompilationContext.deinit(CompilationContext* this)
@@ -37,17 +45,21 @@ fn void CompilationContext.deinit(CompilationContext* this)
 	this.parser.deinit();
 	this.analyzer.deinit();
 	this.mirGen.deinit();
+	this.byteCodeGen.deinit();
 }
 
 
 fn CompilationResult compile_file(String path)
 {
+	CompilationResult result;
+	result.compiledProgram = null;
 	String? file = (String)file::load(mem,path);
 	if (catch err = file) {
 		// Print the error
 		log::errlogn("Failed to load %s: %s", path, err);
 		// We return, so that below 'file' will be unwrapped.
-		return CompilationResult.PARSE_ERROR;
+		result.outcome = CompilationOutcome.PARSE_ERROR;
+		return result;
 	}
 
 	globals::initialize_globals();
@@ -59,7 +71,8 @@ fn CompilationResult compile_file(String path)
     compilationCtx.parser.init();
     if(catch err = compilationCtx.parser.parse()){
         log::errlogn("Parse error");
-        return CompilationResult.PARSE_ERROR;
+		result.outcome = CompilationOutcome.PARSE_ERROR;
+		return result;
     }
 	compilationCtx.parser.outputAst.print();
 
@@ -72,16 +85,37 @@ fn CompilationResult compile_file(String path)
 		log::errlogn("Type error: %s at line %s, expected %s, got %s", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
 	}
 	if (typeResult.hadError || compilationCtx.analyzer.errors.len() > 0) {
-		return CompilationResult.ANALYSIS_ERROR;
+		result.outcome = CompilationOutcome.ANALYSIS_ERROR;
+		return result;
 	}else{
 		log::logn("Compiled successfully");
 	}
 
 	compilationCtx.mirGen.init(&compilationCtx.parser.outputAst, &compilationCtx.analyzer.symbolTable);
-	compilationCtx.mirGen.run();
+	MirGenResult mirResult = compilationCtx.mirGen.run();
+	if(mirResult != MirGenResult.OK){
+		result.outcome = CompilationOutcome.MIR_ERROR;
+		return result;
+	}else{
+		log::logn("Lowered to mir successfully");
+	}
 
-	return CompilationResult.NO_ERROR;
+	result.outcome = CompilationOutcome.NO_ERROR;
+	return result;
+	// Bytecode is WIP
+	compilationCtx.byteCodeGen.init(&compilationCtx);
+	compilationCtx.byteCodeGen.run();
+	result.compiledProgram = &compilationCtx.compiledProgram;
+	result.outcome = CompilationOutcome.NO_ERROR;
+	return result;
 
+}
+
+fn RunResult run(BCProgram* program)
+{
+	Vm vm = {};
+    vm.init(program, io::stdout());
+	return vm::run(&vm);
 }
 
 
@@ -89,5 +123,4 @@ fn void cleanup()
 {
 	globals::cleanup_globals();
 }
-
 

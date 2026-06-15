@@ -1,5 +1,6 @@
-module mir;
-import parser;
+module compiler::mir;
+import compiler;
+
 
 MirOperand placeHolderOperand =  {.kind = MirOperandKind.INVALID, .regId= NO_REG};
 

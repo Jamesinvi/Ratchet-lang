@@ -1,5 +1,6 @@
-module parser::analyzer;
+module compiler::analyzer;
 import std::collections::list;
+import compiler;
 import common;
 import debug;
 

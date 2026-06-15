@@ -1,5 +1,5 @@
-module mir;
-import parser;
+module compiler::mir;
+import compiler;
 import common;
 import std::collections::list;
 import log;

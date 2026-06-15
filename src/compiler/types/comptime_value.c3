@@ -1,4 +1,4 @@
-module parser;
+module compiler;
 import common;
 import globals;
 import std::io;

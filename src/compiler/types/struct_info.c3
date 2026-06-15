@@ -1,4 +1,4 @@
-module parser;
+module compiler;
 import common;
 import std::collections::list;
 import std::collections::map;

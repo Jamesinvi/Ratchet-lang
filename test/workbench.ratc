@@ -1,27 +1,9 @@
 
-struct Vec2 {
-	float x;
-	float y;
-}
-
 // Entry-point. Should return true if errors occured
 fn bool program(){
-	Vec2 aha;
-
-	aha.x = 3f + 55f;
-	aha.y = 21f;
-
-	int test = 125;
-
-	tryThis(test);
+	int a = 5;
+	int b = 12;
+	int c = a+b;
 	return false;
-}
-
-fn int tryThis(int k){
-	if(k > 120){
-		return 120;
-	}else{
-		return k;
-	}
 }
 

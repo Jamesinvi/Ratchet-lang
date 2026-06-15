@@ -1,4 +1,4 @@
-module parser;
+module compiler::parser;
 import common;
 import globals;
 import common::stack;
@@ -146,8 +146,8 @@ fn void Parser.predeclare_structs(Parser* this)
             DeclIdx declIdx = this.push_decl_get_idx(&decl);
 
             // Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
-            String starName = nameTok.value().concat(&globals::allocator, "*");
-            String ampName = nameTok.value().concat(&globals::allocator, "&");
+            String starName = nameTok.value().concat(&globals::compAllocator, "*");
+            String ampName = nameTok.value().concat(&globals::compAllocator, "&");
 
             debug::@log_compilation("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
             globals::declaredStructs.set(nameTok.value(), declIdx);

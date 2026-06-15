@@ -1,4 +1,4 @@
-module parser;
+module common;
 struct Span
 {
     sz tokenStart;   // index into tokens list

@@ -1,4 +1,4 @@
-module parser;
+module compiler::parser;
 import common;
 import log;
 import std::collections::list;

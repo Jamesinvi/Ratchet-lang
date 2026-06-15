@@ -1,5 +1,6 @@
-module parser::analyzer;
+module compiler::analyzer;
 import common;
+import compiler;
 import debug;
 import std::collections::list;
 import common::stack;
@@ -340,7 +341,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 				if (rhsType.hadError) {
 					return rhsType;
 				}
-				if (parser::type_info_matches(lhsType.value, rhsType.value)){
+				if (compiler::type_info_matches(lhsType.value, rhsType.value)){
 					return type_ok(lhsType.value);
 				}
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
@@ -411,7 +412,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 			if (valueType.hadError) {
 				return valueType;
 			}
-			if (!parser::type_info_matches(this.currentReturnType, valueType.value)){
+			if (!compiler::type_info_matches(this.currentReturnType, valueType.value)){
 				return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
 			}
 			return type_ok(valueType.value);
@@ -436,7 +437,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		case ExprKind.DOUBLE:		result = type_ok(make_type(ValueType.DOUBLE));
 		case ExprKind.BOOL:			result = type_ok(make_type(ValueType.BOOL));
 		case ExprKind.NULL:			result = type_ok(make_type(ValueType.NULL));
-		case ExprKind.STRING:		result = type_ok(make_ref_type(ValueType.NULL, parser::NOT_STRUCT));
+		case ExprKind.STRING:		result = type_ok(make_ref_type(ValueType.NULL, compiler::NOT_STRUCT));
 		case ExprKind.UNARY:		result = this.analyze_expr_unary(exprIdx);
 		case ExprKind.BINARY:		result = this.analyze_expr_binary(exprIdx);
 		case ExprKind.NEW:			result = this.create_type_from_ast(&expr.new.type, expr.span);
@@ -562,14 +563,14 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 		case BinOp.MUL:			nextcase;
 		case BinOp.DIV:
 		{
-			if (!is_numeric_type(lhsType.value) || !parser::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!is_numeric_type(lhsType.value) || !compiler::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(lhsType.value);
 		}
 		case BinOp.EQ:			nextcase;
 		case BinOp.NEQ:
-			if (!parser::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!compiler::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
@@ -577,7 +578,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 		case BinOp.LESS_EQ:		nextcase;
 		case BinOp.GREATER:		nextcase;
 		case BinOp.GREATER_EQ:
-			if (!is_numeric_type(lhsType.value) || !parser::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!is_numeric_type(lhsType.value) || !compiler::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
@@ -591,7 +592,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 			}
 			return type_ok(make_type(ValueType.BOOL));
 		case BinOp.STORE:
-			if (!parser::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!compiler::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(lhsType.value);
@@ -683,7 +684,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprI
 	if (!isStruct && !this.is_struct_ref_like(baseInfo)) {
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
-	if (baseInfo.structTypeIndex == parser::NOT_STRUCT) {
+	if (baseInfo.structTypeIndex == compiler::NOT_STRUCT) {
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
 

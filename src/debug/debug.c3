@@ -1,8 +1,8 @@
 module debug;
 import vm;
+import compiler;
 import lexer;
 import common;
-import parser;
 import log;
 
 // macro @print_instruction(Vm* vm){

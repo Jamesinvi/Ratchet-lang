@@ -1,15 +1,15 @@
 module globals;
-import parser;
+import compiler;
 import common;
 import main;
-import parser::analyzer;
 import std::collections::list;
 import std::collections::map;
 
 alias CompilationContext = main::CompilationContext;
 
 bool globalsInitialized = false;
-DynamicArenaAllocator allocator;
+DynamicArenaAllocator compAllocator;
+DynamicArenaAllocator runtimeAllocator;
 
 CompilationContext compilationCtx;
 List{Token} tokens;
@@ -30,29 +30,32 @@ fn void initialize_globals()
 	{
 		return;
 	}
-	allocator = { };
+	compAllocator = { };
+	runtimeAllocator = { };
 	internedSourceStrings = { };
-	allocator.init(mem, 64 * 1024);
-	tokens.init(&globals::allocator, 1024);
-	internedSourceStrings.init(&globals::allocator, 1024);
-	declaredStructs.init(&globals::allocator, 64);
-	declaredFunctions.init(&globals::allocator, 128);
-	structNamesToIdx.init(&globals::allocator, 64);
-	structTypes.init(&globals::allocator, 64);
+	compAllocator.init(mem, 64 * 1024);
+	runtimeAllocator.init(mem, 64 * 512);
+	tokens.init(&globals::compAllocator, 1024);
+	internedSourceStrings.init(&globals::compAllocator, 1024);
+	declaredStructs.init(&globals::compAllocator, 64);
+	declaredFunctions.init(&globals::compAllocator, 128);
+	structNamesToIdx.init(&globals::compAllocator, 64);
+	structTypes.init(&globals::compAllocator, 64);
 	compilationCtx = { };
 	globalsInitialized = true;
 }
 
 fn void cleanup_globals()
 {
-	allocator.free();
+	compilationCtx.deinit();
+	compAllocator.free();
+	runtimeAllocator.free();
 	tokens = { };
 	declaredStructs = { };
 	declaredFunctions = { };
 	structNamesToIdx = { };
 	structTypes = { };
 	internedSourceStrings = { };
-	compilationCtx.deinit();
 
 	globalsInitialized = false;
 }

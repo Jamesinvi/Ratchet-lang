@@ -1,4 +1,4 @@
-module parser;
+module compiler::parser;
 import common;
 import common::stack;
 import log;
@@ -6,7 +6,7 @@ import debug;
 import std::collections::list;
 import std::collections::map;
 import globals;
-alias Byte = common::Byte;
+alias Byte = char;
 
 faultdef PARSE_ERROR;
 

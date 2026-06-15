@@ -1,12 +1,13 @@
 module lib;
 import main;
 import std::core::string;
-import parser::analyzer;
+import compiler::analyzer;
 import globals;
 
 fn int ratchet_compile_file(ZString path) @export("ratchet_compile_file")
 {
-    return (int)main::compile_file(path.str_view());
+    main::CompilationResult result = main::compile_file(path.str_view());
+    return (int)result.outcome;
 }
 
 fn ZString ratchet_get_last_err() @export("ratchet_get_last_error")
@@ -19,7 +20,7 @@ fn ZString ratchet_get_last_err() @export("ratchet_get_last_error")
 
     if(ctx.analyzer.errors.len() > 0){
         TypeResult err = ctx.analyzer.errors[ctx.analyzer.errors.len()-1];
-        return (ZString)string::format(&globals::allocator, "Anaylsis Error: %s at line %s, expected %s, got %s\0", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type); 
+        return (ZString)string::format(&globals::compAllocator, "Anaylsis Error: %s at line %s, expected %s, got %s\0", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type); 
     }
     return "\0";
 }

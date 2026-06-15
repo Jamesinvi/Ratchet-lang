@@ -1,10 +1,17 @@
-module mir;
+module compiler::mir;
 
-import parser;
+import compiler;
 import log;
 import debug;
 import common;
 import std::collections::list;
+
+
+enum MirGenResult
+{
+	OK,
+	ERROR,
+}
 
 struct MirGenerator
 {
@@ -34,7 +41,6 @@ fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable*
 	this.bindings.init(&this.allocator, this.symbolTable.symbols.len());
 
 	common::list_fill{MirOperand}(&this.bindings, placeHolderOperand, this.symbolTable.symbols.len());
-
 }
 
 fn void MirGenerator.deinit(MirGenerator* this)
@@ -42,7 +48,7 @@ fn void MirGenerator.deinit(MirGenerator* this)
 	this.allocator.free();
 }
 
-fn void MirGenerator.run(MirGenerator* this)
+fn MirGenResult MirGenerator.run(MirGenerator* this)
 {
 
 	foreach(idx, &decl : this.inputAst.declarations){
@@ -52,6 +58,7 @@ fn void MirGenerator.run(MirGenerator* this)
 	}
 
 	this.output.print(this.inputAst, this.symbolTable);
+	return MirGenResult.OK;
 }
 
 fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)

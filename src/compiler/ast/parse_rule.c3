@@ -1,4 +1,4 @@
-module parser;
+module compiler::parser;
 import common;
 
 alias PrefixFn = fn ExprIdx(Parser* parser);

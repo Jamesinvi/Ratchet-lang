@@ -1,11 +1,12 @@
 
-module parser::analyzer;
+module compiler::analyzer;
+import compiler;
 import common;
 import globals;
 import std::collections::list;
 import log;
 	
-CompTypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = parser::NOT_STRUCT };
+CompTypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT };
 
 
 fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
@@ -16,7 +17,7 @@ fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
 
 fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, TypeAst* input, Span span)
 {
-	CompTypeInfo result = {.type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = parser::NOT_STRUCT};
+	CompTypeInfo result = {.type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT};
 	switch (input.tokenType)
 	{
 		case TokenType.INTEGER_T: 		result.type = ValueType.INT;
@@ -55,7 +56,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 					sz nextIdx = globals::structTypes.len();
 					CompStructTypeInfo structInfo = {};
 					globals::structTypes.push(structInfo);
-					String nameCopy = String.copy(baseName, &globals::allocator);
+					String nameCopy = String.copy(baseName, &globals::compAllocator);
 					globals::structNamesToIdx[nameCopy] = nextIdx;
 					result.structTypeIndex = (uint)nextIdx;
 				} else {
@@ -73,7 +74,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				sz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
-				String nameCopy = String.copy(typeName, &globals::allocator);
+				String nameCopy = String.copy(typeName, &globals::compAllocator);
 				globals::structNamesToIdx[nameCopy] = nextIdx;
 				result.structTypeIndex = (uint)nextIdx;
 			} else {
@@ -93,7 +94,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				sz nextIdx = globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
-				String nameCopy = String.copy(typeName, &globals::allocator);
+				String nameCopy = String.copy(typeName, &globals::compAllocator);
 				globals::structNamesToIdx[nameCopy] = nextIdx;
 				result.structTypeIndex = (uint)nextIdx;
 			}else{
@@ -109,7 +110,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 
 fn CompTypeInfo make_type(ValueType type)
 {
-	CompTypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = parser::NOT_STRUCT };
+	CompTypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT };
 	return info;
 }
 

@@ -28,7 +28,7 @@ The runtime direction is interpreted execution first, with a planned **JIT** and
 ## Sections
 
 1. [Design Goals](#design-goals)
-2. [Syntax Basics](#syntax-basics)
+2. [Syntax Basics](#syntax-basixcs)
 3. [Types](#types)
 4. [Functions](#functions)
 5. [Values, References, and Pointers](#values-references-and-pointers)
