@@ -42,6 +42,7 @@ fn void BCGenerator.run(BCGenerator* this)
 {
 	foreach(&func : this.mirInput.functions){
 		this.currentFrameOffset = 0;
+		this.localFrameOffset = 0;
 		this.prepare_func_bindings(func);
 		BCFunction functionResult = {};
 		BCFunctionIdx funcIdx = this.push_func_get_idx(&functionResult);
@@ -74,10 +75,48 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				MirRegisterID mirResult = mirInstruction.result;
 				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
+				assert(left.kind == MirOperandKind.REGISTER);
+				assert(right.kind == MirOperandKind.REGISTER);
 				short leftOffset = this.mirRegToOffset[left.regId];
 				short rightOffset = this.mirRegToOffset[right.regId];
 				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
-				this.lower_add(destOffset, leftOffset, rightOffset, mirInstruction.type);
+				this.lower_math_op(BCOpCodeCategory.ADD, destOffset, leftOffset, rightOffset, mirInstruction.type);
+			}
+			case MirOpCode.SUB:
+			{
+				MirRegisterID mirResult = mirInstruction.result;
+				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
+				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
+				assert(left.kind == MirOperandKind.REGISTER);
+				assert(right.kind == MirOperandKind.REGISTER);
+				short leftOffset = this.mirRegToOffset[left.regId];
+				short rightOffset = this.mirRegToOffset[right.regId];
+				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
+				this.lower_math_op(BCOpCodeCategory.SUB, destOffset, leftOffset, rightOffset, mirInstruction.type);
+			}
+			case MirOpCode.MUL:
+			{
+				MirRegisterID mirResult = mirInstruction.result;
+				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
+				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
+				assert(left.kind == MirOperandKind.REGISTER);
+				assert(right.kind == MirOperandKind.REGISTER);
+				short leftOffset = this.mirRegToOffset[left.regId];
+				short rightOffset = this.mirRegToOffset[right.regId];
+				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
+				this.lower_math_op(BCOpCodeCategory.MUL, destOffset, leftOffset, rightOffset, mirInstruction.type);
+			}
+			case MirOpCode.DIV:
+			{
+				MirRegisterID mirResult = mirInstruction.result;
+				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
+				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
+				assert(left.kind == MirOperandKind.REGISTER);
+				assert(right.kind == MirOperandKind.REGISTER);
+				short leftOffset = this.mirRegToOffset[left.regId];
+				short rightOffset = this.mirRegToOffset[right.regId];
+				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
+				this.lower_math_op(BCOpCodeCategory.DIV, destOffset, leftOffset, rightOffset, mirInstruction.type);
 			}
 			case MirOpCode.STORE:
 			{
@@ -112,25 +151,66 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 	}
 }
 
-fn void BCGenerator.lower_add(BCGenerator* this, short destOffset, short leftOffset, short rightOffset, CompTypeInfo typeInfo)
+fn void BCGenerator.lower_math_op(BCGenerator* this, BCOpCodeCategory opCodeCategory, short destOffset, short leftOffset, short rightOffset, CompTypeInfo typeInfo)
 {	
-	switch(typeInfo.type)
+	BCOpCode finalOpCode;
+	switch(opCodeCategory)
 	{
-		case ValueType.INT:
+		case BCOpCodeCategory.ADD:
 		{
-			BCInstruction instruction = {
-				.destOffset = destOffset,
-				.leftOffset = leftOffset,
-				.rightOffset = rightOffset,
-				.immInt = runtime::NO_OFFSET,
-				.opCode = BCOpCode.ADDI,
-				.immKind = BCOperandKind.INVALID,
-			};
-			this.bcOutput.instructions.push(instruction);
+
+			switch(typeInfo.type)
+			{
+				case ValueType.INT: 		finalOpCode = BCOpCode.ADDI;
+				case ValueType.FLOAT: 		finalOpCode = BCOpCode.ADDF;
+				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.ADDD;
+				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+			}
 		}
-		default:
-			log::errlogn("Not supported yet");
+		case BCOpCodeCategory.SUB:
+		{
+
+			switch(typeInfo.type)
+			{
+				case ValueType.INT: 		finalOpCode = BCOpCode.SUBI;
+				case ValueType.FLOAT: 		finalOpCode = BCOpCode.SUBF;
+				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.SUBD;
+				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+			}
+		}
+		case BCOpCodeCategory.MUL:
+		{
+
+			switch(typeInfo.type)
+			{
+				case ValueType.INT: 		finalOpCode = BCOpCode.MULI;
+				case ValueType.FLOAT: 		finalOpCode = BCOpCode.MULF;
+				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.MULD;
+				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+			}
+		}
+		case BCOpCodeCategory.DIV:
+		{
+
+			switch(typeInfo.type)
+			{
+				case ValueType.INT: 		finalOpCode = BCOpCode.DIVI;
+				case ValueType.FLOAT: 		finalOpCode = BCOpCode.DIVF;
+				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.DIVD;
+				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+			}
+		}
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
 	}
+	BCInstruction instruction = {
+		.destOffset = destOffset,
+		.leftOffset = leftOffset,
+		.rightOffset = rightOffset,
+		.immInt = runtime::NO_OFFSET,
+		.opCode = finalOpCode,
+		.immKind = BCOperandKind.INVALID,
+	};
+	this.bcOutput.instructions.push(instruction);
 
 
 }

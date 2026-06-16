@@ -27,6 +27,22 @@ fn ushort get_type_size(CompTypeInfo info)
     }
 }
 
+fn ushort get_type_alignment(CompTypeInfo info)
+{
+	// TODO: Structs needs special alignment handling
+	assert(info.type != ValueType.STRUCT);
+    switch (info.type) {
+        case ValueType.INT:         return int::alignment;
+        case ValueType.FLOAT:       return float::alignment;
+        case ValueType.DOUBLE:      return double::alignment;
+        case ValueType.BOOL:        return bool::alignment;
+        case ValueType.REF:      	nextcase;
+        case ValueType.PTR:   		return uptr::alignment;
+        case ValueType.STRUCT:      return globals::structTypes[info.structTypeIndex].sizeInBytes;
+        default:                    return 0;
+    }
+}
+
 fn CompTypeInfo pointee_from_ref(CompTypeInfo r)
 {
     CompTypeInfo out = {};

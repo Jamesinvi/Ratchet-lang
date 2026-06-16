@@ -1,9 +1,11 @@
 
 // Entry-point. Should return true if errors occured
 fn bool program(){
-	int a = 5;
-	int b = 12;
-	int c = a+b;
+	int a = 3;
+	int b = 32;
+	int n = 12;
+	int k = 4;
+	int c = ((a * b) + n) / k;
 	return false;
 }
 

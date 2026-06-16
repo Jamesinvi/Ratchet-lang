@@ -40,10 +40,15 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	short offset = this.symbolToOffset[symbolIdx];
 	// If we already have a binding then use it, else we need to create one
 	if (offset == runtime::NO_OFFSET) {
+		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
+		short alignment = (short)compiler::get_type_alignment(sym.type);
+		this.localFrameOffset = align_offset(this.localFrameOffset, alignment);
+		short size = (short)compiler::get_type_size(sym.type);
+
 		offset = this.localFrameOffset;
 		this.symbolToOffset[symbolIdx] = offset;
-		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
-		short size = (short)compiler::get_type_size(sym.type);
+		this.localFrameOffset += size;
+
 		BCFrameSlot slot = {
 			.symbolIdx = symbolIdx,
 			.offset = offset,
@@ -51,7 +56,6 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 			.type = sym.type.type,
 		};
 
-		this.localFrameOffset += size;
 		this.bcOutput.functionFrameSlots.push(slot);
 	}
 	return offset;
@@ -67,10 +71,14 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     short offset = this.mirRegToOffset[mirRegId];
 	// If we already have a binding then use it, else we need to create one
     if (offset == runtime::NO_OFFSET) {
-        offset = this.localFrameOffset;
-        this.mirRegToOffset[mirRegId] = offset;
-
+		short alignment = (short)compiler::get_type_alignment(type);
+		this.localFrameOffset = align_offset(this.localFrameOffset, alignment);
         short size = (short)compiler::get_type_size(type);
+
+        offset = this.localFrameOffset;
+
+        this.mirRegToOffset[mirRegId] = offset;
+        this.localFrameOffset += size;
 
         BCFrameSlot slot = {
             .symbolIdx = compiler::analyzer::NO_SYMBOL,
@@ -79,9 +87,15 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
             .type = type.type,
         };
 
-        this.localFrameOffset += size;
         this.bcOutput.functionFrameSlots.push(slot);
     }
 
     return offset;
+}
+
+fn short align_offset(short offset, short alignment)
+{
+	short remainder = offset % alignment;
+	if (remainder == 0) return offset;
+	return offset + (alignment - remainder);
 }

@@ -1,4 +1,9 @@
 module runtime;
 import compiler::parser;
 
-// TEMP
+
+struct StackFrame
+{
+	BCFunction function;
+	sz base;
+}
