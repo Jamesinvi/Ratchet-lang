@@ -5,7 +5,11 @@ import common;
 import runtime;
 import log;
 
-
+<* 
+ 	Should be called before lowering a function.
+	Will clear out all local offsets and prefill mirRegToOffset and symbolToOffset to the correct size
+	with runtime::NO_OFFSET
+*>
 fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFunc)
 {
 	// Clear the bindings
@@ -34,7 +38,11 @@ fn BCFunctionIdx BCGenerator.push_func_get_idx(BCGenerator* this, BCFunction* fu
     return index;
 }
 
-
+<* 
+ 	Helper to bind a symbol to an offset. If the binding already exists it will return the already bound offset.
+	Else, it will bind the offset to the symbol and will create a BCFrameSlot
+	The value will be stored in symbolToOffset and indexed by SymbolIdx.
+*>
 fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolIdx)
 {
 	short offset = this.symbolToOffset[symbolIdx];
@@ -61,7 +69,11 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	return offset;
 }
 
-
+<* 
+ 	Helper to bind a mir register to an offset. If the binding already exists it will return the already bound offset.
+	Else, it will bind the offset to the register and will create a BCFrameSlot
+	The value will be stored in mirRegToOffset and indexed by MirRegisterID.
+*>
 fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegisterID mirRegId, CompTypeInfo type)
 {
 	if (mirRegId == compiler::mir::NO_REG) {
@@ -93,8 +105,10 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     return offset;
 }
 
-
-
+<* 
+ 	Helper to align fields so that all fields respect their alignment, so if i have an int at the top of the stack
+	and i need to store a double, i add 4 bytes of padding so alignment is correct, vm thanks us
+*>
 fn short align_offset(short offset, short alignment)
 {
 	short remainder = offset % alignment;
@@ -104,6 +118,9 @@ fn short align_offset(short offset, short alignment)
 	return offset + (alignment - remainder);
 }
 
+// ----------------------------------------------------------------------------------------------------------------------------------------
+// --------------------- Helpers to switch on type and select typed variant of a specific Opcode, very simple stuff -----------------------
+// ----------------------------------------------------------------------------------------------------------------------------------------
 
 fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo)
 {

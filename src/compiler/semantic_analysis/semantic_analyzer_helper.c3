@@ -14,7 +14,10 @@ fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
 	return this.scopes.size > 0 && this.scopes.peek().insideMethod;
 }
 
-
+<* 
+ 	Helper to convert a TypeAst to a TypeResult we can use for analysis. Conversion can fail if the user program
+	has incorrect type usage. This function will spit out errors to the user using stderr
+*>
 fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, TypeAst* input, Span span)
 {
 	CompTypeInfo result = {.type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT};
