@@ -64,22 +64,18 @@ fn RunResult run(Vm* vm)
 		log::logn("%s", vm.instruction.opCode);
 		switch(vm.instruction.opCode)
 		{
-			case BCOpCode.CONSTI:	
-			{
-    			int* dst = (int*)&vm.stack[vm.frame.base + vm.instruction.destOffset];
-				mem::store(dst, vm.instruction.immInt, int::alignment);
-			}
-			case BCOpCode.MOVI:
-			{
-    			int* dst = (int*)&vm.stack[vm.frame.base + vm.instruction.destOffset];
-    			int* src = (int*)&vm.stack[vm.frame.base + vm.instruction.leftOffset];
-				int value = mem::load(src, int::alignment);
-				mem::store(dst, value, int::alignment);
-			}
-			case BCOpCode.ADDI:		vm.bin_op(int, VmBinOp.ADD);
-			case BCOpCode.SUBI:		vm.bin_op(int, VmBinOp.SUB);
-			case BCOpCode.MULI:		vm.bin_op(int, VmBinOp.MUL);
-			case BCOpCode.DIVI:		vm.bin_op(int, VmBinOp.DIV);
+			case BCOpCode.CONSTI:	vm.const_op(int);
+			case BCOpCode.CONSTF:	vm.const_op(float);
+			case BCOpCode.CONSTD:	vm.const_op(double);
+			case BCOpCode.MOVI:		vm.mov_op(int);
+			case BCOpCode.MOVF:		vm.mov_op(float);
+			case BCOpCode.MOVD:		vm.mov_op(double);
+			case BCOpCode.ADDI:		vm.bin_math_op(int, VmBinOp.ADD);
+			case BCOpCode.ADDF:		vm.bin_math_op(float, VmBinOp.ADD);
+			case BCOpCode.ADDD:		vm.bin_math_op(double, VmBinOp.ADD);
+			case BCOpCode.SUBI:		vm.bin_math_op(int, VmBinOp.SUB);
+			case BCOpCode.MULI:		vm.bin_math_op(int, VmBinOp.MUL);
+			case BCOpCode.DIVI:		vm.bin_math_op(int, VmBinOp.DIV);
 			case BCOpCode.RETURN:
 				vm.running = false;
 			default:
@@ -93,13 +89,35 @@ fn RunResult run(Vm* vm)
 	return RunResult.OK;
 }
 
-macro Vm.bin_op(Vm* vm, $Type, VmBinOp $op)
+
+macro Vm.const_op(Vm* vm, $Type)
+{
+	$Type* dst = ($Type*)&vm.stack[vm.frame.base + vm.instruction.destOffset];
+	$Type field;
+	$switch $Type:
+		$case int: 		field = vm.instruction.immInt;
+		$case float: 	field = vm.instruction.immFloat;
+		$case double: 	field = vm.instruction.immDouble;
+		$case bool: 	field = vm.instruction.immBool;
+	$endswitch
+	*dst = field;
+}
+
+macro Vm.mov_op(Vm* vm, $Type)
+{
+	$Type* dst = ($Type*)&vm.stack[vm.frame.base + vm.instruction.destOffset];
+	$Type* src = ($Type*)&vm.stack[vm.frame.base + vm.instruction.leftOffset];
+	$Type value = *src;
+	*dst = value;
+}
+
+macro Vm.bin_math_op(Vm* vm, $Type, VmBinOp $op)
 {
 	$Type* dst = ($Type*)&vm.stack[vm.frame.base + vm.instruction.destOffset];
 	$Type* left = ($Type*)&vm.stack[vm.frame.base + vm.instruction.leftOffset];
 	$Type* right = ($Type*)&vm.stack[vm.frame.base + vm.instruction.rightOffset];
-	$Type leftVal = mem::load(left, $Type::alignment);
-	$Type rightVal = mem::load(right, $Type::alignment);
+	$Type leftVal = *left;
+	$Type rightVal = *right;
 	$Type result;
 	$switch $op:
 		$case VmBinOp.ADD: result = leftVal + rightVal;
@@ -107,5 +125,5 @@ macro Vm.bin_op(Vm* vm, $Type, VmBinOp $op)
 		$case VmBinOp.MUL: result = leftVal * rightVal;
 		$case VmBinOp.DIV: result = leftVal / rightVal;
 	$endswitch
-	mem::store(dst, result, $Type::alignment);
+	*dst = result;
 }

@@ -125,83 +125,84 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				MirPlace place = this.mirInput.places[dest.placeIdx];
 				SymbolIdx symbol = place.baseSymbolIdx;
 				short destOffset = this.bind_symbol_get_offset(symbol);
-				this.store_value(source, destOffset);
+				this.store_value(mirInstruction, source, destOffset);
 			}
 			case MirOpCode.LOAD:
 			{
-				MirRegisterID mirDest = mirInstruction.result;
-				MirOperand mirSource = this.mirInput.operands[mirInstruction.operandsStart];
-				MirPlace place = this.mirInput.places[mirSource.placeIdx];
+				MirRegisterID dest = mirInstruction.result;
+				MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+				MirPlace place = this.mirInput.places[source.placeIdx];
 				SymbolIdx symbol = place.baseSymbolIdx;
 				short srcOffset = this.bind_symbol_get_offset(symbol);
-				short destOffset = this.bind_mir_register_get_offset(mirDest, mirInstruction.type);
-				BCInstruction instruction = {
-					.destOffset = destOffset,
-					.leftOffset = srcOffset,
-					.rightOffset = runtime::NO_OFFSET,
-					.immInt = runtime::NO_OFFSET,
-					.opCode = BCOpCode.MOVI,
-					.immKind = BCOperandKind.INVALID,
-				};
-				this.bcOutput.instructions.push(instruction);
+				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
+				this.load_value(mirInstruction.type, srcOffset, destOffset);
 			}
 			default:
-				log::errlogn("Not suported by compiler");
+			{
+				log::errlogn("Not suported store by compiler");
+			}
 		}
 	}
 }
 
+fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstruction, MirOperand val, short destOffset)
+{
+	BCInstruction instruction = {};
+	switch (val.kind) {
+		case MirOperandKind.REGISTER:
+		{
+			short srcOffset = this.mirRegToOffset[val.regId];
+			instruction.destOffset = destOffset;
+			instruction.leftOffset = srcOffset;
+			instruction.rightOffset = runtime::NO_OFFSET;
+			instruction.opCode = select_mov_op_code(mirInstruction.type);
+			instruction.immKind = BCOperandKind.INVALID;
+		}
+		case MirOperandKind.IMM_INT:
+		{
+			instruction.destOffset = destOffset;
+			instruction.leftOffset = runtime::NO_OFFSET;
+			instruction.rightOffset = runtime::NO_OFFSET;
+			instruction.immInt = val.immInt;
+			instruction.opCode = BCOpCode.CONSTI;
+			instruction.immKind = BCOperandKind.IMM_INT;
+		}
+		case MirOperandKind.IMM_DOUBLE:
+		{
+			instruction.destOffset = destOffset;
+			instruction.leftOffset = runtime::NO_OFFSET;
+			instruction.rightOffset = runtime::NO_OFFSET;
+			instruction.immDouble = val.immDouble;
+			instruction.opCode = BCOpCode.CONSTD;
+			instruction.immKind = BCOperandKind.IMM_DOUBLE;
+		}
+		default:
+		{
+			log::errlogn("Not suported store by compiler");
+			unreachable();
+		}
+	}
+	this.bcOutput.instructions.push(instruction);
+
+}
+
+fn void BCGenerator.load_value(BCGenerator* this, CompTypeInfo typeInfo, short srcOffset, short destOffset)
+{
+	BCInstruction instruction = {
+		.destOffset = destOffset,
+		.leftOffset = srcOffset,
+		.rightOffset = runtime::NO_OFFSET,
+		.immInt = runtime::NO_OFFSET,
+		.opCode = select_mov_op_code(typeInfo),
+		.immKind = BCOperandKind.INVALID,
+	};
+	this.bcOutput.instructions.push(instruction);
+}
+
+
 fn void BCGenerator.lower_math_op(BCGenerator* this, BCOpCodeCategory opCodeCategory, short destOffset, short leftOffset, short rightOffset, CompTypeInfo typeInfo)
 {	
-	BCOpCode finalOpCode;
-	switch(opCodeCategory)
-	{
-		case BCOpCodeCategory.ADD:
-		{
-
-			switch(typeInfo.type)
-			{
-				case ValueType.INT: 		finalOpCode = BCOpCode.ADDI;
-				case ValueType.FLOAT: 		finalOpCode = BCOpCode.ADDF;
-				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.ADDD;
-				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
-			}
-		}
-		case BCOpCodeCategory.SUB:
-		{
-
-			switch(typeInfo.type)
-			{
-				case ValueType.INT: 		finalOpCode = BCOpCode.SUBI;
-				case ValueType.FLOAT: 		finalOpCode = BCOpCode.SUBF;
-				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.SUBD;
-				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
-			}
-		}
-		case BCOpCodeCategory.MUL:
-		{
-
-			switch(typeInfo.type)
-			{
-				case ValueType.INT: 		finalOpCode = BCOpCode.MULI;
-				case ValueType.FLOAT: 		finalOpCode = BCOpCode.MULF;
-				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.MULD;
-				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
-			}
-		}
-		case BCOpCodeCategory.DIV:
-		{
-
-			switch(typeInfo.type)
-			{
-				case ValueType.INT: 		finalOpCode = BCOpCode.DIVI;
-				case ValueType.FLOAT: 		finalOpCode = BCOpCode.DIVF;
-				case ValueType.DOUBLE: 		finalOpCode = BCOpCode.DIVD;
-				default:					log::errlogn("Unsupported %s operation", opCodeCategory);
-			}
-		}
-		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
-	}
+	BCOpCode finalOpCode = select_math_op_code(typeInfo, opCodeCategory);
 	BCInstruction instruction = {
 		.destOffset = destOffset,
 		.leftOffset = leftOffset,
@@ -214,40 +215,6 @@ fn void BCGenerator.lower_math_op(BCGenerator* this, BCOpCodeCategory opCodeCate
 
 
 }
-
-fn void BCGenerator.store_value(BCGenerator* this, MirOperand val, short destOffset)
-{
-	switch (val.kind) {
-		case MirOperandKind.REGISTER:
-		{
-			short srcOffset = this.mirRegToOffset[val.regId];
-			BCInstruction instruction = {
-				.destOffset = destOffset,
-				.leftOffset = srcOffset,
-				.rightOffset = runtime::NO_OFFSET,
-				.opCode = BCOpCode.MOVI,
-				.immKind = BCOperandKind.INVALID,
-			};
-			this.bcOutput.instructions.push(instruction);
-		}
-
-		case MirOperandKind.IMM_INT:
-		{
-			BCInstruction instruction = {
-				.destOffset = destOffset,
-				.leftOffset = runtime::NO_OFFSET,
-				.rightOffset = runtime::NO_OFFSET,
-				.immInt = val.immInt,
-				.opCode = BCOpCode.CONSTI,
-				.immKind = BCOperandKind.IMM_INT,
-			};
-			this.bcOutput.instructions.push(instruction);
-		}
-			default:
-				log::errlogn("Not suported by compiler");
-	}
-}
-
 fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx)
 {
 	switch(this.mirInput.terminators[terminatorIdx].opCode)
@@ -264,6 +231,9 @@ fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx termina
 			this.bcOutput.instructions.push(instruction);
 		}
 		default:
-			log::errlogn("Not suported by compiler");
+		{
+			log::errlogn("Not suported store by compiler");
+			unreachable();
+		}
 	}
 }

@@ -3,9 +3,12 @@
 fn bool program(){
 	int a = 3;
 	int b = 32;
-	int n = 12;
-	int k = 4;
-	int c = ((a * b) + n) / k;
+	int o = 12;
+	double n = 12.3;
+	double k = 10.1;
+	double g = n + k;
+	int p = 2;
+	int c = ((a * b) + o) / p;
 	return false;
 }
 

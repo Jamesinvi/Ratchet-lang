@@ -164,7 +164,7 @@ fn void BCProgram.print_frame_slot(BCProgram* this, BCFrameSlotIdx idx, BCFrameS
 {
 	log::log("    [%03d] | ", idx);
 	log::log("r%03d |", idx);
-	log::logn(" symbolIdx : %03d | type : %s | offset:%03d | size:%03d", slot.symbolIdx, slot.type, slot.offset, slot.size);
+	log::logn(" symbolIdx : %03d | type : %06s | offset:%03d | size:%03d", slot.symbolIdx, slot.type, slot.offset, slot.size);
 }
 
 fn void BCProgram.print_instruction(BCProgram* this, BCInstruction inst)

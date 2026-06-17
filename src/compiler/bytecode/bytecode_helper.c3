@@ -93,9 +93,90 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     return offset;
 }
 
+
+
 fn short align_offset(short offset, short alignment)
 {
 	short remainder = offset % alignment;
-	if (remainder == 0) return offset;
+	if (remainder == 0) {
+		return offset;
+	}
 	return offset + (alignment - remainder);
+}
+
+
+fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo)
+{
+	switch (typeInfo.type)
+	{
+		case ValueType.INT:			return BCOpCode.MOVI;
+		case ValueType.FLOAT:		return BCOpCode.MOVF;
+		case ValueType.DOUBLE:		return BCOpCode.MOVD;
+		default:					log::errlogn("Not suported type by bytecode");
+	}
+	unreachable();
+}
+
+
+fn BCOpCode select_math_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch (opCodeCategory)
+	{
+		case BCOpCodeCategory.ADD: return select_add_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.SUB: return select_sub_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.MUL: return select_mul_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.DIV: return select_div_op_code(typeInfo, opCodeCategory);
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+
+fn BCOpCode select_add_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.ADDI;
+		case ValueType.FLOAT: 		return BCOpCode.ADDF;
+		case ValueType.DOUBLE: 		return BCOpCode.ADDD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+
+}
+
+fn BCOpCode select_sub_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.SUBI;
+		case ValueType.FLOAT: 		return BCOpCode.SUBF;
+		case ValueType.DOUBLE: 		return BCOpCode.SUBD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+fn BCOpCode select_mul_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.MULI;
+		case ValueType.FLOAT: 		return BCOpCode.MULF;
+		case ValueType.DOUBLE: 		return BCOpCode.MULD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+fn BCOpCode select_div_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.DIVI;
+		case ValueType.FLOAT: 		return BCOpCode.DIVF;
+		case ValueType.DOUBLE: 		return BCOpCode.DIVD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
 }
