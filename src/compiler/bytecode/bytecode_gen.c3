@@ -75,10 +75,8 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				MirRegisterID mirResult = mirInstruction.result;
 				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
-				assert(left.kind == MirOperandKind.REGISTER);
-				assert(right.kind == MirOperandKind.REGISTER);
-				short leftOffset = this.mirRegToOffset[left.regId];
-				short rightOffset = this.mirRegToOffset[right.regId];
+				short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
+				short rightOffset = this.bind_operand_get_offset(right, mirInstruction.type);
 				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
 				this.lower_math_op(BCOpCodeCategory.ADD, destOffset, leftOffset, rightOffset, mirInstruction.type);
 			}
@@ -87,10 +85,8 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				MirRegisterID mirResult = mirInstruction.result;
 				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
-				assert(left.kind == MirOperandKind.REGISTER);
-				assert(right.kind == MirOperandKind.REGISTER);
-				short leftOffset = this.mirRegToOffset[left.regId];
-				short rightOffset = this.mirRegToOffset[right.regId];
+				short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
+				short rightOffset = this.bind_operand_get_offset(right, mirInstruction.type);
 				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
 				this.lower_math_op(BCOpCodeCategory.SUB, destOffset, leftOffset, rightOffset, mirInstruction.type);
 			}
@@ -99,10 +95,8 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				MirRegisterID mirResult = mirInstruction.result;
 				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
-				assert(left.kind == MirOperandKind.REGISTER);
-				assert(right.kind == MirOperandKind.REGISTER);
-				short leftOffset = this.mirRegToOffset[left.regId];
-				short rightOffset = this.mirRegToOffset[right.regId];
+				short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
+				short rightOffset = this.bind_operand_get_offset(right, mirInstruction.type);
 				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
 				this.lower_math_op(BCOpCodeCategory.MUL, destOffset, leftOffset, rightOffset, mirInstruction.type);
 			}
@@ -111,10 +105,8 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				MirRegisterID mirResult = mirInstruction.result;
 				MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
-				assert(left.kind == MirOperandKind.REGISTER);
-				assert(right.kind == MirOperandKind.REGISTER);
-				short leftOffset = this.mirRegToOffset[left.regId];
-				short rightOffset = this.mirRegToOffset[right.regId];
+				short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
+				short rightOffset = this.bind_operand_get_offset(right, mirInstruction.type);
 				short destOffset = this.bind_mir_register_get_offset(mirResult, mirInstruction.type);
 				this.lower_math_op(BCOpCodeCategory.DIV, destOffset, leftOffset, rightOffset, mirInstruction.type);
 			}

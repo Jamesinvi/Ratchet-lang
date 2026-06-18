@@ -105,6 +105,31 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     return offset;
 }
 
+fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand operand, CompTypeInfo typeInfo)
+{
+	short offset;
+	if (is_immediate(operand)){
+		short alignment = (short)compiler::get_type_alignment(typeInfo);
+		this.localFrameOffset = align_offset(this.localFrameOffset, alignment);
+		short size = (short)compiler::get_type_size(typeInfo);
+		offset = this.localFrameOffset;
+		this.localFrameOffset += size;
+		BCFrameSlot slot = {
+			.symbolIdx = compiler::analyzer::NO_SYMBOL,
+			.offset = offset,
+			.size = size,
+			.type = typeInfo.type,
+		};
+		this.bcOutput.functionFrameSlots.push(slot);
+		this.store_value(null, operand, offset);
+	}else{
+		offset = this.bind_mir_register_get_offset(operand.regId, typeInfo);
+	}
+
+    return offset;
+}
+
+
 <* 
  	Helper to align fields so that all fields respect their alignment, so if i have an int at the top of the stack
 	and i need to store a double, i add 4 bytes of padding so alignment is correct, vm thanks us
@@ -116,6 +141,15 @@ fn short align_offset(short offset, short alignment)
 		return offset;
 	}
 	return offset + (alignment - remainder);
+}
+
+
+fn bool is_immediate(MirOperand operand)
+{
+	return operand.kind == MirOperandKind.IMM_BOOL 
+		|| operand.kind == IMM_DOUBLE 
+		|| operand.kind == IMM_FLOAT 
+		|| operand.kind == IMM_INT;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
