@@ -48,9 +48,9 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	this.symbolTable.callReceiverExpr.init(&this.allocator, exprLen);
 
 	// Fill lists with defaults
-	common::list_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
-	common::list_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
-	common::list_fill{DeclParamRange}(&this.symbolTable.declParamRanges, {}, declLen);
+	common::list_append_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
+	common::list_append_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
+	common::list_append_fill{DeclParamRange}(&this.symbolTable.declParamRanges, {}, declLen);
 	for (sz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);

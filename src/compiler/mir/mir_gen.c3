@@ -40,7 +40,7 @@ fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable*
 	this.output.init(&this.allocator, 1024);
 	this.bindings.init(&this.allocator, this.symbolTable.symbols.len());
 
-	common::list_fill{MirOperand}(&this.bindings, placeHolderOperand, this.symbolTable.symbols.len());
+	common::list_append_fill{MirOperand}(&this.bindings, placeHolderOperand, this.symbolTable.symbols.len());
 }
 
 fn void MirGenerator.deinit(MirGenerator* this)

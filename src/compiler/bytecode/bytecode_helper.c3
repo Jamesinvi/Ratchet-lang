@@ -14,6 +14,7 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 {
 	// Clear the bindings
 	this.mirRegToOffset.clear();
+	this.mirRegToType.clear();
 	this.symbolToOffset.clear();
 	int maxMirReg = compiler::mir::NO_REG;
 	// We need to firnd the instruction iwth the highest "result" register index
@@ -27,8 +28,9 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 		}	
 	}
 	// Fill the lists with invalid bytecode registers, they will be bound as soon as they're needed
-	common::list_fill{short}(&this.mirRegToOffset, runtime::NO_OFFSET, (sz)maxMirReg +1 );
-	common::list_fill{short}(&this.symbolToOffset, runtime::NO_OFFSET, (sz)this.symbolTable.symbols.len() +1);
+	common::list_append_fill{short}(&this.mirRegToOffset, runtime::NO_OFFSET, (sz)maxMirReg +1 );
+	common::list_append_fill{CompTypeInfo}(&this.mirRegToType,   {}, (sz)maxMirReg +1);
+	common::list_append_fill{short}(&this.symbolToOffset, runtime::NO_OFFSET, (sz)this.symbolTable.symbols.len() +1);
 }
 
 fn BCFunctionIdx BCGenerator.push_func_get_idx(BCGenerator* this, BCFunction* func){
@@ -90,6 +92,7 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
         offset = this.localFrameOffset;
 
         this.mirRegToOffset[mirRegId] = offset;
+		this.mirRegToType[mirRegId] = type;
         this.localFrameOffset += size;
 
         BCFrameSlot slot = {
@@ -190,6 +193,33 @@ fn BCArgIdx BCGenerator.push_callarg_get_idx(BCGenerator* this, BCCallArg* argum
 }
 
 
+fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand* operand)
+{
+	switch (operand.kind)
+	{
+		case MirOperandKind.REGISTER:			
+		{
+
+    		CompTypeInfo type = this.mirRegToType[operand.regId];
+			// This ensures we have already bound the operand to a proper type
+			assert(type.type != ValueType.NULL || type.refToType != ValueType.NULL);
+			return type;
+		}			
+		case MirOperandKind.IMM_INT:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.INT, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_FLOAT:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.FLOAT, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_DOUBLE:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.DOUBLE, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_BOOL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_NULL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL};
+		case MirOperandKind.PLACE:		
+		{
+			log::logn("Places need to be implemented");
+			unreachable();
+		}		
+		case MirOperandKind.BLOCK:							unreachable();
+		case MirOperandKind.FUNCTION:						unreachable();
+		case MirOperandKind.INVALID:						unreachable();
+	}
+}
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 // --------------------- Helpers to switch on type and select typed variant of a specific Opcode, very simple stuff -----------------------
@@ -202,6 +232,7 @@ fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo)
 		case ValueType.INT:			return BCOpCode.MOVI;
 		case ValueType.FLOAT:		return BCOpCode.MOVF;
 		case ValueType.DOUBLE:		return BCOpCode.MOVD;
+		case ValueType.BOOL:		return BCOpCode.MOVB;
 		default:					log::errlogn("Not suported type by bytecode");
 	}
 	unreachable();
@@ -221,6 +252,19 @@ fn BCOpCode select_math_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCa
 	unreachable();
 }
 
+fn BCOpCode select_cmp_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch (opCodeCategory)
+	{
+		case BCOpCodeCategory.EQ:  		return select_eq_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.NEQ: 		return select_neq_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.LESS: 	return select_less_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.GREATER: 	return select_grter_op_code(typeInfo, opCodeCategory);
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
 
 fn BCOpCode select_add_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
@@ -232,8 +276,60 @@ fn BCOpCode select_add_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
 	}
 	unreachable();
-
 }
+
+fn BCOpCode select_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.EQI;
+		case ValueType.FLOAT: 		return BCOpCode.EQF;
+		case ValueType.DOUBLE: 		return BCOpCode.EQD;
+		case ValueType.BOOL: 		return BCOpCode.EQB;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+
+fn BCOpCode select_neq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.NEQI;
+		case ValueType.FLOAT: 		return BCOpCode.NEQF;
+		case ValueType.DOUBLE: 		return BCOpCode.NEQD;
+		case ValueType.BOOL: 		return BCOpCode.NEQB;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+fn BCOpCode select_less_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.LESSI;
+		case ValueType.FLOAT: 		return BCOpCode.LESSF;
+		case ValueType.DOUBLE: 		return BCOpCode.LESSD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+fn BCOpCode select_grter_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.GREATERI;
+		case ValueType.FLOAT: 		return BCOpCode.GREATERF;
+		case ValueType.DOUBLE: 		return BCOpCode.GREATERD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+
 
 fn BCOpCode select_sub_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {

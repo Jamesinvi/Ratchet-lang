@@ -15,8 +15,9 @@ fn bool is_ref_char(char c) @inline{
     return (c == '&' || c == '*');
 }
 
-fn void list_fill(List{Type}* list, Type val, sz maxSize) <Type>
+fn void list_append_fill(List{Type}* list, Type val, sz maxSize) <Type>
 {
+	list.reserve(maxSize);
     for(sz i = 0; i < maxSize; i++){
         list.push(val);
     }

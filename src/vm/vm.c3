@@ -20,12 +20,20 @@ enum RunResult
     RUNTIME_ERR,
 }
 
-enum VmBinOp
+enum VmMathOp
 {
 	ADD,
 	SUB,
 	MUL,
 	DIV,
+}
+
+enum VmCmpOp
+{
+	EQ,
+	NEQ,
+	LESS,
+	GREATER,
 }
 
 struct Vm
@@ -73,15 +81,17 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.CONSTF:	vm.const_op(inst, float);
 			case BCOpCode.CONSTD:	vm.const_op(inst, double);
 			case BCOpCode.CONSTB:	vm.const_op(inst, bool);
+			case BCOpCode.LESSI:	vm.cmp_op(inst, int, VmCmpOp.LESS);
 			case BCOpCode.MOVI:		vm.mov_op(inst, int);
 			case BCOpCode.MOVF:		vm.mov_op(inst, float);
 			case BCOpCode.MOVD:		vm.mov_op(inst, double);
-			case BCOpCode.ADDI:		vm.bin_math_op(inst, int, VmBinOp.ADD);
-			case BCOpCode.ADDF:		vm.bin_math_op(inst, float, VmBinOp.ADD);
-			case BCOpCode.ADDD:		vm.bin_math_op(inst, double, VmBinOp.ADD);
-			case BCOpCode.SUBI:		vm.bin_math_op(inst, int, VmBinOp.SUB);
-			case BCOpCode.MULI:		vm.bin_math_op(inst, int, VmBinOp.MUL);
-			case BCOpCode.DIVI:		vm.bin_math_op(inst, int, VmBinOp.DIV);
+			case BCOpCode.MOVB:		vm.mov_op(inst, bool);
+			case BCOpCode.ADDI:		vm.bin_math_op(inst, int, VmMathOp.ADD);
+			case BCOpCode.ADDF:		vm.bin_math_op(inst, float, VmMathOp.ADD);
+			case BCOpCode.ADDD:		vm.bin_math_op(inst, double, VmMathOp.ADD);
+			case BCOpCode.SUBI:		vm.bin_math_op(inst, int, VmMathOp.SUB);
+			case BCOpCode.MULI:		vm.bin_math_op(inst, int, VmMathOp.MUL);
+			case BCOpCode.DIVI:		vm.bin_math_op(inst, int, VmMathOp.DIV);
 			case BCOpCode.CALL:
 			{
 				BCCallInfo callInfo = vm.program.callInfos[inst.callInfoIdx];
@@ -162,7 +172,22 @@ macro Vm.mov_op(Vm* vm, BCInstruction* inst, $Type)
 	*dst = value;
 }
 
-macro Vm.bin_math_op(Vm* vm, BCInstruction* inst, $Type, VmBinOp $op)
+macro Vm.cmp_op(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
+{
+	bool* dst = (bool*)&vm.stack[vm.frame.base + inst.destOffset];
+	$Type* left = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
+	$Type* right = ($Type*)&vm.stack[vm.frame.base + inst.rightOffset];
+	bool result;
+	$switch $op:
+		$case VmCmpOp.EQ: 		result = left == right;
+		$case VmCmpOp.NEQ: 		result = left != right;
+		$case VmCmpOp.LESS: 	result = left < right;
+		$case VmCmpOp.GREATER: 	result = left > right;
+	$endswitch
+	*dst = result;
+}
+
+macro Vm.bin_math_op(Vm* vm, BCInstruction* inst, $Type, VmMathOp $op)
 {
 	$Type* dst = ($Type*)&vm.stack[vm.frame.base + inst.destOffset];
 	$Type* left = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
@@ -171,10 +196,10 @@ macro Vm.bin_math_op(Vm* vm, BCInstruction* inst, $Type, VmBinOp $op)
 	$Type rightVal = *right;
 	$Type result;
 	$switch $op:
-		$case VmBinOp.ADD: result = leftVal + rightVal;
-		$case VmBinOp.SUB: result = leftVal - rightVal;
-		$case VmBinOp.MUL: result = leftVal * rightVal;
-		$case VmBinOp.DIV: result = leftVal / rightVal;
+		$case VmMathOp.ADD: result = leftVal + rightVal;
+		$case VmMathOp.SUB: result = leftVal - rightVal;
+		$case VmMathOp.MUL: result = leftVal * rightVal;
+		$case VmMathOp.DIV: result = leftVal / rightVal;
 	$endswitch
 	*dst = result;
 }
