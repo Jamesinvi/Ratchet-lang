@@ -7,8 +7,10 @@ import log;
 alias BCFunctionIdx = sz;
 alias BCBlockIdx = sz;
 alias BCInstructionIdx = sz;
+alias BCCallInfoIdx = sz;
 alias BCProjectionIdx = sz;
 alias BCFrameSlotIdx = sz;
+alias BCArgIdx = short;
 
 const NO_OFFSET = -1;
 
@@ -33,11 +35,13 @@ enum BCOpCode : char (String asStr)
 	CONSTI	{ "cnst_i" },
 	CONSTF	{ "cnst_f" },
 	CONSTD	{ "cnst_d" },
+	CONSTB	{ "cnst_b" },
 	STORI	{ "stor_i" },
 	STORF	{ "stor_f" },
 	STORD	{ "stor_d" },
 	JUMP	{ "jump_a" },
 	BRANCH	{ "branch" },
+	CALL  	{ "call__" },
 	RETURN 	{ "return" },
 }
 
@@ -52,6 +56,7 @@ enum BCOpCodeCategory : char (String asStr)
 	STOR	{ "store" },
 	JUMP	{ "jump" },
 	BRANCH	{ "branch" },
+	CALL  	{ "call" },
 	RETURN 	{ "return" },
 }
 
@@ -79,6 +84,7 @@ struct BCInstruction
         int immInt;
         float immFloat;
         double immDouble;
+		BCCallInfoIdx callInfoIdx;
         bool immBool;
     }
     BCOpCode 	opCode;
@@ -93,6 +99,7 @@ struct BCFunction
 	BCFrameSlotIdx 		layoutEnd;
 	BCInstructionIdx	instructionsStart;
 	BCInstructionIdx	instructionsEnd;
+	short 				frameSize;
 }
 
 struct BCFrameSlot
@@ -102,6 +109,22 @@ struct BCFrameSlot
 	short 			offset;
 	short 			size;
 	ValueType 		type;
+}
+
+struct BCCallInfo
+{
+	BCFunctionIdx calleeIdx;
+    BCArgIdx argsStart;
+	BCArgIdx argsEnd;
+	short returnDestOffset; // caller-frame offset, or NO_OFFSET if discarded
+	short returnSize;
+}
+
+struct BCCallArg
+{
+    short callerOffset; // where arg value is in caller frame
+	short size;
+    ValueType type;
 }
 
 struct BCProjection
@@ -115,6 +138,8 @@ struct BCProgram
 	List{BCFunction}	functions;
 	List{BCFrameSlot} 	functionFrameSlots;
 	List{BCInstruction} instructions;
+	List{BCCallArg} 	callArgs;
+	List{BCCallInfo}	callInfos;
 	DynamicArenaAllocator allocator;
 }
 
@@ -125,6 +150,8 @@ fn void BCProgram.init(BCProgram* this)
 	this.functions.init(&this.allocator);
 	this.functionFrameSlots.init(&this.allocator);
 	this.instructions.init(&this.allocator);
+	this.callArgs.init(&this.allocator);
+	this.callInfos.init(&this.allocator);
 }
 
 fn void BCProgram.deinit(BCProgram* this)
@@ -185,6 +212,12 @@ fn void BCProgram.print_instruction(BCProgram* this, BCInstruction inst)
 	if (inst.immKind != BCOperandKind.INVALID) {
 		log::log(", ");
 		this.print_immediate(inst);
+		if(inst.immKind == BCOperandKind.FUNCTION){
+			BCCallInfo callInfo = this.callInfos[inst.callInfoIdx];
+			log::log("| args: ->[");
+			this.print_call_info(callInfo);
+			log::log("]");
+		}
 	}
 	log::logn("");
 }
@@ -200,7 +233,17 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_FLOAT:	log::log("%s", inst.immFloat);
 		case BCOperandKind.IMM_DOUBLE:	log::log("%s", inst.immDouble);
 		case BCOperandKind.IMM_BOOL:	log::log("%s", inst.immBool);
+		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		default:						log::log("<?>");
+	}
+}
+
+fn void BCProgram.print_call_info(BCProgram* this, BCCallInfo callInfo)
+{
+	for(short i = callInfo.argsStart; i < callInfo.argsEnd; i++){
+		log::log("(", this.callArgs[i].type);
+		this.print_offset(this.callArgs[i].callerOffset);
+		log::log(" | type: %s)", this.callArgs[i].type);
 	}
 }

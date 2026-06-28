@@ -1,7 +1,12 @@
 
 // Entry-point. Should return true if errors occured
 fn bool program(){
-	int a = 3 + 14 * 3;
+	int a = 12;
+	addOne(a);
 	return false;
+}
+
+fn int addOne(int g){
+	return g + 1;
 }
 

@@ -105,6 +105,10 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     return offset;
 }
 
+<* 
+ 	Helper to bind a mir operand to an offset. If the operand is an immediate, it will emit a mov
+	instruction to store the value in a new BCFrameSlot. Else, it will bind a register to it.
+*>
 fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand operand, CompTypeInfo typeInfo)
 {
 	short offset;
@@ -151,6 +155,41 @@ fn bool is_immediate(MirOperand operand)
 		|| operand.kind == IMM_FLOAT 
 		|| operand.kind == IMM_INT;
 }
+
+<* 
+ 	Helper to push an instruction and get the index it was added at. Note it pushes a Copy of the BCInstruction
+	so any changes you need to make after calling this will have to be made through the returned index
+*>
+fn BCInstructionIdx BCGenerator.push_instruction_get_idx(BCGenerator* this, BCInstruction* instruction)
+{
+	BCInstructionIdx index = this.bcOutput.instructions.len();
+	this.bcOutput.instructions.push(*instruction);
+    return index;
+}
+
+<* 
+ 	Helper to push an instruction and get the index it was added at. Note it pushes a Copy of the BCCallInfo
+	so any changes you need to make after calling this will have to be made through the returned index
+*>
+fn BCCallInfoIdx BCGenerator.push_callinfo_get_idx(BCGenerator* this, BCCallInfo* callInfo)
+{
+	BCCallInfoIdx index = this.bcOutput.callInfos.len();
+	this.bcOutput.callInfos.push(*callInfo);
+    return index;
+}
+
+<* 
+ 	Helper to push an instruction and get the index it was added at. Note it pushes a Copy of the BCCallArg
+	so any changes you need to make after calling this will have to be made through the returned index
+*>
+fn BCArgIdx BCGenerator.push_callarg_get_idx(BCGenerator* this, BCCallArg* argument)
+{
+	BCArgIdx index = (BCArgIdx)this.bcOutput.callArgs.len();
+	this.bcOutput.callArgs.push(*argument);
+    return index;
+}
+
+
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 // --------------------- Helpers to switch on type and select typed variant of a specific Opcode, very simple stuff -----------------------

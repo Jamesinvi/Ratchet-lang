@@ -16,6 +16,7 @@ struct BCGenerator
 	BCProgram*			bcOutput;
 	List{short}			symbolToOffset; 	// Indexed by SymbolIdx
 	List{short}			mirRegToOffset;	  	// Indexed by MirRegisterID
+	List{BCFunctionIdx} declToBcFunction;	// Indexed by DeclIdx (source)
 	int 				currentFrameOffset;
 	short 				localFrameOffset;
 }
@@ -29,6 +30,7 @@ fn void BCGenerator.init(BCGenerator* this, CompilationContext* ctx)
 	this.bcOutput.init();
 	this.symbolToOffset.init(mem);
 	this.mirRegToOffset.init(mem);
+	this.declToBcFunction.init(mem);
 }
 
 fn void BCGenerator.deinit(BCGenerator* this)
@@ -36,18 +38,29 @@ fn void BCGenerator.deinit(BCGenerator* this)
 	if (this.bcOutput != null) {
 		this.bcOutput.deinit();
 	}
+	this.symbolToOffset.free();
+	this.mirRegToOffset.free();
+	this.declToBcFunction.free();
 }
 
 fn void BCGenerator.run(BCGenerator* this)
 {
+	common::list_fill{BCFunctionIdx}(&this.declToBcFunction, -1, this.inputAst.declarations.len());
+	// First pass: add all functions to the declToBcFuntion list
 	foreach(&func : this.mirInput.functions){
+		BCFunction functionResult = {};
+		BCFunctionIdx funcIdx = this.push_func_get_idx(&functionResult);
+		this.declToBcFunction[func.sourceDeclIdx] = funcIdx;
+	}
+	// Second pass: actually lower the function instructions
+	foreach(&func : this.mirInput.functions){
+		BCFunctionIdx funcIdx = this.declToBcFunction[func.sourceDeclIdx];
 		this.currentFrameOffset = 0;
 		this.localFrameOffset = 0;
 		this.prepare_func_bindings(func);
-		BCFunction functionResult = {};
-		BCFunctionIdx funcIdx = this.push_func_get_idx(&functionResult);
 		this.lower_fun(func, funcIdx);
 	}
+
 	this.bcOutput.print();
 }
 	
@@ -58,10 +71,13 @@ fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunct
 	funcOutput.instructionsStart = this.bcOutput.instructions.len();
 	for(sz i = funcInput.blocksStart; i<funcInput.blocksEnd;i++){
 		this.lower_block(&this.mirInput.blocks[i], funcOutputIdx);
-		this.lower_terminator(this.mirInput.blocks[i].terminator);
+		SymbolIdx fnSymbolIdx = this.symbolTable.declSymbols[funcInput.sourceDeclIdx];
+		CompTypeInfo returnType = this.symbolTable.symbols[fnSymbolIdx].type;
+		this.lower_terminator(this.mirInput.blocks[i].terminator, returnType);
 	}
 	funcOutput.layoutEnd = this.bcOutput.functionFrameSlots.len();
 	funcOutput.instructionsEnd = this.bcOutput.instructions.len();
+	funcOutput.frameSize = align_offset(this.localFrameOffset, 8);
 }
 
 
@@ -129,13 +145,58 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
 				this.load_value(mirInstruction.type, srcOffset, destOffset);
 			}
+			case MirOpCode.CALL:
+			{
+				MirOperand callee = this.mirInput.operands[mirInstruction.operandsStart];
+				// Lower all call arguments
+				short argsStart = -1;
+				short argsEnd = -1;
+				short argsCount = 0;
+				for(sz k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++){
+					BCCallArg argument = {};
+					BCArgIdx argIdx = this.push_callarg_get_idx(&argument);
+					if(argsCount == 0){
+						argsStart = argIdx;
+					}
+					// Only way to extract the type for every argument is through symbol table (for now)
+					DeclParamRange paramRange = this.symbolTable.declParamRanges[callee.fnCalleeIdx];
+					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[paramRange.start + argsCount];
+					CompTypeInfo argType = this.symbolTable.symbols[paramSymbolIdx].type;
+					// Argumnents have bindings in both caller and callee.
+					this.bcOutput.callArgs[argIdx].callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
+					this.bcOutput.callArgs[argIdx].size = (short)compiler::get_type_size(argType);
+					this.bcOutput.callArgs[argIdx].type = argType.type;
+					argsCount++;
+				}
+				argsEnd = argsStart + argsCount;
+				// Create call info
+				BCCallInfo callInfo = {
+					.calleeIdx = this.declToBcFunction[callee.fnCalleeIdx],
+					.argsStart = argsStart,
+					.argsEnd = argsEnd,
+					.returnDestOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type),
+					.returnSize = (short)compiler::get_type_size(mirInstruction.type)
+				};
+				BCCallInfoIdx infoIdx = this.push_callinfo_get_idx(&callInfo);
+				BCInstruction instruction = {
+					.destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type),
+					.leftOffset = runtime::NO_OFFSET,
+					.rightOffset = runtime::NO_OFFSET,
+					.opCode = BCOpCode.CALL,
+					.callInfoIdx = infoIdx,
+					.immKind = BCOperandKind.FUNCTION,
+				};
+				this.push_instruction_get_idx(&instruction);
+
+			}
 			default:
 			{
-				log::errlogn("Not suported store by compiler");
+				log::errlogn("Instruction \"%s\" is unsupported by compiler", mirInstruction.opCode);
 			}
 		}
 	}
 }
+
 
 fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstruction, MirOperand val, short destOffset)
 {
@@ -159,6 +220,15 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 			instruction.opCode = BCOpCode.CONSTI;
 			instruction.immKind = BCOperandKind.IMM_INT;
 		}
+		case MirOperandKind.IMM_FLOAT:
+		{
+			instruction.destOffset = destOffset;
+			instruction.leftOffset = runtime::NO_OFFSET;
+			instruction.rightOffset = runtime::NO_OFFSET;
+			instruction.immFloat = val.immFloat;
+			instruction.opCode = BCOpCode.CONSTF;
+			instruction.immKind = BCOperandKind.IMM_FLOAT;
+		}
 		case MirOperandKind.IMM_DOUBLE:
 		{
 			instruction.destOffset = destOffset;
@@ -167,6 +237,15 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 			instruction.immDouble = val.immDouble;
 			instruction.opCode = BCOpCode.CONSTD;
 			instruction.immKind = BCOperandKind.IMM_DOUBLE;
+		}
+		case MirOperandKind.IMM_BOOL:
+		{
+			instruction.destOffset = destOffset;
+			instruction.leftOffset = runtime::NO_OFFSET;
+			instruction.rightOffset = runtime::NO_OFFSET;
+			instruction.immBool = val.immBool;
+			instruction.opCode = BCOpCode.CONSTB;
+			instruction.immKind = BCOperandKind.IMM_BOOL;
 		}
 		default:
 		{
@@ -207,19 +286,29 @@ fn void BCGenerator.lower_math_op(BCGenerator* this, BCOpCodeCategory opCodeCate
 
 
 }
-fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx)
+fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx, CompTypeInfo typeInfo)
 {
-	switch(this.mirInput.terminators[terminatorIdx].opCode)
+	MirTerminator term = this.mirInput.terminators[terminatorIdx];
+	short returnSourceOffset = runtime::NO_OFFSET;
+
+	
+	switch(term.opCode)
 	{
 		case MirTerminatorOp.RETURN:
 		{
+			if (term.operandsStart < term.operandsEnd) {
+				MirOperand returnOperand = this.mirInput.operands[term.operandsStart];
+				returnSourceOffset = this.bind_operand_get_offset(returnOperand, typeInfo);
+			}
+
 			BCInstruction instruction = {
 				.destOffset = runtime::NO_OFFSET,
-				.leftOffset = runtime::NO_OFFSET,
+				.leftOffset = returnSourceOffset,
 				.rightOffset = runtime::NO_OFFSET,
 				.opCode = BCOpCode.RETURN,
 				.immKind = BCOperandKind.INVALID,
 			};
+
 			this.bcOutput.instructions.push(instruction);
 		}
 		default:
