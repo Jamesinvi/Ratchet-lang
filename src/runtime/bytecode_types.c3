@@ -4,12 +4,12 @@ import std::collections::list;
 import common;
 import log;
 
-alias BCFunctionIdx = sz;
-alias BCBlockIdx = sz;
-alias BCInstructionIdx = sz;
-alias BCCallInfoIdx = sz;
-alias BCProjectionIdx = sz;
-alias BCFrameSlotIdx = sz;
+alias BCFunctionIdx = int;
+alias BCBlockIdx = int;
+alias BCInstructionIdx = int;
+alias BCCallInfoIdx = int;
+alias BCProjectionIdx = int;
+alias BCFrameSlotIdx = int;
 alias BCArgIdx = short;
 
 const NO_OFFSET = -1;
@@ -17,47 +17,51 @@ const NO_OFFSET = -1;
 
 enum BCOpCode : char (String asStr)
 {
-	ADDI	{ "add__i" },
-	ADDF	{ "add__f" },	
-	ADDD	{ "add__d" },
-	SUBI	{ "sub__i" },
-	SUBF	{ "sub__f" },
-	SUBD	{ "sub__d" },
-	MULI	{ "mul__i" },
-	MULF	{ "mul__f" },
-	MULD	{ "mul__d" },
-	DIVI	{ "div__i" },
-	DIVF	{ "div__f" },	
-	DIVD	{ "div__d" },
-	MOVI	{ "mov__i" },
-	MOVF	{ "mov__f" },
-	MOVD	{ "mov__d" },
-	MOVB	{ "mov__b" },
-	CONSTI	{ "cnst_i" },
-	CONSTF	{ "cnst_f" },
-	CONSTD	{ "cnst_d" },
-	CONSTB	{ "cnst_b" },
-	STORI	{ "stor_i" },
-	STORF	{ "stor_f" },
-	STORD	{ "stor_d" },
-	EQI		{ "eq___i" },
-	EQF		{ "eq___f" },
-	EQD		{ "eq___d" },
-	EQB		{ "eq___b" },
-	NEQI	{ "!eq__i" },
-	NEQF	{ "!eq__f" },
-	NEQD	{ "!eq__d" },
-	NEQB	{ "!eq__b" },
-	LESSI	{ "less_i" },
-	LESSF	{ "less_f" },
-	LESSD	{ "less_d" },
-	GREATERI{ "grteri" },
-	GREATERF{ "grterf" },
-	GREATERD{ "grterd" },
-	JUMP	{ "jump_a" },
-	BRANCH	{ "branch" },
-	CALL  	{ "call__" },
-	RETURN 	{ "return" },
+	ADDI	        { "add__i" },
+	ADDF	        { "add__f" },	
+	ADDD	        { "add__d" },
+	SUBI	        { "sub__i" },
+	SUBF	        { "sub__f" },
+	SUBD	        { "sub__d" },
+	MULI	        { "mul__i" },
+	MULF	        { "mul__f" },
+	MULD	        { "mul__d" },
+	DIVI	        { "div__i" },
+	DIVF	        { "div__f" },	
+	DIVD	        { "div__d" },
+	MOVI	        { "mov__i" },
+	MOVF	        { "mov__f" },
+	MOVD	        { "mov__d" },
+	MOVB	        { "mov__b" },
+	CONSTI	        { "cnst_i" },
+	CONSTF	        { "cnst_f" },
+	CONSTD	        { "cnst_d" },
+	CONSTB	        { "cnst_b" },
+	STORI	        { "stor_i" },
+	STORF	        { "stor_f" },
+	STORD	        { "stor_d" },
+	EQI		        { "eq___i" },
+	EQF		        { "eq___f" },
+	EQD		        { "eq___d" },
+	EQB		        { "eq___b" },
+	NEQI	        { "!eq__i" },
+	NEQF	        { "!eq__f" },
+	NEQD	        { "!eq__d" },
+	NEQB	        { "!eq__b" },
+	LESSI	        { "less_i" },
+	LESSF	        { "less_f" },
+	LESSD	        { "less_d" },
+	GREATERI        { "grteri" },
+	GREATERF        { "grterf" },
+	GREATERD        { "grterd" },
+	JUMP	        { "jmp___" },
+	BRANCH_IF_FALSE	{ "br_nif" },
+	CALL  	        { "call__" },
+	RETURN 	        { "return" },
+	ECHOI           { "echo_i" },
+	ECHOF           { "echo_f" },
+	ECHOD           { "echo_d" },
+	ECHOB           { "echo_b" },
 }
 
 enum BCOpCodeCategory : char (String asStr)
@@ -96,6 +100,8 @@ enum BCOperandKind : char (String asStr)
 
 struct BCInstruction
 {
+    BCOpCode 	opCode;
+    BCOperandKind immKind;
 	short 		destOffset;
 	short 		leftOffset;
 	short 		rightOffset;
@@ -103,11 +109,10 @@ struct BCInstruction
         int immInt;
         float immFloat;
         double immDouble;
-		BCCallInfoIdx callInfoIdx;
         bool immBool;
+		BCCallInfoIdx callInfoIdx;
+		BCBlockIdx  blockToJumpTo;
     }
-    BCOpCode 	opCode;
-    BCOperandKind immKind;
 }
 
 struct BCFunction
@@ -116,8 +121,8 @@ struct BCFunction
 	SymbolIdx 			symbolIdx;
 	BCFrameSlotIdx 		layoutStart;
 	BCFrameSlotIdx 		layoutEnd;
-	BCInstructionIdx	instructionsStart;
-	BCInstructionIdx	instructionsEnd;
+	BCBlockIdx          blocksStart;
+	BCBlockIdx	        blocksEnd;
 	short 				frameSize;
 }
 
@@ -146,6 +151,14 @@ struct BCCallArg
     ValueType type;
 }
 
+struct BCBlock
+{
+    BCInstructionIdx instructionsStart;
+    BCInstructionIdx instructionsEnd;
+    BCInstructionIdx terminatorsStart;
+    BCInstructionIdx terminatorsEnd;
+}
+
 struct BCProjection
 {
 	int placeholder;
@@ -156,6 +169,7 @@ struct BCProgram
 {
 	List{BCFunction}	functions;
 	List{BCFrameSlot} 	functionFrameSlots;
+	List{BCBlock}       blocks;
 	List{BCInstruction} instructions;
 	List{BCCallArg} 	callArgs;
 	List{BCCallInfo}	callInfos;
@@ -168,6 +182,7 @@ fn void BCProgram.init(BCProgram* this)
 	this.allocator.init(mem, 1024);
 	this.functions.init(&this.allocator);
 	this.functionFrameSlots.init(&this.allocator);
+	this.blocks.init(&this.allocator);
 	this.instructions.init(&this.allocator);
 	this.callArgs.init(&this.allocator);
 	this.callInfos.init(&this.allocator);
@@ -185,7 +200,7 @@ fn void BCProgram.print(BCProgram* this)
 	{
 		log::logn("function_%s symbolIdx=%s", fun.idx, fun.symbolIdx);
 		log::logn("  frame_slots:");
-		for (sz slotIdx = fun.layoutStart; slotIdx < fun.layoutEnd; slotIdx++) {
+		for (int slotIdx = fun.layoutStart; slotIdx < fun.layoutEnd; slotIdx++) {
 			if (slotIdx >= this.functionFrameSlots.len()) {
 				log::logn("    <bad-slot-idx:%s>", slotIdx);
 				continue;
@@ -193,18 +208,36 @@ fn void BCProgram.print(BCProgram* this)
 			this.print_frame_slot(slotIdx, this.functionFrameSlots[slotIdx]);
 		}
 		log::logn("  instructions:");
-		for (sz instIdx = fun.instructionsStart; instIdx < fun.instructionsEnd; instIdx++) {
-			if (instIdx >= this.instructions.len()) {
-				log::logn("    <bad-inst-idx:%s>", instIdx);
-				continue;
-			}
-			log::log("    %03d: ", instIdx);
-			this.print_instruction(this.instructions[instIdx]);
+		for (int blockIdx = fun.blocksStart; blockIdx < fun.blocksEnd; blockIdx++){
+		    log::logn("  block_%s", blockIdx);
+		    this.print_block(blockIdx);
 		}
 		log::logn("");
 	}
 	log::logn("------------------------------");
 }
+
+fn void BCProgram.print_block(BCProgram* this, BCBlockIdx idx)
+{
+    BCBlock* block = &this.blocks[idx];
+    for (int instIdx = block.instructionsStart; instIdx < block.instructionsEnd; instIdx++) {
+        if (instIdx >= this.instructions.len()) {
+            log::logn("    <bad-inst-idx:%s>", instIdx);
+            continue;
+        }
+        log::log("    %03d: ", instIdx);
+        this.print_instruction(this.instructions[instIdx]);
+    }
+    for (int termIdx = block.terminatorsStart; termIdx < block.terminatorsEnd; termIdx++) {
+        if (termIdx >= this.instructions.len()) {
+            log::logn("    <bad-inst-idx:%s>", termIdx);
+            continue;
+        }
+        log::log("    %03d: ", termIdx);
+        this.print_instruction(this.instructions[termIdx]);
+    }
+}
+
 
 fn void BCProgram.print_frame_slot(BCProgram* this, BCFrameSlotIdx idx, BCFrameSlot slot)
 {
@@ -254,6 +287,7 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_BOOL:	log::log("%s", inst.immBool);
 		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
+		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);
 		default:						log::log("<?>");
 	}
 }

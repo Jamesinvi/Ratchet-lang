@@ -5,6 +5,7 @@ import globals;
 import compiler;
 import runtime;
 import log;
+import debug;
 import std::collections::list;
 
 
@@ -64,41 +65,45 @@ fn void BCGenerator.run(BCGenerator* this)
 		this.lower_fun(func, funcIdx);
 	}
 
-	this.bcOutput.print();
 }
 	
 fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunctionIdx funcOutputIdx)
 {
 	BCFunction* funcOutput = &this.bcOutput.functions[funcOutputIdx];
-	funcOutput.layoutStart = this.bcOutput.functionFrameSlots.len();
-	funcOutput.instructionsStart = this.bcOutput.instructions.len();
-	for(sz i = funcInput.blocksStart; i<funcInput.blocksEnd;i++){
-		this.lower_block(&this.mirInput.blocks[i], funcOutputIdx);
+	funcOutput.layoutStart = this.fun_frame_slots_len();
+	funcOutput.blocksStart = this.blocks_len();
+	for(int i = funcInput.blocksStart; i<funcInput.blocksEnd;i++){
+		BCBlockIdx loweredBlockIdx = this.lower_block(&this.mirInput.blocks[i], funcOutputIdx);
 		SymbolIdx fnSymbolIdx = this.symbolTable.declSymbols[funcInput.sourceDeclIdx];
 		CompTypeInfo returnType = this.symbolTable.symbols[fnSymbolIdx].type;
-		this.lower_terminator(this.mirInput.blocks[i].terminator, returnType);
+		this.lower_terminator(this.mirInput.blocks[i].terminator, loweredBlockIdx, returnType);
 	}
-	funcOutput.layoutEnd = this.bcOutput.functionFrameSlots.len();
-	funcOutput.instructionsEnd = this.bcOutput.instructions.len();
+	funcOutput.layoutEnd = this.fun_frame_slots_len();
+	funcOutput.blocksEnd = this.blocks_len();
 	funcOutput.frameSize = align_offset(this.localFrameOffset, 8);
 }
 
 
-fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctionIdx currentFuncidx)
+fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctionIdx currentFuncidx)
 {
-	for(sz i = mirBlock.instructionsStart; i<mirBlock.instructionsEnd;i++){
+    BCInstructionIdx instructionsLenBeforeLower = this.instructions_len();
+	for(int i = mirBlock.instructionsStart; i<mirBlock.instructionsEnd;i++){
 		MirInstruction* mirInstruction = &this.mirInput.instructions[i];
-		log::logn("%s | %s", mirInstruction.opCode, mirInstruction.type.type);
+		debug::@log_bytecode("loweing %s | type: %s", mirInstruction.opCode, mirInstruction.type.type);
 		switch (mirInstruction.opCode){
+			case MirOpCode.EQ:		    this.lower_cmp_op(BCOpCodeCategory.EQ, mirInstruction);
+			case MirOpCode.NEQ:		    this.lower_cmp_op(BCOpCodeCategory.NEQ, mirInstruction);
 			case MirOpCode.LESS:		this.lower_cmp_op(BCOpCodeCategory.LESS, mirInstruction);
+			case MirOpCode.GREATER:		this.lower_cmp_op(BCOpCodeCategory.GREATER, mirInstruction);
 			case MirOpCode.ADD:			this.lower_math_op(BCOpCodeCategory.ADD, mirInstruction);
 			case MirOpCode.SUB:			this.lower_math_op(BCOpCodeCategory.SUB, mirInstruction);
 			case MirOpCode.MUL:			this.lower_math_op(BCOpCodeCategory.MUL, mirInstruction);
 			case MirOpCode.DIV:			this.lower_math_op(BCOpCodeCategory.DIV, mirInstruction);
+			case MirOpCode.ECHO:		this.lower_echo(mirInstruction);
 			case MirOpCode.STORE:
 			{
 				MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
-				MirOperand source = this.mirInput.operands[mirInstruction.operandsStart + 1];
+				MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 				MirPlace place = this.mirInput.places[dest.placeIdx];
 				SymbolIdx symbol = place.baseSymbolIdx;
 				short destOffset = this.bind_symbol_get_offset(symbol);
@@ -121,7 +126,7 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 				short argsStart = -1;
 				short argsEnd = -1;
 				short argsCount = 0;
-				for(sz k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++){
+				for(int k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++){
 					BCCallArg argument = {};
 					BCArgIdx argIdx = this.push_callarg_get_idx(&argument);
 					if(argsCount == 0){
@@ -129,7 +134,7 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 					}
 					// Only way to extract the type for every argument is through symbol table (for now)
 					DeclParamRange paramRange = this.symbolTable.declParamRanges[callee.fnCalleeIdx];
-					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[paramRange.start + argsCount];
+					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
 					CompTypeInfo argType = this.symbolTable.symbols[paramSymbolIdx].type;
 					// Argumnents have bindings in both caller and callee.
 					this.bcOutput.callArgs[argIdx].callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
@@ -156,7 +161,6 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 					.immKind = BCOperandKind.FUNCTION,
 				};
 				this.push_instruction_get_idx(&instruction);
-
 			}
 			default:
 			{
@@ -164,13 +168,17 @@ fn void BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCFunctio
 			}
 		}
 	}
+    BCBlock block = {
+        .instructionsStart = instructionsLenBeforeLower,
+        .instructionsEnd = this.instructions_len()
+    };
+    return this.push_block_get_idx(&block);
 }
 
 
 fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstruction, MirOperand val, short destOffset)
 {
 	BCInstruction instruction = {};
-	log::logn("%s", val.kind);
 	switch (val.kind) {
 		case MirOperandKind.REGISTER:
 		{
@@ -240,12 +248,29 @@ fn void BCGenerator.load_value(BCGenerator* this, CompTypeInfo typeInfo, short s
 	this.bcOutput.instructions.push(instruction);
 }
 
+fn void BCGenerator.lower_echo(BCGenerator* this, MirInstruction* mirInstruction)
+{
+    MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
+    // Bind what we're trying to "echo" to a specific offset in the current stack-frame slots
+    short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
+    BCOpCode finalOpCode = select_echo_op_code(mirInstruction.type);
+    BCInstruction instruction = {
+        .destOffset = runtime::NO_OFFSET,
+        .leftOffset = leftOffset,
+        .rightOffset = runtime::NO_OFFSET,
+        .immInt = runtime::NO_OFFSET,
+        .opCode = finalOpCode,
+        .immKind = BCOperandKind.INVALID,
+    };
+    this.bcOutput.instructions.push(instruction);
+}
+
 
 fn void BCGenerator.lower_math_op(BCGenerator* this, BCOpCodeCategory opCodeCategory, MirInstruction* mirInstruction)
 {	
 	MirRegisterID mirResult = mirInstruction.result;
 	MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
-	MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
+	MirOperand right = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 	// Bind operands to specific offsets in the current stack-frame slots
 	short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
 	short rightOffset = this.bind_operand_get_offset(right, mirInstruction.type);
@@ -267,7 +292,7 @@ fn void BCGenerator.lower_cmp_op(BCGenerator* this, BCOpCodeCategory opCodeCateg
 {	
 	MirRegisterID mirResult = mirInstruction.result;
 	MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
-	MirOperand right = this.mirInput.operands[mirInstruction.operandsStart + 1];
+	MirOperand right = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 	// Create a return type that is always bool, because comparison can never return anything else
 	CompTypeInfo boolType = {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
 	// Operand type is assumed to be uniform once we reach byecode (equal types)
@@ -289,12 +314,11 @@ fn void BCGenerator.lower_cmp_op(BCGenerator* this, BCOpCodeCategory opCodeCateg
 }
 
 
-fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx, CompTypeInfo typeInfo)
+fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx, BCBlockIdx currentBlockIdx, CompTypeInfo typeInfo)
 {
 	MirTerminator term = this.mirInput.terminators[terminatorIdx];
 	short returnSourceOffset = runtime::NO_OFFSET;
-
-	
+    BCInstructionIdx terminatorsStart = this.instructions_len();
 	switch(term.opCode)
 	{
 		case MirTerminatorOp.RETURN:
@@ -314,10 +338,56 @@ fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx termina
 
 			this.bcOutput.instructions.push(instruction);
 		}
+		case MirTerminatorOp.BRANCH:
+		{
+            MirOperand condition = this.mirInput.operands[term.operandsStart];
+            MirBlockIdx ifBlock = this.mirInput.operands[(sz)term.operandsStart + 1].blockIdx;
+            MirBlockIdx elseBlock = this.mirInput.operands[(sz)term.operandsStart + 2].blockIdx;
+            CompTypeInfo conditionType = {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
+            short conditionOffset = this.bind_operand_get_offset(condition, conditionType);
+			BCInstruction elseInstruction = {
+				.destOffset = runtime::NO_OFFSET,
+				.leftOffset = conditionOffset,
+				.rightOffset = runtime::NO_OFFSET,
+				.opCode = BCOpCode.BRANCH_IF_FALSE,
+				.blockToJumpTo = elseBlock,
+				.immKind = BCOperandKind.BLOCK,
+			};
+            BCInstruction thenInstruction = {
+                .destOffset = runtime::NO_OFFSET,
+                .leftOffset = runtime::NO_OFFSET,
+                .rightOffset = runtime::NO_OFFSET,
+                .opCode = BCOpCode.JUMP,
+                .blockToJumpTo = ifBlock,
+                .immKind = BCOperandKind.BLOCK,
+            };
+            // Push these instruction in "else" then "then" order. 
+            // This is because branch is "branch if false", so a true condition should ignore it and continue to the unconditional jump:
+	        // BRANCH_IF_FALSE cond, elseBlock
+            // UNCONDITIONAL JMP     thenBlock
+			this.bcOutput.instructions.push(elseInstruction);
+			this.bcOutput.instructions.push(thenInstruction);
+		}
+		case MirTerminatorOp.JUMP:
+		{
+            MirBlockIdx destBlock = this.mirInput.operands[term.operandsStart].blockIdx;
+            BCInstruction instruction = {
+                .destOffset = runtime::NO_OFFSET,
+                .leftOffset = runtime::NO_OFFSET,
+                .rightOffset = runtime::NO_OFFSET,
+                .opCode = BCOpCode.JUMP,
+                .blockToJumpTo = destBlock,
+                .immKind = BCOperandKind.BLOCK,
+            };
+            this.bcOutput.instructions.push(instruction);
+		}
 		default:
 		{
 			log::errlogn("Unsupported op %s", term.opCode);
 			unreachable();
 		}
 	}
+	
+	this.bcOutput.blocks[currentBlockIdx].terminatorsStart = terminatorsStart;
+	this.bcOutput.blocks[currentBlockIdx].terminatorsEnd = this.instructions_len();
 }

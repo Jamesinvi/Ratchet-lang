@@ -183,7 +183,7 @@ fn void Parser.predeclare_functions(Parser* this)
  
 fn void Parser.desugar_methods(Parser* this)
 {
-    this.outputAst.loweredMethodsStart = this.outputAst.declarations.len();
+    this.outputAst.loweredMethodsStart = (DeclIdx)this.outputAst.declarations.len();
     foreach(structDeclIdx : this.structs){
         Decl* decl = &this.outputAst.declarations[structDeclIdx];
         foreach (methodIdx, &method : decl.structDecl.methods) {
@@ -240,28 +240,28 @@ fn void Parser.predeclare_natives(Parser* this)
 }
 
 fn ExprIdx Parser.push_expr_get_idx(Parser* this, Expr* expr){
-    ExprIdx index = this.outputAst.expressions.len();
+    ExprIdx index = (ExprIdx)this.outputAst.expressions.len();
     this.outputAst.expressions.push(*expr);
     return index;
 }
 
 fn DeclIdx Parser.push_decl_get_idx(Parser* this, Decl* decl){
-    DeclIdx index = this.outputAst.declarations.len();
+    DeclIdx index = (DeclIdx)this.outputAst.declarations.len();
     this.outputAst.declarations.push(*decl);
     return index;
 }
 
 fn NameIdx Parser.push_name_get_idx(Parser* this, String toCopy){
-    NameIdx index = this.outputAst.names.len();
+    NameIdx index = (NameIdx)this.outputAst.names.len();
     InternedString stringId = globals::internedSourceStrings.get_or_intern(toCopy);
     this.outputAst.names.push(stringId);
-	assert(this.outputAst.names.len() == index + 1);
+	assert(this.outputAst.names.len() == (sz)index + 1);
     return index;
 }
 
 fn StmtIdx Parser.push_stmt_get_idx(Parser* this, Stmt* stmt)
 {
-    StmtIdx idx = this.outputAst.statements.len();
+    StmtIdx idx = (StmtIdx)this.outputAst.statements.len();
     this.outputAst.statements.push(*stmt);
     return idx;
 }

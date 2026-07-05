@@ -34,7 +34,7 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 }
 
 fn BCFunctionIdx BCGenerator.push_func_get_idx(BCGenerator* this, BCFunction* func){
-    BCFunctionIdx index = this.bcOutput.functions.len();
+    BCFunctionIdx index = (BCFunctionIdx)this.bcOutput.functions.len();
 	func.idx = index;
     this.bcOutput.functions.push(*func);
     return index;
@@ -165,7 +165,7 @@ fn bool is_immediate(MirOperand operand)
 *>
 fn BCInstructionIdx BCGenerator.push_instruction_get_idx(BCGenerator* this, BCInstruction* instruction)
 {
-	BCInstructionIdx index = this.bcOutput.instructions.len();
+	BCInstructionIdx index = (BCInstructionIdx)this.bcOutput.instructions.len();
 	this.bcOutput.instructions.push(*instruction);
     return index;
 }
@@ -176,7 +176,7 @@ fn BCInstructionIdx BCGenerator.push_instruction_get_idx(BCGenerator* this, BCIn
 *>
 fn BCCallInfoIdx BCGenerator.push_callinfo_get_idx(BCGenerator* this, BCCallInfo* callInfo)
 {
-	BCCallInfoIdx index = this.bcOutput.callInfos.len();
+	BCCallInfoIdx index = (BCCallInfoIdx)this.bcOutput.callInfos.len();
 	this.bcOutput.callInfos.push(*callInfo);
     return index;
 }
@@ -192,6 +192,34 @@ fn BCArgIdx BCGenerator.push_callarg_get_idx(BCGenerator* this, BCCallArg* argum
     return index;
 }
 
+<* 
+ 	Helper to push an instruction block get the index it was added at. Note it pushes a Copy of the BCBlock
+	so any changes you need to make after calling this will have to be made through the returned index
+*>
+fn BCBlockIdx BCGenerator.push_block_get_idx(BCGenerator* this, BCBlock* block)
+{
+	BCBlockIdx index = (BCBlockIdx)this.bcOutput.blocks.len();
+	this.bcOutput.blocks.push(*block);
+    return index;
+}
+
+macro BCFrameSlotIdx BCGenerator.fun_frame_slots_len(BCGenerator* this)
+{
+	assert(this.bcOutput.functionFrameSlots.len() < int::max);
+    return (BCFrameSlotIdx)this.bcOutput.functionFrameSlots.len();
+}
+
+macro BCBlockIdx BCGenerator.blocks_len(BCGenerator* this)
+{
+	assert(this.bcOutput.blocks.len() < int::max);
+    return (BCBlockIdx)this.bcOutput.blocks.len();
+}
+
+macro BCInstructionIdx BCGenerator.instructions_len(BCGenerator* this)
+{
+	assert(this.bcOutput.instructions.len() < int::max);
+    return (BCInstructionIdx)this.bcOutput.instructions.len();
+}
 
 fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand* operand)
 {
@@ -364,5 +392,18 @@ fn BCOpCode select_div_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 		case ValueType.DOUBLE: 		return BCOpCode.DIVD;
 		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
 	}
+	unreachable();
+}
+
+fn BCOpCode select_echo_op_code(CompTypeInfo typeInfo)
+{
+    switch(typeInfo.type)
+    {
+        case ValueType.INT: 		return BCOpCode.ECHOI;
+        case ValueType.FLOAT: 		return BCOpCode.ECHOF;
+        case ValueType.DOUBLE: 		return BCOpCode.ECHOD;
+        case ValueType.BOOL: 		return BCOpCode.ECHOB;
+        default:					log::errlogn("Unsupported %s operation", typeInfo.type);
+    }
 	unreachable();
 }

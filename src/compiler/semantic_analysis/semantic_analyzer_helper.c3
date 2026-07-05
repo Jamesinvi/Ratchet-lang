@@ -39,6 +39,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.BOOL_REF_NOGC:	{ result.type = ValueType.PTR; result.refToType = ValueType.BOOL; }
 		case TokenType.IDENTIFIER:
 		{
+            assert(globals::structTypes.len() < int::max);
 			String typeName = this.ast.names[input.nameIdx].text();
 			if (typeName.len == 0){
 				return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
@@ -54,16 +55,16 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 				result.type = (lastChar == '&') ? ValueType.REF : ValueType.PTR;
 				result.refToType = ValueType.STRUCT;
-				sz? structTypeIdx = globals::structNamesToIdx.get(baseName);
+				int? structTypeIdx = globals::structNamesToIdx.get(baseName);
 				if (catch err = structTypeIdx) {
-					sz nextIdx = globals::structTypes.len();
+					int nextIdx = (int)globals::structTypes.len();
 					CompStructTypeInfo structInfo = {};
 					globals::structTypes.push(structInfo);
 					String nameCopy = String.copy(baseName, &globals::compAllocator);
 					globals::structNamesToIdx[nameCopy] = nextIdx;
-					result.structTypeIndex = (uint)nextIdx;
+					result.structTypeIndex = nextIdx;
 				} else {
-					result.structTypeIndex = (uint)structTypeIdx;
+					result.structTypeIndex = structTypeIdx;
 				}
 				return type_ok(result);
 			}
@@ -72,36 +73,37 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.STRUCT;
-			sz? structTypeIdx = globals::structNamesToIdx.get(typeName);
+			int? structTypeIdx = globals::structNamesToIdx.get(typeName);
 			if (catch err = structTypeIdx) {
-				sz nextIdx = globals::structTypes.len();
+				int nextIdx = (int)globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
 				String nameCopy = String.copy(typeName, &globals::compAllocator);
 				globals::structNamesToIdx[nameCopy] = nextIdx;
-				result.structTypeIndex = (uint)nextIdx;
+				result.structTypeIndex = nextIdx;
 			} else {
-				result.structTypeIndex = (uint)structTypeIdx;
+				result.structTypeIndex = structTypeIdx;
 			}
 			return type_ok(result);
 		}
 		case TokenType.THIS:			
 		{
+            assert(globals::structTypes.len() < int::max);
 			String typeName = this.ast.names[input.nameIdx].text();
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.REF;
 			
-			sz? structTypeIdx = globals::structNamesToIdx.get(typeName);
+			int? structTypeIdx = globals::structNamesToIdx.get(typeName);
 			if (catch err = structTypeIdx) {
-				sz nextIdx = globals::structTypes.len();
+				int nextIdx = (int)globals::structTypes.len();
 				CompStructTypeInfo structInfo = {};
 				globals::structTypes.push(structInfo);
 				String nameCopy = String.copy(typeName, &globals::compAllocator);
 				globals::structNamesToIdx[nameCopy] = nextIdx;
-				result.structTypeIndex = (uint)nextIdx;
+				result.structTypeIndex = nextIdx;
 			}else{
-				result.structTypeIndex = (uint)structTypeIdx;
+				result.structTypeIndex = structTypeIdx;
 			}
 			result.refToType = ValueType.STRUCT;
 			return type_ok(result);
@@ -117,7 +119,7 @@ fn CompTypeInfo make_type(ValueType type)
 	return info;
 }
 
-fn CompTypeInfo make_ref_type(ValueType refToType, sz structIndex)
+fn CompTypeInfo make_ref_type(ValueType refToType, int structIndex)
 {
 	CompTypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex };
 	return info;
@@ -126,4 +128,10 @@ fn CompTypeInfo make_ref_type(ValueType refToType, sz structIndex)
 fn bool is_numeric_type(CompTypeInfo info)
 {
 	return info.type == ValueType.INT || info.type == ValueType.FLOAT || info.type == ValueType.DOUBLE;
+}
+
+macro SymbolIdx SemanticAnalyzer.symbols_len(SemanticAnalyzer* this)
+{
+    assert(this.symbolTable.symbols.len() < int::max);
+    return (SymbolIdx)this.symbolTable.symbols.len();
 }

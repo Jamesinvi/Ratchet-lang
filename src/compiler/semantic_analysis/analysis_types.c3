@@ -5,7 +5,7 @@ import common;
 import debug;
 
 
-alias SymbolIdx = sz;
+alias SymbolIdx = int;
 const NO_SYMBOL = -1;
 
 enum SymbolKind : char
@@ -18,15 +18,15 @@ enum SymbolKind : char
 
 struct Symbol
 {
-	SymbolKind kind;
 	SymbolIdx idx;
 	CompTypeInfo type;
+	SymbolKind kind;
 }
 
 struct DeclParamRange
 {
-	sz start;
-	sz end;
+	int start;
+	int end;
 }
 
 struct SymbolTable
@@ -42,7 +42,6 @@ struct SymbolTable
 	List{ExprIdx} callReceiverExpr; 		// index by ExprIdx (NO_IDX when absent)
 	List{Scope} scopes; 					// name -> SymbolIdx
 }
-
 
 enum CallTargetKind : char
 {
@@ -75,9 +74,9 @@ struct TypeResult
 {
 	CompTypeInfo value;
 	CompTypeInfo expected;
-	bool hadError;
-	ErrorKind errKind;
 	Span errSpan;
+	ErrorKind errKind;
+	bool hadError;
 }
 
 fn TypeResult type_ok(CompTypeInfo expected)
@@ -110,10 +109,10 @@ fn TypeResult SemanticAnalyzer.type_error(
 struct Scope
 {
 	TypeResult returnType;
-	sz enclosingIdx;
-	sz depth;
-	bool insideMethod;
 	Stack{SymbolIdx} visibleSymbols;
+	int enclosingIdx;
+	int depth;
+	bool insideMethod;
 }
 
 fn void Scope.init(Scope* this, TypeResult returnType, bool insideMethod)

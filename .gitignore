@@ -2,6 +2,9 @@ build/
 out/
 
 
+## Editors
+.idea
+
 ## Misc
 ratchet_compiler_migration_plan.md
 current_progress.md

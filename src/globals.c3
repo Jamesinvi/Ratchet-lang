@@ -20,7 +20,7 @@ HashMap{String, DeclIdx} declaredStructs;
 HashMap{String, DeclIdx} declaredFunctions;
 
 // This map maps a struct name to its index in structTypes
-HashMap{String, sz} structNamesToIdx;
+HashMap{String, int} structNamesToIdx;
 List{CompStructTypeInfo} structTypes;
 
 

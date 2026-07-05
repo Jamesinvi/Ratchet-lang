@@ -42,6 +42,12 @@ macro @log_mir(String msg, args ...){
     $endif
 }
 
+macro @log_bytecode(String msg, args ...){
+    $if ($feature(TRACE_BYTECODE)):
+        log::logn(msg,...args);
+    $endif
+}
+
 macro @print_type_stack(Stack{CompTypeInfo}* typeStack)
 {
     $if ($feature(TRACE_COMPILATION)):

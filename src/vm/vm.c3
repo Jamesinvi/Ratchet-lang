@@ -73,25 +73,61 @@ fn RunResult run(Vm* vm)
 	while(vm.running) {
 		BCInstruction* inst = vm.instructionPtr;
 		vm.instructionPtr++; 
-		
-		log::logn("%s", inst.opCode);
 		switch(inst.opCode)
 		{
+		    // Const
 			case BCOpCode.CONSTI:	vm.const_op(inst, int);
 			case BCOpCode.CONSTF:	vm.const_op(inst, float);
 			case BCOpCode.CONSTD:	vm.const_op(inst, double);
 			case BCOpCode.CONSTB:	vm.const_op(inst, bool);
+			// Less
 			case BCOpCode.LESSI:	vm.cmp_op(inst, int, VmCmpOp.LESS);
+			case BCOpCode.LESSF:	vm.cmp_op(inst, float, VmCmpOp.LESS);
+			case BCOpCode.LESSD:	vm.cmp_op(inst, double, VmCmpOp.LESS);
+			// Greater
+			case BCOpCode.GREATERI:	vm.cmp_op(inst, int, VmCmpOp.GREATER);
+			case BCOpCode.GREATERF:	vm.cmp_op(inst, float, VmCmpOp.GREATER);
+			case BCOpCode.GREATERD:	vm.cmp_op(inst, double, VmCmpOp.GREATER);
+			// Mov
 			case BCOpCode.MOVI:		vm.mov_op(inst, int);
 			case BCOpCode.MOVF:		vm.mov_op(inst, float);
 			case BCOpCode.MOVD:		vm.mov_op(inst, double);
 			case BCOpCode.MOVB:		vm.mov_op(inst, bool);
+			// Add
 			case BCOpCode.ADDI:		vm.bin_math_op(inst, int, VmMathOp.ADD);
 			case BCOpCode.ADDF:		vm.bin_math_op(inst, float, VmMathOp.ADD);
 			case BCOpCode.ADDD:		vm.bin_math_op(inst, double, VmMathOp.ADD);
+			// Sub
 			case BCOpCode.SUBI:		vm.bin_math_op(inst, int, VmMathOp.SUB);
+			case BCOpCode.SUBF:		vm.bin_math_op(inst, float, VmMathOp.SUB);
+			case BCOpCode.SUBD:		vm.bin_math_op(inst, double, VmMathOp.SUB);
+			// Mul
 			case BCOpCode.MULI:		vm.bin_math_op(inst, int, VmMathOp.MUL);
+			case BCOpCode.MULF:		vm.bin_math_op(inst, float, VmMathOp.MUL);
+			case BCOpCode.MULD:		vm.bin_math_op(inst, double, VmMathOp.MUL);
+			// Div
 			case BCOpCode.DIVI:		vm.bin_math_op(inst, int, VmMathOp.DIV);
+			case BCOpCode.DIVF:		vm.bin_math_op(inst, float, VmMathOp.DIV);
+			case BCOpCode.DIVD:		vm.bin_math_op(inst, double, VmMathOp.DIV);
+			// Echo
+			case BCOpCode.ECHOI:	vm.echo(inst, int);
+			case BCOpCode.ECHOF:	vm.echo(inst, float);
+			case BCOpCode.ECHOD:	vm.echo(inst, double);
+			case BCOpCode.ECHOB:	vm.echo(inst, bool);
+			// Control flow
+			case BCOpCode.BRANCH_IF_FALSE:
+			{
+			    bool* condition = (bool*)&vm.stack[vm.frame.base + inst.leftOffset];
+			    if(!*condition){
+			        BCBlock* block = &vm.program.blocks[inst.blockToJumpTo];
+		            vm.instructionPtr = &vm.program.instructions[(sz)block.instructionsStart]; 
+			    }
+			}
+            case BCOpCode.JUMP:
+            {
+                BCBlock* block = &vm.program.blocks[inst.blockToJumpTo];
+                vm.instructionPtr = &vm.program.instructions[(sz)block.instructionsStart]; 
+            }
 			case BCOpCode.CALL:
 			{
 				BCCallInfo callInfo = vm.program.callInfos[inst.callInfoIdx];
@@ -104,7 +140,7 @@ fn RunResult run(Vm* vm)
 				vm.frame.size = callee.frameSize;
 				vm.stackHead += callee.frameSize;
 				vm.frame.returnPtr = vm.instructionPtr;
-				vm.instructionPtr = &vm.program.instructions[callee.instructionsStart];
+				vm.instructionPtr = &vm.program.instructions[vm.program.blocks[callee.blocksStart].instructionsStart];
 				vm.frame.returnDestOffset = callInfo.returnDestOffset;
 				vm.frame.returnSize = callInfo.returnSize;
 
@@ -146,8 +182,15 @@ fn RunResult run(Vm* vm)
 		}
 	} 
 
-	vm.print_stack();
+	// vm.print_stack();
 	return RunResult.OK;
+}
+
+macro Vm.echo(Vm* vm, BCInstruction* inst, $Type)
+{
+	$Type* val = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
+	// use the vm output stream. stdout by default
+    io::fprintfn(vm.output, "%s", *val);
 }
 
 

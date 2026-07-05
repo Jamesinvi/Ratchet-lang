@@ -19,7 +19,7 @@ struct SemanticAnalyzer
 	List{TypeResult} errors;
 	Stack{Scope} scopes;
 	bool returnFound;
-	sz currentScopeIdx;
+	int currentScopeIdx;
 	DeclIdx currentStructDeclIdx;
 	DynamicArenaAllocator allocator;
 
@@ -80,8 +80,9 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	TypeResult globalReturnType = type_ok(make_type(ValueType.NULL));
 	this.begin_scope(globalReturnType, false);
 
+    assert(this.ast.declarations.len() < int::max);
 	// Predeclare function symbols with return types.
-	for (sz i = 0; i < this.ast.declarations.len(); i++){
+	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
 		Decl* decl = &this.ast.declarations[i];
 		if (decl.kind == DeclKind.FUNCTION) {
 			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
@@ -89,7 +90,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 			if (returnType.hadError) {
 				return returnType;
 			}
-			SymbolIdx symbolIdx = this.symbolTable.symbols.len();
+			SymbolIdx symbolIdx = this.symbols_len();
 			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
 			this.symbolTable.symbols.push(symbol);
 			this.symbolTable.declSymbols[i] = symbolIdx;
@@ -98,7 +99,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	}
 
 
-	for (sz i = 0; i < this.ast.loweredMethodsStart; i++){
+	for (int i = 0; i < this.ast.loweredMethodsStart; i++){
 		Decl* decl = &this.ast.declarations[i];
 		switch (decl.kind)
 		{
@@ -126,13 +127,13 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 
 fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params, DeclIdx ownerDeclIdx)
 {
-	sz rangeStart = this.symbolTable.declParamSymbols.len();
+	int rangeStart = (int)this.symbolTable.declParamSymbols.len();
 	foreach (&param : *params){
 		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
 		if (paramType.hadError) {
 			return paramType;
 		}
-		SymbolIdx symbolIdx = this.symbolTable.symbols.len();
+		SymbolIdx symbolIdx = this.symbols_len();
 		Symbol symbol = { .kind = SymbolKind.PARAM, .idx = (SymbolIdx)param.nameIdx, .type = paramType.value };
 		this.symbolTable.symbols.push(symbol);
 		this.symbolTable.declParamSymbols.push(symbolIdx);
@@ -140,21 +141,22 @@ fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{Param
 	}
 	this.symbolTable.declParamRanges[ownerDeclIdx] = {
 		.start = rangeStart,
-		.end = this.symbolTable.declParamSymbols.len(),
+		.end = (int)this.symbolTable.declParamSymbols.len(),
 	};
 	return type_ok(make_type(ValueType.NULL));
 }
 
 fn void SemanticAnalyzer.begin_scope(SemanticAnalyzer* this, TypeResult returnType, bool insideMethod)
 {
-	sz enclosingIdx = 0;
+	int enclosingIdx = 0;
 	if (this.scopes.size > 0) {
 		enclosingIdx = this.currentScopeIdx;
 	}
-	Scope scope = {.depth = this.scopes.size, .enclosingIdx = enclosingIdx };
+	assert(this.scopes.size < int::max);
+	Scope scope = {.depth = (int)this.scopes.size, .enclosingIdx = enclosingIdx };
 	scope.init(returnType, insideMethod);
 	this.scopes.push(scope);
-	this.currentScopeIdx = this.scopes.size - 1;
+	this.currentScopeIdx = (int)this.scopes.size - 1;
 }
 
 fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
@@ -162,8 +164,9 @@ fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
 	Scope popped = this.scopes.pop();
 	popped.visibleSymbols.free();
 	debug::@log_analysis("exiting scope");
+	assert(this.scopes.size < int::max);
 	if (this.scopes.size > 0) {
-		this.currentScopeIdx = this.scopes.size - 1;
+		this.currentScopeIdx = (int)this.scopes.size - 1;
 	}
 }
 
@@ -282,10 +285,12 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	return type_ok(expectedRetType.value);
 }
 
-fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, sz structTypeIndex)
+fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, int structTypeIndex)
 {
 	// Search for a struct that has the same structTypeIndex 
+	assert(this.ast.declarations.len() < int::max);
 	foreach(idx, &decl : this.ast.declarations){
+	    int index = (int)idx;
 		if (decl.kind != DeclKind.STRUCT) {
 			continue;
 		}
@@ -293,12 +298,12 @@ fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, sz stru
 		if (!globals::structNamesToIdx.has_key(structName)) {
 			continue;
 		}
-		sz? indexInStructNames = globals::structNamesToIdx.get(structName);
+		int? indexInStructNames = globals::structNamesToIdx.get(structName);
 		if (catch err = indexInStructNames) {
 			continue;
 		}
-		if ((uint)indexInStructNames == structTypeIndex) {
-			return idx;
+		if (indexInStructNames == structTypeIndex) {
+			return index;
 		}
 	}
 	return parser::NO_IDX;
@@ -329,7 +334,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 			if (lhsType.hadError) {
 				return lhsType;
 			}
-			SymbolIdx symbolIdx = this.symbolTable.symbols.len();
+			SymbolIdx symbolIdx = this.symbols_len();
 			Symbol symbol = { .kind = SymbolKind.LOCAL, .idx = stmtIdx, .type = lhsType.value };
 			this.symbolTable.symbols.push(symbol);
 			this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;

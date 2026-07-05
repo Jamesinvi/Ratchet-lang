@@ -1,6 +1,6 @@
 module common;
 
-enum ValueType
+enum ValueType : char
 {
 	INT, 
 	FLOAT,

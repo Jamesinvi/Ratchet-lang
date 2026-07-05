@@ -5,16 +5,17 @@ import std::collections::list;
 import log;
 
 alias MirRegisterID = int;
-alias MirBlockIdx = sz;
-alias MirPlaceIdx = sz;
-alias MirProjectionIdx = sz;
-alias MirInstructionIdx = sz;
-alias MirTerminatorIdx = sz;
-alias OperandIdx = sz;
+alias MirBlockIdx = int;
+alias MirPlaceIdx = int;
+alias MirProjectionIdx = int;
+alias MirInstructionIdx = int;
+alias MirTerminatorIdx = int;
+alias OperandIdx = int;
 
 const NO_REG = -1;
 const NO_TERMINATOR = -1;
 const NO_PROJECTION = -1;
+const NO_BLOCK = -1;
 
 bitstruct MirRegisterFlags : char
 {
@@ -48,6 +49,7 @@ enum MirOpCode : char (String asStr)
 	STORE 		{ "store" },
 	CALL  		{ "call" },
 	LOAD 		{ "load" },
+	ECHO 		{ "echo" },
 }
 
 enum MirTerminatorOp : char (String asStr)
@@ -74,7 +76,6 @@ enum MirOperandKind : char (String asStr)
 
 struct MirOperand
 {
-	MirOperandKind kind;
 	union {
 		MirRegisterID 	regId;
 		MirPlaceIdx 	placeIdx;
@@ -85,6 +86,7 @@ struct MirOperand
 		double 			immDouble;
 		bool 			immBool;
 	}
+	MirOperandKind kind;
 }
 
 struct MirInstruction
@@ -130,8 +132,8 @@ struct MirBlock
 
 struct MirFunction
 {
-	sz blocksStart;
-	sz blocksEnd;
+	MirBlockIdx blocksStart;
+	MirBlockIdx blocksEnd;
 	DeclIdx sourceDeclIdx;
 }
 

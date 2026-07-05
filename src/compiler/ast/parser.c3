@@ -524,7 +524,7 @@ fn void Parser.fill_call_args(Parser* this, ExprCall* exprCall)
 {
 	// We're CALLING a function, so we allow expressions as arguments
 	// Consume as many as we can find.
-	exprCall.argsStart = this.outputAst.args.len();
+	exprCall.argsStart = (ExprIdx)this.outputAst.args.len();
 	int arityCounter = 0;
 	if (!this.check(TokenType.RIGHT_PAREN))
 	{

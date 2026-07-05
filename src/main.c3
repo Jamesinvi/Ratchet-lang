@@ -16,9 +16,6 @@ fn int main(String[] args)
 	if(result.outcome != CompilationOutcome.NO_ERROR){
 		return (int)result.outcome;
 	}
-    return (int)result.outcome;
-	// VM Runs start here, but is WIP
-
 	RunResult runResult = run(result.compiledProgram);
 	cleanup();
     return (int)result.outcome;

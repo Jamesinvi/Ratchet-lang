@@ -74,11 +74,8 @@ fn CompilationResult compile_file(String path)
 		result.outcome = CompilationOutcome.PARSE_ERROR;
 		return result;
     }
-	compilationCtx.parser.outputAst.print();
-
-
+	// compilationCtx.parser.outputAst.print();
 	compilationCtx.analyzer.init(&compilationCtx.parser.outputAst);
-	
 	TypeResult typeResult = compilationCtx.analyzer.run();
 	
 	foreach(err : compilationCtx.analyzer.errors){
@@ -93,6 +90,9 @@ fn CompilationResult compile_file(String path)
 
 	compilationCtx.mirGen.init(&compilationCtx.parser.outputAst, &compilationCtx.analyzer.symbolTable);
 	MirGenResult mirResult = compilationCtx.mirGen.run();
+	
+	// compilationCtx.mirGen.output.print(compilationCtx.mirGen.inputAst, compilationCtx.mirGen.symbolTable);
+	
 	if(mirResult != MirGenResult.OK){
 		result.outcome = CompilationOutcome.MIR_ERROR;
 		return result;
@@ -101,10 +101,12 @@ fn CompilationResult compile_file(String path)
 	}
 
 	result.outcome = CompilationOutcome.NO_ERROR;
-	return result;
 	// Bytecode is WIP
 	compilationCtx.byteCodeGen.init(&compilationCtx);
 	compilationCtx.byteCodeGen.run();
+	
+	// compilationCtx.byteCodeGen.bcOutput.print();
+	
 	result.compiledProgram = &compilationCtx.compiledProgram;
 	result.outcome = CompilationOutcome.NO_ERROR;
 	return result;

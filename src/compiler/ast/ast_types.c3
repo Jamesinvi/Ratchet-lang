@@ -3,10 +3,10 @@ import common;
 import log;
 import std::collections::list;
 
-alias NameIdx = sz;
-alias ExprIdx = sz;
-alias DeclIdx = sz;
-alias StmtIdx = sz;
+alias NameIdx = int;
+alias ExprIdx = int;
+alias DeclIdx = int;
+alias StmtIdx = int;
 
 const NO_IDX = -1;
 

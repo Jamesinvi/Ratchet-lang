@@ -7,7 +7,7 @@ const NOT_STRUCT = -1;
 
 struct CompTypeInfo
 {
-    sz structTypeIndex;         // -1 is reserved for non-structs
+    int structTypeIndex;        // -1 is reserved for non-structs
     ValueType type;
     ValueType refToType;        // Will be ValueType.NULL when not it's not a reference
 }
