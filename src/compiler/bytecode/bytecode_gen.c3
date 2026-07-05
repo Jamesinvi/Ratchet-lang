@@ -64,6 +64,7 @@ fn void BCGenerator.run(BCGenerator* this)
 		this.prepare_func_bindings(func);
 		this.lower_fun(func, funcIdx);
 	}
+	optimize(this.bcOutput);
 
 }
 	

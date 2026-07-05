@@ -26,7 +26,7 @@ fn void MirGenerator.terminate_current_block_with_jump(MirGenerator* this, MirBl
     block.terminator = this.push_terminator_get_idx(&jumpTerm);
 }
 
-fn MirBlockIdx MirGenerator.push_empty_block(MirGenerator* this)
+fn MirBlockIdx MirGenerator.push_empty_block_get_idx(MirGenerator* this)
 {
     MirBlockIdx idx = this.blocks_len();
     MirBlock block = {

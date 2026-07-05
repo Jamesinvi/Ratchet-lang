@@ -1,15 +1,12 @@
 
 // Entry-point. Should return true if errors occured
 fn bool program(){
-    int a = 12;
-    int b = 14;
-    int c = 0;
-    if(b>a){
-        c = 100;
-        if(12.3f < 15.999f){
-            c = c +1;
-        }
+    int a = 0;
+    int b = 3;
+    while(a<2000000000){
+        a = a+b;
+        b = b +1;
     }
-    echo(c);
+    echo (a);
     return false;
 }

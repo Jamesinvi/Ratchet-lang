@@ -14,12 +14,22 @@ alias BCArgIdx = short;
 
 const NO_OFFSET = -1;
 
-
+const BCInstruction NO_OP = {
+	.opCode = BCOpCode.NOP,
+	.immKind = BCOperandKind.INVALID,
+	.destOffset = NO_OFFSET,
+	.leftOffset = NO_OFFSET,
+	.rightOffset = NO_OFFSET,
+};
+	
 enum BCOpCode : char (String asStr)
 {
+	NOP				{ "______" },
 	ADDI	        { "add__i" },
 	ADDF	        { "add__f" },	
 	ADDD	        { "add__d" },
+	ADDI_IM			{ "add_ik" },
+	INCREMENT		{ "inc__i" },
 	SUBI	        { "sub__i" },
 	SUBF	        { "sub__f" },
 	SUBD	        { "sub__d" },
@@ -49,6 +59,7 @@ enum BCOpCode : char (String asStr)
 	NEQD	        { "!eq__d" },
 	NEQB	        { "!eq__b" },
 	LESSI	        { "less_i" },
+	LESSI_IM	    { "lessik" },
 	LESSF	        { "less_f" },
 	LESSD	        { "less_d" },
 	GREATERI        { "grteri" },
@@ -109,7 +120,7 @@ struct BCInstruction
         int immInt;
         float immFloat;
         double immDouble;
-        bool immBool;
+		bool immBool;
 		BCCallInfoIdx callInfoIdx;
 		BCBlockIdx  blockToJumpTo;
     }

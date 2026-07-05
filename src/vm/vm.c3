@@ -43,6 +43,9 @@ struct Vm
     StackFrame* 			frame;
 	BCProgram* 				program;
 	BCInstruction* 			instructionPtr;
+	BCInstruction* 			instructions;
+	BCFunction* 			functions;
+	BCBlock* 				blocks;
     HeapTracker 			trackedHeap;
     HeapTracker 			untrackedHeap;
     OutStream 				output;
@@ -63,18 +66,22 @@ fn void Vm.init(Vm* this, BCProgram* program, OutStream output)
 fn RunResult run(Vm* vm)
 {
 	vm.running = true;
-    vm.instructionPtr = &vm.program.instructions[0];
+	vm.functions = vm.program.functions.entries;
+	vm.instructions = vm.program.instructions.entries;
+	vm.blocks = vm.program.blocks.entries;
+    vm.instructionPtr = &vm.instructions[0];
 	vm.frameCount++;
 	vm.frame = &vm.frames[vm.frameCount -1];
 	vm.frame.base = 0;
-	vm.frame.size = vm.program.functions[0].frameSize;
-	vm.stackHead = vm.program.functions[0].frameSize;
+	vm.frame.size = vm.functions[0].frameSize;
+	vm.stackHead = vm.functions[0].frameSize;
 
 	while(vm.running) {
 		BCInstruction* inst = vm.instructionPtr;
 		vm.instructionPtr++; 
 		switch(inst.opCode)
 		{
+			case BCOpCode.NOP:		continue;
 		    // Const
 			case BCOpCode.CONSTI:	vm.const_op(inst, int);
 			case BCOpCode.CONSTF:	vm.const_op(inst, float);
@@ -84,6 +91,7 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.LESSI:	vm.cmp_op(inst, int, VmCmpOp.LESS);
 			case BCOpCode.LESSF:	vm.cmp_op(inst, float, VmCmpOp.LESS);
 			case BCOpCode.LESSD:	vm.cmp_op(inst, double, VmCmpOp.LESS);
+			case BCOpCode.LESSI_IM:	vm.cmp_op_immediate(inst, int, VmCmpOp.LESS);
 			// Greater
 			case BCOpCode.GREATERI:	vm.cmp_op(inst, int, VmCmpOp.GREATER);
 			case BCOpCode.GREATERF:	vm.cmp_op(inst, float, VmCmpOp.GREATER);
@@ -94,9 +102,16 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.MOVD:		vm.mov_op(inst, double);
 			case BCOpCode.MOVB:		vm.mov_op(inst, bool);
 			// Add
+			case BCOpCode.INCREMENT:
+			{
+				int* v = (int*)&vm.stack[vm.frame.base + inst.destOffset];
+				*v  = (*v) + 1;
+
+			}
 			case BCOpCode.ADDI:		vm.bin_math_op(inst, int, VmMathOp.ADD);
 			case BCOpCode.ADDF:		vm.bin_math_op(inst, float, VmMathOp.ADD);
 			case BCOpCode.ADDD:		vm.bin_math_op(inst, double, VmMathOp.ADD);
+			case BCOpCode.ADDI_IM:	vm.bin_math_op_immediate(inst, int, VmMathOp.ADD);
 			// Sub
 			case BCOpCode.SUBI:		vm.bin_math_op(inst, int, VmMathOp.SUB);
 			case BCOpCode.SUBF:		vm.bin_math_op(inst, float, VmMathOp.SUB);
@@ -119,19 +134,19 @@ fn RunResult run(Vm* vm)
 			{
 			    bool* condition = (bool*)&vm.stack[vm.frame.base + inst.leftOffset];
 			    if(!*condition){
-			        BCBlock* block = &vm.program.blocks[inst.blockToJumpTo];
-		            vm.instructionPtr = &vm.program.instructions[(sz)block.instructionsStart]; 
+			        BCBlock* block = &vm.blocks[inst.blockToJumpTo];
+		            vm.instructionPtr = &vm.instructions[(sz)block.instructionsStart]; 
 			    }
 			}
             case BCOpCode.JUMP:
             {
-                BCBlock* block = &vm.program.blocks[inst.blockToJumpTo];
-                vm.instructionPtr = &vm.program.instructions[(sz)block.instructionsStart]; 
+                BCBlock* block = &vm.blocks[inst.blockToJumpTo];
+                vm.instructionPtr = &vm.instructions[(sz)block.instructionsStart]; 
             }
 			case BCOpCode.CALL:
 			{
 				BCCallInfo callInfo = vm.program.callInfos[inst.callInfoIdx];
-				BCFunction callee = vm.program.functions[callInfo.calleeIdx];
+				BCFunction callee = vm.functions[callInfo.calleeIdx];
 				// Setup the new stack frame
 				StackFrame* callerFrame = vm.frame; // Store the old one to copy arguments into the new one 
 				vm.frameCount++;
@@ -140,7 +155,7 @@ fn RunResult run(Vm* vm)
 				vm.frame.size = callee.frameSize;
 				vm.stackHead += callee.frameSize;
 				vm.frame.returnPtr = vm.instructionPtr;
-				vm.instructionPtr = &vm.program.instructions[vm.program.blocks[callee.blocksStart].instructionsStart];
+				vm.instructionPtr = &vm.instructions[vm.blocks[callee.blocksStart].instructionsStart];
 				vm.frame.returnDestOffset = callInfo.returnDestOffset;
 				vm.frame.returnSize = callInfo.returnSize;
 
@@ -222,10 +237,10 @@ macro Vm.cmp_op(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 	$Type* right = ($Type*)&vm.stack[vm.frame.base + inst.rightOffset];
 	bool result;
 	$switch $op:
-		$case VmCmpOp.EQ: 		result = left == right;
-		$case VmCmpOp.NEQ: 		result = left != right;
-		$case VmCmpOp.LESS: 	result = left < right;
-		$case VmCmpOp.GREATER: 	result = left > right;
+		$case VmCmpOp.EQ: 		result = *left == *right;
+		$case VmCmpOp.NEQ: 		result = *left != *right;
+		$case VmCmpOp.LESS: 	result = *left < *right;
+		$case VmCmpOp.GREATER: 	result = *left > *right;
 	$endswitch
 	*dst = result;
 }
@@ -246,3 +261,47 @@ macro Vm.bin_math_op(Vm* vm, BCInstruction* inst, $Type, VmMathOp $op)
 	$endswitch
 	*dst = result;
 }
+
+macro Vm.bin_math_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmMathOp $op)
+{
+	$Type* dst = ($Type*)&vm.stack[vm.frame.base + inst.destOffset];
+	$Type* left = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
+	$Type leftVal = *left;
+	$Type rightVal;
+	$switch $Type:
+		$case int: 		rightVal = inst.immInt;
+		$case float:	rightVal = inst.immFloat;
+		$case double: 	rightVal = inst.immDouble;
+	$endswitch
+	$Type result;
+	$switch $op:
+		$case VmMathOp.ADD: result = leftVal + rightVal;
+		$case VmMathOp.SUB: result = leftVal - rightVal;
+		$case VmMathOp.MUL: result = leftVal * rightVal;
+		$case VmMathOp.DIV: result = leftVal / rightVal;
+	$endswitch
+	*dst = result;
+}
+
+
+
+macro Vm.cmp_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
+{
+	bool* dst = (bool*)&vm.stack[vm.frame.base + inst.destOffset];
+	$Type* left = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
+	$Type right;
+	bool result;
+	$switch $Type:
+		$case int: 		right = inst.immInt;
+		$case float:	right = inst.immFloat;
+		$case double: 	right = inst.immDouble;
+	$endswitch
+	$switch $op:
+		$case VmCmpOp.EQ: 		result = *left == right;
+		$case VmCmpOp.NEQ: 		result = *left != right;
+		$case VmCmpOp.LESS: 	result = *left < right;
+		$case VmCmpOp.GREATER: 	result = *left > right;
+	$endswitch
+	*dst = result;
+}
+

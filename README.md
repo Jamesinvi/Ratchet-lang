@@ -276,8 +276,6 @@ method null translate(float dx, float dy)
 fn null Vec2_translate(inout Vec2 self, float dx, float dy)
 ```
 
-Interfaces are currently not part of the active language direction. They may be reconsidered later, but the current design favors concrete structs, free functions, methods, borrow parameters, and coroutines.
-
 <a id="examples" name="examples"></a>
 ## Examples
 

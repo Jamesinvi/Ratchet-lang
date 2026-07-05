@@ -129,9 +129,14 @@ fn void MirGenerator.lower_stmt(MirGenerator* this, StmtIdx stmtIdx)
 		case StmtKind.ECHO:		this.lower_echo(stmtIdx);
 		case StmtKind.DECL:		this.lower_var_decl(stmtIdx);
 		case StmtKind.IF:		this.lower_if(stmtIdx);
+		case StmtKind.WHILE:    this.lower_while(stmtIdx);
 		case StmtKind.RETURN:	this.lower_return(stmtIdx);
 		case StmtKind.EXPR:		this.lower_expr(stmt.exprStmt);
-		default: 				break;
+		default: 
+		{
+			log::errlogn("Unsupported statement %s in mir gen", stmt.kind);
+			unreachable();
+		};
 	}
 }
 
@@ -155,6 +160,55 @@ fn void MirGenerator.lower_echo(MirGenerator* this, StmtIdx stmtIdx)
     };
 	this.output.instructions.push(instruction);
 }
+
+fn void MirGenerator.lower_while(MirGenerator* this, StmtIdx stmtIdx)
+{  
+	Stmt* stmt = &this.inputAst.statements[stmtIdx];
+    BlockStmt* body = &this.inputAst.statements[stmt.whileStmt.body].blockStmt;
+
+    // 1. Split before condition.
+    MirBlockIdx condBlockIdx = this.push_empty_block_get_idx();
+    this.terminate_current_block_with_jump(condBlockIdx);
+
+    // 2. Lower condition in its own block.
+    this.currentBlock = condBlockIdx;
+    MirOperand condOperand = this.lower_expr(stmt.whileStmt.cond);
+
+    // 3. Create body block now. Join is still unknown.
+    MirBlockIdx bodyBlockIdx = this.push_empty_block_get_idx();
+
+    OperandIdx branchStart = this.operands_len();
+    this.output.operands.push(condOperand);
+    this.output.operands.push({ .kind = MirOperandKind.BLOCK, .blockIdx = bodyBlockIdx });
+    this.output.operands.push({ .kind = MirOperandKind.BLOCK, .blockIdx = NO_BLOCK }); // join, patched later
+    OperandIdx branchEnd = this.operands_len();
+
+    MirTerminator branchTerm = {
+        .opCode = MirTerminatorOp.BRANCH,
+        .operandsStart = branchStart,
+        .operandsEnd = branchEnd,
+    };
+
+    this.output.blocks[condBlockIdx].instructionsEnd = this.instructions_len();
+    this.output.blocks[condBlockIdx].terminator = this.push_terminator_get_idx(&branchTerm);
+
+    // 4. Lower body.
+    this.currentBlock = bodyBlockIdx;
+    foreach (bodyStmtIdx : body.stmts) {
+        this.lower_stmt(bodyStmtIdx);
+    }
+
+    // 5. Close body by jumping back to condition.
+    this.terminate_current_block_with_jump(condBlockIdx);
+
+    // 6. Now create join, after body is finalized, and patch false target.
+    MirBlockIdx joinBlockIdx = this.push_empty_block_get_idx();
+    this.output.operands[(sz)branchStart + 2].blockIdx = joinBlockIdx;
+
+    // 7. Continue after loop.
+    this.currentBlock = joinBlockIdx;
+}
+
 
 fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
 {
@@ -185,7 +239,7 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
     this.output.blocks[branchBlockIdx].terminator = this.push_terminator_get_idx(&branchTerm);
     
     // Lower then.
-    MirBlockIdx thenBlockIdx = this.push_empty_block();
+    MirBlockIdx thenBlockIdx = this.push_empty_block_get_idx();
     this.currentBlock = thenBlockIdx;
     
     foreach (thenStmtIdx : thenStmt.stmts) {
@@ -198,7 +252,7 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
     MirBlockIdx elseBlockIdx = NO_BLOCK;
     MirBlockIdx elseExitBlockIdx = NO_BLOCK;
     if (hasElse) {
-        elseBlockIdx = this.push_empty_block();
+        elseBlockIdx = this.push_empty_block_get_idx();
         this.currentBlock = elseBlockIdx;
     
         foreach (elseStmtIdx : elseStmt.stmts) {
@@ -210,7 +264,7 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
     
     // Create join after both bodies are lowered.
     // This matters because then/else bodies may allocate nested blocks.
-    MirBlockIdx joinBlockIdx = this.push_empty_block();
+    MirBlockIdx joinBlockIdx = this.push_empty_block_get_idx();
     
     // Patch branch targets now that real block ids are known.
     MirBlockIdx falseTarget = hasElse ? elseBlockIdx : joinBlockIdx;

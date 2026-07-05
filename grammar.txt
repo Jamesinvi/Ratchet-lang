@@ -1,59 +1,73 @@
-program        → declaration* EOF ;
+program        -> declaration* EOF ;
 
-// DECLARATIONS
-declaration    → structDecl | interfaceDecl | funDecl ;
-structDecl     → "struct" IDENTIFIER ( ":" IDENTIFIER ( "," IDENTIFIER )* )?
-                 "{" structMember* "}" ;
-interfaceDecl  → "interface" IDENTIFIER "{" interfaceMember* "}" ;
-structMember   → varDecl | methodDecl ;
-interfaceMember→ fieldDecl | methodDecl ;
-fieldDecl      → "field" type IDENTIFIER ";" ;
-funDecl        → "fn" function ;
-methodDecl     → "method" function ;
-varDecl        → type IDENTIFIER ( "=" expression )? ";" ;
-type           → baseType typeModifier* ;
-baseType       → "int" | "float" | "double" | "bool" | "string" | IDENTIFIER ;
-typeModifier   → "&" | "*" | "[]" ;
+// Top-level declarations
+declaration    -> funDecl | structDecl ;
+funDecl        -> "fn" type IDENTIFIER "(" parameters? ")" block ;
+structDecl     -> "struct" IDENTIFIER "{" structMember* "}" ;
+structMember   -> fieldDecl | methodDecl ;
+fieldDecl      -> type IDENTIFIER ";" ;
+methodDecl     -> "method" type IDENTIFIER "(" parameters? ")" block ;
 
-// STATEMENTS
-statement      → varDecl | exprStmt | forStmt | ifStmt | returnStmt | whileStmt | block ;
-exprStmt       → expression ";" ;
-forStmt        → "for" "(" ( varDecl | exprStmt | ";" )
-                           expression? ";"
-                           expression? ")" statement ;
-ifStmt         → "if" "(" expression ")" block ( "else" block )? ;
-returnStmt     → "return" expression? ";" ;
-whileStmt      → "while" "(" expression ")" statement ;
-block          → "{" statement* "}" ;
+// Types
+// Type parsing consumes one type token. Built-in refs such as "int&" are
+// single lexer tokens. Declared struct refs/pointers such as "Vec3&" and
+// "Vec3*" are accepted as identifier-like type tokens after predeclaration.
+type           -> "int"
+               | "float"
+               | "double"
+               | "bool"
+               | "string"
+               | "null"
+               | "int&" | "float&" | "double&" | "bool&"
+               | DECLARED_STRUCT_TYPE
+               | DECLARED_STRUCT_REF_OR_PTR ;
 
-// EXPRESSIONS
-expression     → assignment ;
-assignment     → lvalue "=" assignment
-               | logic_or ;
-lvalue         → IDENTIFIER ( "." IDENTIFIER | "[" expression "]" )* ;
-logic_or       → logic_and ( "||" logic_and )* ;
-logic_and      → equality ( "&&" equality )* ;
-equality       → comparison ( ( "!=" | "==" ) comparison )* ;
-comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term           → factor ( ( "-" | "+" ) factor )* ;
-factor         → unary ( ( "/" | "*" ) unary )* ;
-unary          → ( "!" | "-" ) unary | cast | call ;
-cast           → call "as" type ;
-call           → primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
-primary        → "true" | "false" | "null"
-               | INTEGER | FLOAT | DOUBLE
-               | STRING | IDENTIFIER
-               | structLiteral
-               | newExpr
+parameters     -> parameter ( "," parameter )* ;
+parameter      -> type IDENTIFIER ;
+
+// Statements
+statement      -> echoStmt
+               | block
+               | ifStmt
+               | whileStmt
+               | returnStmt
+               | exprStmt ;
+
+block          -> "{" blockItem* "}" ;
+blockItem      -> varDecl | statement ;
+varDecl        -> type IDENTIFIER ( "=" expression )? ";" ;
+echoStmt       -> "echo" expression ";" ;
+exprStmt       -> expression ";" ;
+ifStmt         -> "if" "(" expression ")" block ( "else" block )? ;
+whileStmt      -> "while" "(" expression ")" block ;
+returnStmt     -> "return" expression? ";" ;
+
+// Expressions, written by precedence from lowest to highest.
+expression     -> assignment ;
+assignment     -> asExpr ( "=" asExpr )* ;
+asExpr         -> logic_or ( "as" type )* ;
+logic_or       -> logic_and ( "or" logic_and )* ;
+logic_and      -> equality ( "and" equality )* ;
+equality       -> comparison ( ( "!=" | "==" ) comparison )* ;
+comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term           -> factor ( ( "-" | "+" ) factor )* ;
+factor         -> unary ( ( "/" | "*" ) unary )* ;
+unary          -> ( "!" | "-" ) unary | call ;
+call           -> primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+primary        -> "true"
+               | "false"
+               | "null"
+               | "this"
+               | INTEGER
+               | FLOAT
+               | DOUBLE
+               | STRING
+               | IDENTIFIER
+               | "new" type
                | "(" expression ")" ;
-structLiteral  → "{" fieldInit ( "," fieldInit )* "}" ;
-fieldInit      → IDENTIFIER "=" expression ;
-newExpr        → "new" type ( structLiteral | "(" expression ")" | arrayAlloc )? ;
-arrayAlloc     → "[" expression "]" ( "[" expression "]" )* ;
 
-// UTILITY
-function       → returnType IDENTIFIER "(" parameters? ")" block ;
-parameters     → parameter ( "," parameter )* ;
-parameter      → type IDENTIFIER ;
-arguments      → expression ( "," expression )* ;
-returnType     → type | "null" ;
+arguments      -> expression ( "," expression )* ;
+
+// Not currently parsed despite older grammar entries:
+// top-level method declarations, for statements, array/index syntax,
+// struct literals, and "new" initializers.
