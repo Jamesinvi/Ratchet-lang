@@ -307,7 +307,9 @@ fn BCOpCode select_cmp_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 		case BCOpCodeCategory.EQ:  		return select_eq_op_code(typeInfo, opCodeCategory);
 		case BCOpCodeCategory.NEQ: 		return select_neq_op_code(typeInfo, opCodeCategory);
 		case BCOpCodeCategory.LESS: 	return select_less_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.LESS_EQ: 	return select_less_eq_op_code(typeInfo, opCodeCategory);
 		case BCOpCodeCategory.GREATER: 	return select_grter_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.GREATER_EQ: return select_grter_eq_op_code(typeInfo, opCodeCategory);
 		case BCOpCodeCategory.AND: 		return BCOpCode.AND;
 		case BCOpCodeCategory.OR: 		return BCOpCode.OR;
 		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
@@ -367,6 +369,18 @@ fn BCOpCode select_less_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCa
 	unreachable();
 }
 
+fn BCOpCode select_less_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.LESS_EQI;
+		case ValueType.FLOAT: 		return BCOpCode.LESS_EQF;
+		case ValueType.DOUBLE: 		return BCOpCode.LESS_EQD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
 fn BCOpCode select_grter_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
@@ -374,6 +388,18 @@ fn BCOpCode select_grter_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeC
 		case ValueType.INT: 		return BCOpCode.GREATERI;
 		case ValueType.FLOAT: 		return BCOpCode.GREATERF;
 		case ValueType.DOUBLE: 		return BCOpCode.GREATERD;
+		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
+	}
+	unreachable();
+}
+
+fn BCOpCode select_grter_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+{
+	switch(typeInfo.type)
+	{
+		case ValueType.INT: 		return BCOpCode.GREATER_EQI;
+		case ValueType.FLOAT: 		return BCOpCode.GREATER_EQF;
+		case ValueType.DOUBLE: 		return BCOpCode.GREATER_EQD;
 		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
 	}
 	unreachable();
