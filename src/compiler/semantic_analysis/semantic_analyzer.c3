@@ -108,12 +108,40 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 			}
 		}
 
-		// Loop over the struct declarations we saved, and fill in all its info/sizes etc.
-		for(int i = 0; i < (int)structDeclIndices.len(); i++){
-			DeclIdx declIdx = structDeclIndices[i];
-			Decl* decl = &this.ast.declarations[declIdx];
-			assert(decl.kind == DeclKind.STRUCT);
-			this.fill_struct_info(decl, this.ast);
+		// Allocate a list to track which structs managed to determine their metadata
+		List{bool} done = {};
+		done.tinit(structDeclIndices.len());
+		common::list_append_fill{bool}(&done, false, structDeclIndices.len());
+		sz remaining = structDeclIndices.len();
+		// Continue trying to loop through all structs determining their metadata. 
+		// If no progress was made in an iteration it must mean there's a circular reference
+		while(remaining > 0){
+			bool madeProgress = false;
+			for (int i = 0; i < (int)structDeclIndices.len(); i++) {
+				// Already done, early out
+				if (done[i]) {
+					continue;
+				}
+
+				DeclIdx declIdx = structDeclIndices[i];
+				Decl* decl = &this.ast.declarations[declIdx];
+				StructLayoutResult result = this.try_fill_struct_info(decl, this.ast);
+
+				switch (result) {
+					case StructLayoutResult.DONE:
+					{
+						done[i] = true;
+						remaining--;
+						madeProgress = true;
+					}
+					case StructLayoutResult.DEFER:	 continue; // Try again after other structs are laid out.
+					case StructLayoutResult.ERROR:   return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, {});
+				}
+			}
+			// Break out. Special error for circular references
+			if(!madeProgress){
+				return this.type_error(ErrorKind.UNRESOLVED_STRUCT, nullType, nullType, {});
+			}
 		}
 	};
 

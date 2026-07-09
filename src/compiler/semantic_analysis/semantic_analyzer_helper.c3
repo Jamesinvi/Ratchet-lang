@@ -119,25 +119,45 @@ fn int get_struct_idx_bind_if_needed(String name)
 	}
 }
 
+enum StructLayoutResult : char
+{
+	DONE,
+	DEFER,
+	ERROR,
+}
 <*
 	Fills in all details of a struct declaration. This is done just before the program is fully analyzed. 
 	All types however, should be already declared in a previous pass.
 *>
-fn void SemanticAnalyzer.fill_struct_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
+fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
 	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text());
 	CompStructTypeInfo* info = &globals::structTypes[index];
 	String name = ast.names[decl.structDecl.nameIdx].text();
+
 	// CompStructTypeInfo owns its data, so we must  init() it
 	info.init();
-	info.isDefined = true;
-	info.name = String.copy(name, &globals::typeInfoAllocator);
-
     ushort offset = 0;
     ushort maxAlign = 1;
+	// First pass: check if we can actually fill in the info
+	foreach (&field : decl.structDecl.fields) {
+        TypeResult fieldTypeResult = this.create_type_from_ast(&field.type, {});
+        if (fieldTypeResult.hadError){
+			return StructLayoutResult.ERROR;
+		} 
+        CompTypeInfo fieldType = fieldTypeResult.value;
+		if (fieldType.type == ValueType.STRUCT) {
+			int fieldStructIndex = fieldType.structTypeIndex;
+			CompStructTypeInfo* fieldStructInfo = &globals::structTypes[fieldStructIndex];
+
+			if (!fieldStructInfo.isDefined) {
+				return StructLayoutResult.DEFER;
+			}
+		}
+    }
+	// Second pass: know we know we have all the field types declared, so fill in the info
     foreach (&field : decl.structDecl.fields) {
         CompTypeInfo fieldType = this.create_type_from_ast(&field.type, {}).value;
-
         ushort fieldAlign = compiler::get_type_alignment(fieldType);
         ushort fieldSize = compiler::get_type_size(fieldType);
 		// There's some ugliness with types and sizes, so make sure these casts are safe
@@ -156,12 +176,17 @@ fn void SemanticAnalyzer.fill_struct_info(SemanticAnalyzer* this, Decl* decl, Pr
         offset += fieldSize;
         maxAlign = max(maxAlign, fieldAlign);
     }
+
+	info.name = String.copy(name, &globals::typeInfoAllocator);
+
 	// There's some ugliness with types and sizes, so make sure these casts are safe
 	always_assert(offset < short::max);
 	always_assert(maxAlign < short::max);
     info.fieldCount = (ushort)info.fieldInfos.len();
     info.alignmentInBytes = maxAlign;
     info.sizeInBytes = (ushort)common::align_offset((short)offset, (short)maxAlign);
+	info.isDefined = true;
+	return StructLayoutResult.DONE;
 }
 
 

@@ -108,6 +108,7 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 				MirPlace* place = &this.mirInput.places[dest.placeIdx];
 				SymbolIdx symbolIdx = place.baseSymbolIdx;
 				CompTypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+				// destOffset = base offset + sum of all projection offsets
 				short destOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 				this.store_value(mirInstruction, source, destOffset);
 			}
@@ -118,6 +119,7 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 				MirPlace* place = &this.mirInput.places[source.placeIdx];
 				SymbolIdx symbolIdx = place.baseSymbolIdx;
 				CompTypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+				// destOffset = base offset + sum of all projection offsets
 				short srcOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
 				this.load_value(mirInstruction.type, srcOffset, destOffset);
