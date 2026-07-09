@@ -1,5 +1,8 @@
 fn bool program() {
     echo(true and false);
     echo(true or false);
+    echo(false or false);
+    echo(true and true);
+    echo(true or false and false);
     return false;
 }

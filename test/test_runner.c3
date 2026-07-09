@@ -36,7 +36,7 @@ fn void t_05() @test
 
 fn void t_06() @test
 {
-    compile_and_run_file("./test/06_logic.ratc","false\ntrue\n")!!;
+    compile_and_run_file("./test/06_logic.ratc","false\ntrue\nfalse\ntrue\ntrue\n")!!;
 }
 
 fn void t_07() @test
@@ -76,6 +76,8 @@ fn void t_13() @test
 
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
+faultdef EXPECTED_ANALYSIS_ERROR;
+
 fn void? compile_and_run_file(String filename, String expectedResult)
 {
 	defer main::cleanup();

@@ -34,6 +34,8 @@ enum VmCmpOp
 	NEQ,
 	LESS,
 	GREATER,
+	AND,
+	OR,
 }
 
 struct Vm
@@ -99,6 +101,9 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.GREATERI:	vm.cmp_op(inst, int, VmCmpOp.GREATER);
 			case BCOpCode.GREATERF:	vm.cmp_op(inst, float, VmCmpOp.GREATER);
 			case BCOpCode.GREATERD:	vm.cmp_op(inst, double, VmCmpOp.GREATER);
+			// Logic
+			case BCOpCode.AND:		vm.cmp_op(inst, bool, VmCmpOp.AND);
+			case BCOpCode.OR:		vm.cmp_op(inst, bool, VmCmpOp.OR);
 			// Mov
 			case BCOpCode.MOVI:		vm.mov_op(inst, int);
 			case BCOpCode.MOVF:		vm.mov_op(inst, float);
@@ -251,6 +256,8 @@ macro Vm.cmp_op(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 		$case VmCmpOp.NEQ: 		result = *left != *right;
 		$case VmCmpOp.LESS: 	result = *left < *right;
 		$case VmCmpOp.GREATER: 	result = *left > *right;
+		$case VmCmpOp.AND: 		result = *left && *right;
+		$case VmCmpOp.OR: 		result = *left || *right;
 	$endswitch
 	*dst = result;
 }
@@ -311,6 +318,8 @@ macro Vm.cmp_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 		$case VmCmpOp.NEQ: 		result = *left != right;
 		$case VmCmpOp.LESS: 	result = *left < right;
 		$case VmCmpOp.GREATER: 	result = *left > right;
+		$case VmCmpOp.AND: 		result = *left && right;
+		$case VmCmpOp.OR: 		result = *left || right;
 	$endswitch
 	*dst = result;
 }

@@ -308,6 +308,8 @@ fn BCOpCode select_cmp_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 		case BCOpCodeCategory.NEQ: 		return select_neq_op_code(typeInfo, opCodeCategory);
 		case BCOpCodeCategory.LESS: 	return select_less_op_code(typeInfo, opCodeCategory);
 		case BCOpCodeCategory.GREATER: 	return select_grter_op_code(typeInfo, opCodeCategory);
+		case BCOpCodeCategory.AND: 		return BCOpCode.AND;
+		case BCOpCodeCategory.OR: 		return BCOpCode.OR;
 		default:					log::errlogn("Unsupported %s operation", opCodeCategory);
 	}
 	unreachable();

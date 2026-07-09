@@ -96,6 +96,8 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.NEQ:		    this.lower_cmp_op(BCOpCodeCategory.NEQ, mirInstruction);
 			case MirOpCode.LESS:		this.lower_cmp_op(BCOpCodeCategory.LESS, mirInstruction);
 			case MirOpCode.GREATER:		this.lower_cmp_op(BCOpCodeCategory.GREATER, mirInstruction);
+			case MirOpCode.AND:			this.lower_cmp_op(BCOpCodeCategory.AND, mirInstruction);
+			case MirOpCode.OR:			this.lower_cmp_op(BCOpCodeCategory.OR, mirInstruction);
 			case MirOpCode.ADD:			this.lower_math_op(BCOpCodeCategory.ADD, mirInstruction);
 			case MirOpCode.SUB:			this.lower_math_op(BCOpCodeCategory.SUB, mirInstruction);
 			case MirOpCode.MUL:			this.lower_math_op(BCOpCodeCategory.MUL, mirInstruction);

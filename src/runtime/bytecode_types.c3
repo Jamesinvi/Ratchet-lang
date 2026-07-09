@@ -43,6 +43,8 @@ enum BCOpCode : char (String asStr)
 	MOVF	        { "mov__f" },
 	MOVD	        { "mov__d" },
 	MOVB	        { "mov__b" },
+	AND				{ "and__b" },
+	OR				{ "or___b" },
 	MOV_BYTES	    { "movbts" },
 	CONSTI	        { "cnst_i" },
 	CONSTF	        { "cnst_f" },
@@ -89,6 +91,8 @@ enum BCOpCodeCategory : char (String asStr)
 	NEQ		{ "not equal" },
 	LESS	{ "less" },
 	GREATER	{ "greater" },
+	AND		{ "and" },
+	OR		{ "or" },
 	JUMP	{ "jump" },
 	BRANCH	{ "branch" },
 	CALL  	{ "call" },
@@ -113,11 +117,6 @@ enum BCOperandKind : char (String asStr)
 
 struct BCInstruction
 {
-    BCOpCode 	opCode;
-    BCOperandKind immKind;
-	short 		destOffset;
-	short 		leftOffset;
-	short 		rightOffset;
     union {
         int immInt;
         float immFloat;
@@ -127,6 +126,11 @@ struct BCInstruction
 		BCCallInfoIdx callInfoIdx;
 		BCBlockIdx  blockToJumpTo;
     }
+	short 		destOffset;
+	short 		leftOffset;
+	short 		rightOffset;
+    BCOpCode 	opCode;
+    BCOperandKind immKind;
 }
 
 struct BCFunction
