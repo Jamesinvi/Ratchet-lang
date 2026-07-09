@@ -81,7 +81,7 @@ fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunct
 	}
 	funcOutput.layoutEnd = this.fun_frame_slots_len();
 	funcOutput.blocksEnd = this.blocks_len();
-	funcOutput.frameSize = align_offset(this.localFrameOffset, 8);
+	funcOutput.frameSize = common::align_offset(this.localFrameOffset, 8);
 }
 
 
@@ -90,7 +90,7 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
     BCInstructionIdx instructionsLenBeforeLower = this.instructions_len();
 	for(int i = mirBlock.instructionsStart; i<mirBlock.instructionsEnd;i++){
 		MirInstruction* mirInstruction = &this.mirInput.instructions[i];
-		debug::@log_bytecode("loweing %s | type: %s", mirInstruction.opCode, mirInstruction.type.type);
+		debug::@log_bytecode("lowering %s | type: %s", mirInstruction.opCode, mirInstruction.type.type);
 		switch (mirInstruction.opCode){
 			case MirOpCode.EQ:		    this.lower_cmp_op(BCOpCodeCategory.EQ, mirInstruction);
 			case MirOpCode.NEQ:		    this.lower_cmp_op(BCOpCodeCategory.NEQ, mirInstruction);
@@ -105,18 +105,20 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			{
 				MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
-				MirPlace place = this.mirInput.places[dest.placeIdx];
-				SymbolIdx symbol = place.baseSymbolIdx;
-				short destOffset = this.bind_symbol_get_offset(symbol);
+				MirPlace* place = &this.mirInput.places[dest.placeIdx];
+				SymbolIdx symbolIdx = place.baseSymbolIdx;
+				CompTypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+				short destOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 				this.store_value(mirInstruction, source, destOffset);
 			}
 			case MirOpCode.LOAD:
 			{
 				MirRegisterID dest = mirInstruction.result;
 				MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
-				MirPlace place = this.mirInput.places[source.placeIdx];
-				SymbolIdx symbol = place.baseSymbolIdx;
-				short srcOffset = this.bind_symbol_get_offset(symbol);
+				MirPlace* place = &this.mirInput.places[source.placeIdx];
+				SymbolIdx symbolIdx = place.baseSymbolIdx;
+				CompTypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+				short srcOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
 				this.load_value(mirInstruction.type, srcOffset, destOffset);
 			}
@@ -183,12 +185,15 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 	switch (val.kind) {
 		case MirOperandKind.REGISTER:
 		{
+			ushort bytesToMove = 0;
+			BCOpCode opCode = select_mov_op_code(mirInstruction.type, &bytesToMove);
 			short srcOffset = this.mirRegToOffset[val.regId];
 			instruction.destOffset = destOffset;
 			instruction.leftOffset = srcOffset;
 			instruction.rightOffset = runtime::NO_OFFSET;
-			instruction.opCode = select_mov_op_code(mirInstruction.type);
-			instruction.immKind = BCOperandKind.INVALID;
+			instruction.opCode = opCode;
+			instruction.byteCount = bytesToMove;
+			instruction.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.MOVE_SIZE: BCOperandKind.INVALID;
 		}
 		case MirOperandKind.IMM_INT:
 		{
@@ -238,13 +243,16 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 
 fn void BCGenerator.load_value(BCGenerator* this, CompTypeInfo typeInfo, short srcOffset, short destOffset)
 {
+	ushort bytesToMove = 0;
+	BCOpCode opCode = select_mov_op_code(typeInfo, &bytesToMove);
 	BCInstruction instruction = {
 		.destOffset = destOffset,
 		.leftOffset = srcOffset,
 		.rightOffset = runtime::NO_OFFSET,
 		.immInt = runtime::NO_OFFSET,
-		.opCode = select_mov_op_code(typeInfo),
-		.immKind = BCOperandKind.INVALID,
+		.opCode = opCode,
+		.byteCount = bytesToMove,
+		.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.MOVE_SIZE: BCOperandKind.INVALID,
 	};
 	this.bcOutput.instructions.push(instruction);
 }

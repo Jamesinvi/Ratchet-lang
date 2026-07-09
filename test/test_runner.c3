@@ -1,5 +1,7 @@
 import compiler;
 import main;
+import vm;
+import log;
 
 
 fn void t_00() @test
@@ -67,8 +69,13 @@ fn void t_12() @test
     compile_and_run_file("./test/12_very_long_file.ratc","")!!;
 }
 
+fn void t_13() @test
+{
+    compile_and_run_file("./test/13_structs_decl_order.ratc","34\n")!!;
+}
 
-faultdef UNKNOWN_ERROR;
+faultdef UNKNOWN_COMPILE_ERROR;
+faultdef OUTPUT_DOESNT_MATCH_ERROR;
 fn void? compile_and_run_file(String filename, String expectedResult)
 {
 	defer main::cleanup();
@@ -76,12 +83,23 @@ fn void? compile_and_run_file(String filename, String expectedResult)
 	switch (result.outcome) 
 	{
 		case main::CompilationOutcome.NO_ERROR:
-			return;
+			break;
 		case main::CompilationOutcome.PARSE_ERROR:
 			return compiler::parser::PARSE_ERROR~;
 		case main::CompilationOutcome.ANALYSIS_ERROR:
 			return compiler::analyzer::ANALYSIS_ERR~;
 		default:
-			return UNKNOWN_ERROR~;
+			return UNKNOWN_COMPILE_ERROR~;
+	}
+
+
+	DString output = dstring::new(mem);
+	defer output.free();
+	Vm vm = {};
+    vm.init(result.compiledProgram, &output);
+	vm::run(&vm);
+	log::logn("%s", output);
+	if(expectedResult != output.str_view()){
+		return OUTPUT_DOESNT_MATCH_ERROR~;
 	}
 }

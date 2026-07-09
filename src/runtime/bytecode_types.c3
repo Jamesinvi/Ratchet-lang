@@ -43,6 +43,7 @@ enum BCOpCode : char (String asStr)
 	MOVF	        { "mov__f" },
 	MOVD	        { "mov__d" },
 	MOVB	        { "mov__b" },
+	MOV_BYTES	    { "movbts" },
 	CONSTI	        { "cnst_i" },
 	CONSTF	        { "cnst_f" },
 	CONSTD	        { "cnst_d" },
@@ -107,6 +108,7 @@ enum BCOperandKind : char (String asStr)
 	IMM_NULL 	{ "null" },
 	BLOCK 		{ "block" },
 	FUNCTION 	{ "fn" },
+	MOVE_SIZE	{ "mov_size"},
 }
 
 struct BCInstruction
@@ -121,6 +123,7 @@ struct BCInstruction
         float immFloat;
         double immDouble;
 		bool immBool;
+		ushort byteCount;
 		BCCallInfoIdx callInfoIdx;
 		BCBlockIdx  blockToJumpTo;
     }
@@ -299,6 +302,7 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);
+		case BCOperandKind.MOVE_SIZE:	log::log("move %s bytes", inst.byteCount);
 		default:						log::log("<?>");
 	}
 }

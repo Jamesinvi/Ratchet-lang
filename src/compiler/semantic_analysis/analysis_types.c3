@@ -6,6 +6,7 @@ import debug;
 
 
 alias SymbolIdx = int;
+alias MemberIdx = int;
 const NO_SYMBOL = -1;
 
 enum SymbolKind : char
@@ -37,6 +38,7 @@ struct SymbolTable
 	List{SymbolIdx} stmtSymbols; 			// index by StmtIdx
 	List{SymbolIdx} declSymbols; 			// index by DeclIdx
 	List{DeclParamRange} declParamRanges; 	// index by DeclIdx
+	List{MemberIdx} memberFieldIndices; 	// indexed by ExprIdx, -1 if not a member expr
 	List{SymbolIdx} declParamSymbols; 		// flat storage for function param symbols
 	List{CallTarget} callTargets; 			// index by ExprIdx
 	List{ExprIdx} callReceiverExpr; 		// index by ExprIdx (NO_IDX when absent)

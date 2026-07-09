@@ -9,6 +9,7 @@ alias CompilationContext = main::CompilationContext;
 
 bool globalsInitialized = false;
 DynamicArenaAllocator compAllocator;
+DynamicArenaAllocator typeInfoAllocator;
 DynamicArenaAllocator runtimeAllocator;
 
 CompilationContext compilationCtx;
@@ -31,16 +32,18 @@ fn void initialize_globals()
 		return;
 	}
 	compAllocator = { };
+	typeInfoAllocator = { };
 	runtimeAllocator = { };
 	internedSourceStrings = { };
 	compAllocator.init(mem, 64 * 1024);
 	runtimeAllocator.init(mem, 64 * 512);
+	typeInfoAllocator.init(mem, 64 * 512);
 	tokens.init(&globals::compAllocator, 1024);
 	internedSourceStrings.init(&globals::compAllocator, 1024);
 	declaredStructs.init(&globals::compAllocator, 64);
 	declaredFunctions.init(&globals::compAllocator, 128);
 	structNamesToIdx.init(&globals::compAllocator, 64);
-	structTypes.init(&globals::compAllocator, 64);
+	structTypes.init(&globals::typeInfoAllocator, 64);
 	compilationCtx = { };
 	globalsInitialized = true;
 }
@@ -50,6 +53,7 @@ fn void cleanup_globals()
 	compilationCtx.deinit();
 	compAllocator.free();
 	runtimeAllocator.free();
+	typeInfoAllocator.free();
 	tokens = { };
 	declaredStructs = { };
 	declaredFunctions = { };
@@ -58,4 +62,12 @@ fn void cleanup_globals()
 	internedSourceStrings = { };
 
 	globalsInitialized = false;
+}
+
+
+fn void print_struct_types()
+{
+	foreach(&structInfo : structTypes){
+		structInfo.print();
+	}
 }

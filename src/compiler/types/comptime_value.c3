@@ -1,7 +1,7 @@
 module compiler;
 import common;
 import globals;
-import std::io;
+import log;
 
 const NOT_STRUCT = -1;
 
@@ -9,7 +9,7 @@ struct CompTypeInfo
 {
     int structTypeIndex;        // -1 is reserved for non-structs
     ValueType type;
-    ValueType refToType;        // Will be ValueType.NULL when not it's not a reference
+    ValueType refToType;        // Will be ValueType.NULL when it is not a reference
 }
 
 
@@ -29,8 +29,6 @@ fn ushort get_type_size(CompTypeInfo info)
 
 fn ushort get_type_alignment(CompTypeInfo info)
 {
-	// TODO: Structs needs special alignment handling
-	assert(info.type != ValueType.STRUCT);
     switch (info.type) {
         case ValueType.INT:         return int::alignment;
         case ValueType.FLOAT:       return float::alignment;
@@ -38,7 +36,7 @@ fn ushort get_type_alignment(CompTypeInfo info)
         case ValueType.BOOL:        return bool::alignment;
         case ValueType.REF:      	nextcase;
         case ValueType.PTR:   		return uptr::alignment;
-        case ValueType.STRUCT:      return globals::structTypes[info.structTypeIndex].sizeInBytes;
+        case ValueType.STRUCT: 		return globals::structTypes[info.structTypeIndex].alignmentInBytes;
         default:                    return 0;
     }
 }

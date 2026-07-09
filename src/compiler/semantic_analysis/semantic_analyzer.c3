@@ -46,11 +46,13 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
 	this.symbolTable.declParamSymbols.init(&this.allocator, exprLen + stmtLen + declLen);
 	this.symbolTable.callTargets.init(&this.allocator, exprLen);
 	this.symbolTable.callReceiverExpr.init(&this.allocator, exprLen);
+	this.symbolTable.memberFieldIndices.init(&this.allocator, exprLen);
 
 	// Fill lists with defaults
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
 	common::list_append_fill{DeclParamRange}(&this.symbolTable.declParamRanges, {}, declLen);
+	common::list_append_fill{MemberIdx}(&this.symbolTable.memberFieldIndices, -1, exprLen);
 	for (sz i = 0; i < exprLen; i++) {
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);
@@ -81,22 +83,40 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	this.begin_scope(globalReturnType, false);
 
     assert(this.ast.declarations.len() < int::max);
-	// Predeclare function symbols with return types.
-	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
-		Decl* decl = &this.ast.declarations[i];
-		if (decl.kind == DeclKind.FUNCTION) {
-			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
-			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
-			if (returnType.hadError) {
-				return returnType;
+	@pool()
+	{
+		// Create a temporary list in which we will store all decl indices for structs
+		List{DeclIdx} structDeclIndices = {};
+		structDeclIndices.tinit(this.ast.declarations.len() / 2);
+		// Predeclare function symbols with return types.
+		for (int i = 0; i < (int)this.ast.declarations.len(); i++){
+			Decl* decl = &this.ast.declarations[i];
+			if (decl.kind == DeclKind.FUNCTION) {
+				Span declSpan = this.ast.statements[decl.fnDecl.body].span;
+				TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
+				if (returnType.hadError) {
+					return returnType;
+				}
+				SymbolIdx symbolIdx = this.symbols_len();
+				Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
+				this.symbolTable.symbols.push(symbol);
+				this.symbolTable.declSymbols[i] = symbolIdx;
+				this.current_scope().visibleSymbols.push(symbolIdx);
+			} else if (decl.kind == DeclKind.STRUCT) {
+				get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text());
+				structDeclIndices.push(i);
 			}
-			SymbolIdx symbolIdx = this.symbols_len();
-			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
-			this.symbolTable.symbols.push(symbol);
-			this.symbolTable.declSymbols[i] = symbolIdx;
-			this.current_scope().visibleSymbols.push(symbolIdx);
 		}
-	}
+
+		// Loop over the struct declarations we saved, and fill in all its info/sizes etc.
+		for(int i = 0; i < (int)structDeclIndices.len(); i++){
+			DeclIdx declIdx = structDeclIndices[i];
+			Decl* decl = &this.ast.declarations[declIdx];
+			assert(decl.kind == DeclKind.STRUCT);
+			this.fill_struct_info(decl, this.ast);
+		}
+	};
+
 
 
 	for (int i = 0; i < this.ast.loweredMethodsStart; i++){
@@ -700,11 +720,14 @@ fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprI
 
 	Decl* structDecl = &this.ast.declarations[structDeclIdx];
 	InternedString fieldName = this.ast.names[expr.member.memberIdx];
+	MemberIdx fieldIdx = 0;
 	foreach (&field : structDecl.structDecl.fields){
 		InternedString declName = this.ast.names[field.nameIdx];
 		if (declName.id == fieldName.id){
+			this.symbolTable.memberFieldIndices[exprIdx] = fieldIdx;
 			return this.create_type_from_ast(&field.type, expr.span);
 		}
+		fieldIdx++;
 	}
 	return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, nullType, expr.span);
 }

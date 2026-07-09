@@ -4,6 +4,7 @@ import compiler::mir;
 import common;
 import runtime;
 import log;
+import globals;
 
 <* 
  	Should be called before lowering a function.
@@ -17,7 +18,7 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 	this.mirRegToType.clear();
 	this.symbolToOffset.clear();
 	int maxMirReg = compiler::mir::NO_REG;
-	// We need to firnd the instruction iwth the highest "result" register index
+	// We need to find the instruction with the highest "result" register index
 	for(sz i = mirFunc.blocksStart; i<mirFunc.blocksEnd;i++){
 		MirBlock* mirBlock = &this.mirInput.blocks[i];
 		for(sz j = mirBlock.instructionsStart; j<mirBlock.instructionsEnd;j++){
@@ -52,7 +53,7 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	if (offset == runtime::NO_OFFSET) {
 		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
 		short alignment = (short)compiler::get_type_alignment(sym.type);
-		this.localFrameOffset = align_offset(this.localFrameOffset, alignment);
+		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
 		short size = (short)compiler::get_type_size(sym.type);
 
 		offset = this.localFrameOffset;
@@ -71,6 +72,27 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	return offset;
 }
 
+<*
+	Recurses all projections to get the offset into the type. NOTE: the passed in type will be modified!
+	Make sure it's a local value and not some external reference or it will clobber the data.
+*>
+fn short BCGenerator.resolve_projection_get_offset(BCGenerator* this, MirProjectionIdx idx, CompTypeInfo* type)
+{
+	if (idx == mir::NO_PROJECTION){
+		return 0;
+	}
+
+    MirProjection* proj = &this.mirInput.projections[idx];
+
+    short offset = this.resolve_projection_get_offset(proj.prevProjectionIdx, type);
+
+    // Now type is the type after resolving previous projections.
+    CompStructTypeInfo* structInfo = &globals::structTypes[type.structTypeIndex];
+	FieldInfo* field = &structInfo.fieldInfos[proj.fieldIdx];
+	*type = field.typeInfo;
+	return offset + (short)field.offset;
+}
+
 <* 
  	Helper to bind a mir register to an offset. If the binding already exists it will return the already bound offset.
 	Else, it will bind the offset to the register and will create a BCFrameSlot
@@ -86,7 +108,7 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
 	// If we already have a binding then use it, else we need to create one
     if (offset == runtime::NO_OFFSET) {
 		short alignment = (short)compiler::get_type_alignment(type);
-		this.localFrameOffset = align_offset(this.localFrameOffset, alignment);
+		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
         short size = (short)compiler::get_type_size(type);
 
         offset = this.localFrameOffset;
@@ -117,7 +139,7 @@ fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand opera
 	short offset;
 	if (is_immediate(operand)){
 		short alignment = (short)compiler::get_type_alignment(typeInfo);
-		this.localFrameOffset = align_offset(this.localFrameOffset, alignment);
+		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
 		short size = (short)compiler::get_type_size(typeInfo);
 		offset = this.localFrameOffset;
 		this.localFrameOffset += size;
@@ -137,18 +159,6 @@ fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand opera
 }
 
 
-<* 
- 	Helper to align fields so that all fields respect their alignment, so if i have an int at the top of the stack
-	and i need to store a double, i add 4 bytes of padding so alignment is correct, vm thanks us
-*>
-fn short align_offset(short offset, short alignment)
-{
-	short remainder = offset % alignment;
-	if (remainder == 0) {
-		return offset;
-	}
-	return offset + (alignment - remainder);
-}
 
 
 fn bool is_immediate(MirOperand operand)
@@ -253,15 +263,25 @@ fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand*
 // --------------------- Helpers to switch on type and select typed variant of a specific Opcode, very simple stuff -----------------------
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
-fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo)
+<*	
+	Helper to select a move op code. byteCount is an out parameter that will contain the number of bytes
+	to move. The value will be 0 for built-in values (since instruction encodes the size), and non-zero for structs
+*>
+fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo, ushort* byteCount)
 {
+	*byteCount = 0;
 	switch (typeInfo.type)
 	{
 		case ValueType.INT:			return BCOpCode.MOVI;
 		case ValueType.FLOAT:		return BCOpCode.MOVF;
 		case ValueType.DOUBLE:		return BCOpCode.MOVD;
 		case ValueType.BOOL:		return BCOpCode.MOVB;
-		default:					log::errlogn("Not suported type by bytecode");
+		case ValueType.STRUCT:		
+		{
+			*byteCount = (ushort)compiler::get_type_size(typeInfo);
+			return BCOpCode.MOV_BYTES;
+		}
+		default:					log::errlogn("Type not supported by bytecode");
 	}
 	unreachable();
 }

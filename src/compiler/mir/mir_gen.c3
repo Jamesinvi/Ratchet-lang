@@ -143,7 +143,7 @@ fn void MirGenerator.lower_stmt(MirGenerator* this, StmtIdx stmtIdx)
 fn void MirGenerator.lower_echo(MirGenerator* this, StmtIdx stmtIdx)
 {
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
-	// Echo has it's own special expr so lower it directly
+	// Echo has its own special expr so lower it directly
 	MirOperand echoOperand = this.lower_expr(stmt.echoStmt);
 	// as usual get "start" before pushing, then "end" after
     OperandIdx start = this.operands_len();
@@ -247,6 +247,7 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
     }
     
     MirBlockIdx thenExitBlockIdx = this.currentBlock;
+    this.seal_current_block();
     
     // Lower else, if present.
     MirBlockIdx elseBlockIdx = NO_BLOCK;
@@ -260,6 +261,7 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
         }
     
         elseExitBlockIdx = this.currentBlock;
+        this.seal_current_block();
     }
     
     // Create join after both bodies are lowered.
@@ -274,12 +276,12 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
     
     // Close then exit into join.
     this.currentBlock = thenExitBlockIdx;
-    this.terminate_current_block_with_jump(joinBlockIdx);
+    this.add_jump_to_current_block(joinBlockIdx);
     
     // Close else exit into join, if there is an else.
     if (hasElse) {
         this.currentBlock = elseExitBlockIdx;
-        this.terminate_current_block_with_jump(joinBlockIdx);
+        this.add_jump_to_current_block(joinBlockIdx);
     }
     
     // Continue lowering following statements into join.
@@ -408,14 +410,13 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			return this.lower_free_fun(exprIdx);
 		}
         case ExprKind.VAR:
-			{
-
-				SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
-				CompTypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
-				MirOperand place = this.bindings[varExprSymbolIdx];
-				MirRegisterID resultReg = this.currentReg++;
-				OperandIdx start = this.operands_len();
-				this.output.operands.push(place);
+		{
+			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
+			CompTypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
+			MirOperand place = this.bindings[varExprSymbolIdx];
+			MirRegisterID resultReg = this.currentReg++;
+			OperandIdx start = this.operands_len();
+			this.output.operands.push(place);
 			OperandIdx end = this.operands_len();
 
 			MirInstruction inst = {
@@ -429,8 +430,30 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			this.output.instructions.push(inst);
 			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
 		}
+		case ExprKind.MEMBER:
+		{
+			// Basically the same as VAR but we lower the place since we know it's a member
+			CompTypeInfo memberType = this.symbolTable.exprTypes[exprIdx];
+			MirOperand place = this.lower_place(exprIdx);
+			MirRegisterID resultReg = this.currentReg++;
+			OperandIdx start = this.operands_len();
+			this.output.operands.push(place);
+			OperandIdx end = this.operands_len();
+
+			MirInstruction inst = {
+				.opCode = MirOpCode.LOAD,
+				.type = memberType,
+				.result = resultReg,
+				.operandsStart = start,
+				.operandsEnd = end,
+				.sourceExprIdx = exprIdx,
+			};
+
+			this.output.instructions.push(inst);
+			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
+		}
 		default:{
-			return {.kind = MirOperandKind.REGISTER, .regId = NO_REG};
+			unreachable();
 		}
 	}
 
@@ -506,8 +529,9 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 			//										   |_ index is NO_PROJECTION
 			// Projection chains are stored backwards: newest node points to previous one.
 			// This lets places share common prefixes (e.g. `a.x` reused by `a.x.y`).
+			MemberIdx fieldIdx = this.symbolTable.memberFieldIndices[exprIdx];
 			MirProjection projection = {
-				.fieldIdx = expr.member.memberIdx,
+				.fieldIdx = fieldIdx,
 				.prevProjectionIdx = basePlace.projectionIdx,
 			};
 			MirProjectionIdx projectionIdx = this.push_projection_get_idx(&projection);

@@ -104,14 +104,14 @@ struct MirInstruction
 
 struct MirPlace
 {
-	sz idx;
+	int idx;
 	SymbolIdx baseSymbolIdx;
 	MirProjectionIdx projectionIdx;
 }
 
 struct MirProjection
 {
-	NameIdx fieldIdx;
+	int fieldIdx;
 	MirProjectionIdx prevProjectionIdx;		// Each projection stores index to previous projection in the chain (NO_PROJECTION for first projection!)
 }
 
@@ -215,7 +215,6 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 			} else {
 				log::log("_r%s", op.regId);
 			}
-		case MirOperandKind.PLACE:							log::log("_%%%s", 	op.placeIdx);
 		case MirOperandKind.IMM_INT:						log::log("%s", 		op.immInt);
 		case MirOperandKind.IMM_FLOAT:						log::log("%s", 		op.immFloat);
 		case MirOperandKind.IMM_DOUBLE:						log::log("%s", 		op.immDouble);
@@ -227,6 +226,16 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 			DeclIdx declIdx = op.fnCalleeIdx;
 			this.print_decl_function_name(declIdx, ast);
 		}
+		case MirOperandKind.PLACE:					
+		{
+			MirPlace* place = &this.places[op.placeIdx];
+			if(place.projectionIdx == NO_PROJECTION){
+				log::log("_%s", place.baseSymbolIdx);
+				return;
+			}
+			MirProjection* projection = &this.projections[place.projectionIdx];
+			log::log("_%s_@fieldIdx:%s", place.baseSymbolIdx, projection.fieldIdx);
+		}	
 		default:
 			log::log("<?>");
 	}

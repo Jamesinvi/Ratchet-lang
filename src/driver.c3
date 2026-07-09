@@ -16,6 +16,8 @@ alias Lexer = lexer::Lexer;
 alias Parser = parser::Parser;
 alias compilationCtx = globals::compilationCtx;
 
+const PRINT_COMP_PIPELINE = true;
+
 enum CompilationOutcome : int
 {
 	NO_ERROR,
@@ -68,19 +70,28 @@ fn CompilationResult compile_file(String path)
 	compilationCtx.lexer.parse_tokens();
 	free(file);
 
+	// ------------ Parse, AST ------------
     compilationCtx.parser.init();
     if(catch err = compilationCtx.parser.parse()){
         log::errlogn("Parse error");
 		result.outcome = CompilationOutcome.PARSE_ERROR;
 		return result;
     }
-	compilationCtx.parser.outputAst.print();
+	if(PRINT_COMP_PIPELINE){
+		compilationCtx.parser.outputAst.print();
+	}
+	// ------------ Analyze, Type-Check --
 	compilationCtx.analyzer.init(&compilationCtx.parser.outputAst);
 	TypeResult typeResult = compilationCtx.analyzer.run();
 	
 	foreach(err : compilationCtx.analyzer.errors){
 		log::errlogn("Type error: %s at line %s, expected %s, got %s", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
 	}
+
+	if(PRINT_COMP_PIPELINE){
+		globals::print_struct_types();
+	}
+
 	if (typeResult.hadError || compilationCtx.analyzer.errors.len() > 0) {
 		result.outcome = CompilationOutcome.ANALYSIS_ERROR;
 		return result;
@@ -88,11 +99,14 @@ fn CompilationResult compile_file(String path)
 		log::logn("Compiled successfully");
 	}
 
+	// ------------ Lower, MIR -----------
 	compilationCtx.mirGen.init(&compilationCtx.parser.outputAst, &compilationCtx.analyzer.symbolTable);
 	MirGenResult mirResult = compilationCtx.mirGen.run();
-	
-	compilationCtx.mirGen.output.print(compilationCtx.mirGen.inputAst, compilationCtx.mirGen.symbolTable);
-	
+
+	if(PRINT_COMP_PIPELINE){
+		compilationCtx.mirGen.output.print(compilationCtx.mirGen.inputAst, compilationCtx.mirGen.symbolTable);
+	}
+
 	if(mirResult != MirGenResult.OK){
 		result.outcome = CompilationOutcome.MIR_ERROR;
 		return result;
@@ -101,11 +115,13 @@ fn CompilationResult compile_file(String path)
 	}
 
 	result.outcome = CompilationOutcome.NO_ERROR;
-	// Bytecode is WIP
+	// Lower, Bytecode (WIP)
 	compilationCtx.byteCodeGen.init(&compilationCtx);
 	compilationCtx.byteCodeGen.run();
 	
-	compilationCtx.byteCodeGen.bcOutput.print();
+	if(PRINT_COMP_PIPELINE){
+		compilationCtx.byteCodeGen.bcOutput.print();
+	}
 	
 	result.compiledProgram = &compilationCtx.compiledProgram;
 	result.outcome = CompilationOutcome.NO_ERROR;

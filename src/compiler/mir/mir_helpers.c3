@@ -5,12 +5,24 @@ import compiler;
 MirOperand placeHolderOperand =  {.kind = MirOperandKind.INVALID, .regId= NO_REG};
 
 
-
 fn void MirGenerator.terminate_current_block_with_jump(MirGenerator* this, MirBlockIdx targetBlockIdx)
+{
+    this.seal_current_block();
+    this.add_jump_to_current_block(targetBlockIdx);
+}
+
+<* 
+	Simply sets the instructionsEnd field to the current block
+*>
+fn void MirGenerator.seal_current_block(MirGenerator* this)
 {
     MirBlock* block = &this.output.blocks[this.currentBlock];
     block.instructionsEnd = this.instructions_len();
+}
 
+fn void MirGenerator.add_jump_to_current_block(MirGenerator* this, MirBlockIdx targetBlockIdx)
+{
+    MirBlock* block = &this.output.blocks[this.currentBlock];
     if (block.terminator != NO_TERMINATOR) return;
 
     OperandIdx jumpStart = this.operands_len();

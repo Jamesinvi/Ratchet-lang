@@ -65,6 +65,9 @@ fn void Vm.init(Vm* this, BCProgram* program, OutStream output)
 
 fn RunResult run(Vm* vm)
 {
+	if(vm.program.functions.len() == 0){
+		return RunResult.OK;
+	}
 	vm.running = true;
 	vm.functions = vm.program.functions.entries;
 	vm.instructions = vm.program.instructions.entries;
@@ -101,6 +104,13 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.MOVF:		vm.mov_op(inst, float);
 			case BCOpCode.MOVD:		vm.mov_op(inst, double);
 			case BCOpCode.MOVB:		vm.mov_op(inst, bool);
+			case BCOpCode.MOV_BYTES:
+			{
+				Byte* dst = (Byte*)&vm.stack[vm.frame.base + inst.destOffset];
+				Byte* src = (Byte*)&vm.stack[vm.frame.base + inst.leftOffset];
+				// memmove handles overlapping memory correctly. memcpy is undefined
+				mem::move(dst, src, inst.byteCount);
+			}
 			// Add
 			case BCOpCode.INCREMENT:
 			{

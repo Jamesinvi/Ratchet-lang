@@ -45,7 +45,7 @@ struct FieldAst
 {
     TypeAst type;
     NameIdx nameIdx;
-	sz idxInFields;		// index in the StructDeclAst field list
+	int idxInFields;		// index in the StructDeclAst field list
 }
 
 struct TypeAst

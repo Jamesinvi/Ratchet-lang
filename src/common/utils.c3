@@ -30,3 +30,16 @@ fn void list_set_values(List{Type}* list, Type val) <Type>
     }
 }
 
+<* 
+ 	Helper to align fields so that all fields respect their alignment, so if i have an int at the top of the stack
+	and i need to store a double, i add 4 bytes of padding so alignment is correct, vm thanks us
+*>
+fn short align_offset(short offset, short alignment)
+{
+	short remainder = offset % alignment;
+	if (remainder == 0) {
+		return offset;
+	}
+	return offset + (alignment - remainder);
+}
+

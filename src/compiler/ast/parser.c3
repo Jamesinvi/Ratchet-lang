@@ -291,8 +291,8 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 			TypeAst fieldType = this.parse_type_ast();
 			this.consume(TokenType.IDENTIFIER, "Expected field name.");
 			NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value());
-			FieldAst field       = { .type = fieldType, .nameIdx = fieldNameIdx };
-			sz fieldsCount       = decl.structDecl.fields.len();
+			FieldAst field = { .type = fieldType, .nameIdx = fieldNameIdx };
+			int fieldsCount = (int)decl.structDecl.fields.len();
 			field.idxInFields = fieldsCount;
 			decl.structDecl.fields.push(field);
 			this.consume(TokenType.SEMICOLON, "Expected ';' after field");
