@@ -497,6 +497,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		case ExprKind.THIS:				result = this.analyze_expr_this(exprIdx);
 		case ExprKind.CALL:				result = this.analyze_expr_call(exprIdx);
 		case ExprKind.MEMBER:			result = this.analyze_expr_member(exprIdx);
+		case ExprKind.CAST:				result = this.analyze_expr_cast(exprIdx);
 		default:						result = type_ok(make_type(ValueType.NULL));
 	}
 	if (!result.hadError) {
@@ -594,15 +595,33 @@ fn TypeResult SemanticAnalyzer.analyze_expr_unary(SemanticAnalyzer* this, ExprId
 	}
 }
 
+fn TypeResult SemanticAnalyzer.analyze_expr_cast( SemanticAnalyzer* this,ExprIdx exprIdx)
+ {
+    Expr* expr = &this.ast.expressions[exprIdx];
+
+    TypeResult source = this.analyze_expr(expr.cast.value);
+    if (source.hadError) {
+		return source;
+	}
+
+    TypeResult target = this.create_type_from_ast(&expr.cast.targetType, expr.span);
+    if (target.hadError){
+		return target;
+	} 
+
+    if (!is_numeric_type(source.value) || !is_numeric_type(target.value)) {
+        return this.type_error( ErrorKind.TYPE_MISMATCH, source.value, target.value, expr.span);
+    }
+
+    return type_ok(target.value);
+}
+
 fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.ast.expressions[exprIdx];
 	TypeResult lhsType = this.analyze_expr(expr.binary.lhs);
 	if (lhsType.hadError) {
 		return lhsType;
-	}
-	if (expr.binary.op == BinOp.AS) {
-		return type_ok(lhsType.value);
 	}
 	TypeResult rhsType = this.analyze_expr(expr.binary.rhs);
 	if (rhsType.hadError) {

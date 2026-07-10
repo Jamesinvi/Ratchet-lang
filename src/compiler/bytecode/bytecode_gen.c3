@@ -55,6 +55,11 @@ fn void BCGenerator.run(BCGenerator* this)
 		BCFunction functionResult = {};
 		BCFunctionIdx funcIdx = this.push_func_get_idx(&functionResult);
 		this.declToBcFunction[func.sourceDeclIdx] = funcIdx;
+		FnDeclAst* sourceFunction = &this.inputAst.declarations[func.sourceDeclIdx].fnDecl;
+		String functionName = this.inputAst.names[sourceFunction.nameIdx].src_text();
+		if (functionName == "program") {
+			this.bcOutput.entryFunctionIdx = funcIdx;
+		}
 	}
 	// Second pass: actually lower the function instructions
 	foreach(&func : this.mirInput.functions){
@@ -72,7 +77,18 @@ fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunct
 {
 	BCFunction* funcOutput = &this.bcOutput.functions[funcOutputIdx];
 	funcOutput.layoutStart = this.fun_frame_slots_len();
+
+	DeclParamRange params = this.symbolTable.declParamRanges[funcInput.sourceDeclIdx];
+	// Bind all function parameters first! before anything else. 
+	// If we don't do this, if a parameter is used after a local, vm will read the wrong offset in the stack frame
+	for (int i = params.start; i < params.end; i++) {
+		SymbolIdx parameterSymbol =	this.symbolTable.declParamSymbols[i];
+		// Reserves and records its offset.
+		this.bind_symbol_get_offset(parameterSymbol);
+	}
+
 	funcOutput.blocksStart = this.blocks_len();
+
 	for(int i = funcInput.blocksStart; i<funcInput.blocksEnd;i++){
 		BCBlockIdx loweredBlockIdx = this.lower_block(&this.mirInput.blocks[i], funcOutputIdx);
 		SymbolIdx fnSymbolIdx = this.symbolTable.declSymbols[funcInput.sourceDeclIdx];
@@ -105,6 +121,24 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.MUL:			this.lower_math_op(BCOpCodeCategory.MUL, mirInstruction);
 			case MirOpCode.DIV:			this.lower_math_op(BCOpCodeCategory.DIV, mirInstruction);
 			case MirOpCode.ECHO:		this.lower_echo(mirInstruction);
+			case MirOpCode.AS:
+			{
+				MirOperand source =	this.mirInput.operands[mirInstruction.operandsStart];
+				CompTypeInfo sourceType = this.get_type_from_operand(&source);
+				CompTypeInfo targetType = mirInstruction.type;
+
+				short sourceOffset = this.bind_operand_get_offset(source, sourceType);
+				short destinationOffset = this.bind_mir_register_get_offset( mirInstruction.result, targetType);
+				BCInstruction instruction = {
+					.opCode = BCOpCode.CAST,
+					.leftOffset = sourceOffset,
+					.rightOffset = runtime::NO_OFFSET,
+					.destOffset = destinationOffset,
+					.castKind = select_cast_kind(sourceType, targetType),
+					.immKind = BCOperandKind.CAST_TYPE,
+				};
+				this.push_instruction_get_idx(&instruction);
+			}
 			case MirOpCode.STORE:
 			{
 				MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];

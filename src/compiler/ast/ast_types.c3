@@ -100,6 +100,7 @@ enum ExprKind : char
     BOOL,
     NULL,
     STRING_LITERAL,
+	CAST,		// k as float
     VAR,        // identifier
     UNARY,      // -x, !x
     BINARY,     // x + y, x * y, ...
@@ -124,7 +125,6 @@ enum BinOp : char (String asStr)
     GREATER_EQ  { "greatereq" }, 
     AND         { "and" }, 
     OR          { "or" },
-    AS          { "as" },
     STORE       { "store" },
 }
 
@@ -141,6 +141,7 @@ struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
 struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd;  ExprIdx memberCaller;}
 struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
 struct ExprNew		{ TypeAst type; }
+struct ExprCast 	{ ExprIdx value;	TypeAst targetType; }
 
 struct Expr
 {
@@ -161,6 +162,7 @@ struct Expr
         ExprCall    call;
         ExprMember  member;
 		ExprNew 	new;
+		ExprCast	cast;
     }    
 }
 
@@ -409,6 +411,12 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         case ExprKind.STRING_LITERAL:   log::log("\"%s\"", this.names[expr.stringLiteral].src_text());
 		case ExprKind.THIS:             log::log("@this");
         case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr].src_text());
+        case ExprKind.CAST:             
+		{
+			log::log("(");
+            this.print_expression(&this.expressions[expr.cast.value]);
+			log::log(" as %s)", this.names[expr.cast.targetType.nameIdx].src_text());
+		}
         case ExprKind.UNARY:
         {
             log::log("%s", expr.unary.op.asStr);

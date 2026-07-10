@@ -51,7 +51,7 @@ fn void t_08() @test
 
 fn void t_09() @test
 {
-    compile_and_run_file("./test/09_simple_casts","hello\n15\n")!!;
+    compile_and_run_file("./test/09_simple_casts.ratc", "15\n15.000000\n13.600000\n16.400000\n16\n16.400000\n13.600000\n13\n-3\n")!!;
 }
 
 fn void t_10() @test

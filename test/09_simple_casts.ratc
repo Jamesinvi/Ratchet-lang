@@ -1,8 +1,22 @@
 fn bool program() {
     int k = 15;
-    echo("hello");
     echo(k);
-    echo((k as float));
-    echo((k as double));
+    float kf = k as float;
+    double kd = k as double;
+    echo(kf);
+    kf = kf + 1.4f;
+    kd = kd - 1.4;
+    echo(kd);
+    echo(kf);
+    echo(kf as int);
+
+    double widened = kf as double;
+    float narrowed = kd as float;
+    echo(widened);
+    echo(narrowed);
+    echo(kd as int);
+
+    float negative = 0.0f - 3.9f;
+    echo(negative as int);
     return false;
 }

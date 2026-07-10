@@ -458,6 +458,25 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			this.output.instructions.push(inst);
 			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
 		}
+		case ExprKind.CAST:
+		    MirOperand source = this.lower_expr(expr.cast.value);
+			MirRegisterID result = this.currentReg++;
+
+			OperandIdx start = this.operands_len();
+			this.output.operands.push(source);
+			OperandIdx end = this.operands_len();
+
+			MirInstruction inst = {
+				.opCode = MirOpCode.AS,
+				.type = this.symbolTable.exprTypes[exprIdx], // destination type
+				.result = result,
+				.operandsStart = start,
+				.operandsEnd = end,
+				.sourceExprIdx = exprIdx,
+			};
+
+			this.output.instructions.push(inst);
+			return { .kind = MirOperandKind.REGISTER, .regId = result,};
 		default:{
 			unreachable();
 		}

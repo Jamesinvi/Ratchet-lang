@@ -565,18 +565,15 @@ fn ExprIdx Parser.new_expr(Parser* this)
 
 fn ExprIdx Parser.as(Parser* this, ExprIdx lhs)
 {
-	// Parse a type on the RHS of `as` (e.g., expr as string)
+	// Parse a type on the RHS of `as` (e.g., "k as float")
 	TypeAst targetType = this.parse_type_ast();
-	// Represent the type as a synthetic VAR node holding the type name for now.
 
+    Expr expr = {
+        .kind = ExprKind.CAST,
+    };
 
-	Expr typeExpr = { .kind = ExprKind.VAR, .varExpr = targetType.nameIdx };
-	typeExpr.span = { .line = this.previous.line };
-	ExprIdx rhs = this.push_expr_get_idx(&typeExpr);
-
-	Expr expr = { .kind = ExprKind.BINARY };
-	expr.span = { .line = this.previous.line };
-	expr.binary = { .op = BinOp.AS, .lhs = lhs, .rhs = rhs };
+	expr.cast = { .value = lhs, .targetType = targetType };
+    expr.span = { .line = this.previous.line };
 	return this.push_expr_get_idx(&expr);
 }
 
@@ -696,7 +693,7 @@ fn ExprIdx Parser.binary(Parser* this, ExprIdx lhs)
 		case TokenType.LESS: op = BinOp.LESS;
 		case TokenType.LESS_EQUAL: op = BinOp.LESS_EQ;
 		case TokenType.EQUAL: op = BinOp.STORE;
-		default: op = BinOp.AS;
+		default: unreachable();
 	}
 	Expr expr = { .kind = ExprKind.BINARY };
 	expr.span = { .line = this.previous.line };

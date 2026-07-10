@@ -54,7 +54,21 @@ fn MirBlockIdx MirGenerator.push_empty_block_get_idx(MirGenerator* this)
 
 fn MirOpCode ast_to_mir_op(BinOp astBinOp) @inline
 {
-	return (MirOpCode)(int)astBinOp;
+    switch (astBinOp) {
+        case BinOp.ADD:        return MirOpCode.ADD;
+        case BinOp.SUB:        return MirOpCode.SUB;
+        case BinOp.MUL:        return MirOpCode.MUL;
+        case BinOp.DIV:        return MirOpCode.DIV;
+        case BinOp.EQ:         return MirOpCode.EQ;
+        case BinOp.NEQ:        return MirOpCode.NEQ;
+        case BinOp.LESS:       return MirOpCode.LESS;
+        case BinOp.LESS_EQ:    return MirOpCode.LESS_EQ;
+        case BinOp.GREATER:    return MirOpCode.GREATER;
+        case BinOp.GREATER_EQ: return MirOpCode.GREATER_EQ;
+        case BinOp.AND:        return MirOpCode.AND;
+        case BinOp.OR:         return MirOpCode.OR;
+        case BinOp.STORE:      return MirOpCode.STORE;
+    }
 }
 
 fn MirPlaceIdx MirGenerator.push_place_get_idx(MirGenerator* this, MirPlace* to_push)

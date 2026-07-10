@@ -16,7 +16,7 @@ alias Lexer = lexer::Lexer;
 alias Parser = parser::Parser;
 alias compilationCtx = globals::compilationCtx;
 
-const PRINT_COMP_PIPELINE = true;
+const PRINT_COMP_PIPELINE = false;
 
 enum CompilationOutcome : int
 {

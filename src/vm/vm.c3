@@ -76,19 +76,26 @@ fn RunResult run(Vm* vm)
 	vm.functions = vm.program.functions.entries;
 	vm.instructions = vm.program.instructions.entries;
 	vm.blocks = vm.program.blocks.entries;
-    vm.instructionPtr = &vm.instructions[0];
-	vm.frameCount++;
-	vm.frame = &vm.frames[vm.frameCount -1];
-	vm.frame.base = 0;
-	vm.frame.size = vm.functions[0].frameSize;
-	vm.stackHead = vm.functions[0].frameSize;
 
+	BCFunction* entry = &vm.functions[vm.program.entryFunctionIdx];
+	BCBlock* entryBlock = &vm.blocks[entry.blocksStart];
+	vm.instructionPtr =  &vm.instructions[entryBlock.instructionsStart];
+
+	vm.frameCount = 1;
+	vm.frame = &vm.frames[0];
+	vm.frame.base = 0;
+	vm.frame.size = entry.frameSize;
+	vm.stackHead = entry.frameSize;
+	
 	while(vm.running) {
 		BCInstruction* inst = vm.instructionPtr;
 		vm.instructionPtr++; 
+		// log::logn("%s", inst.opCode.asStr);
 		switch(inst.opCode)
 		{
 			case BCOpCode.NOP:		continue;
+			// Cast
+			case BCOpCode.CAST:		vm.cast_op(inst);
 		    // Const
 			case BCOpCode.CONSTI:	vm.const_op(inst, int);
 			case BCOpCode.CONSTF:	vm.const_op(inst, float);
@@ -353,4 +360,24 @@ macro Vm.cmp_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 		$case VmCmpOp.OR: 		result = *left || right;
 	$endswitch
 	*dst = result;
+}
+
+fn void Vm.cast_op(Vm* vm, BCInstruction* inst)
+{
+	switch(inst.castKind)
+	{
+		case BCCastKind.INT_TO_FLOAT: 		vm.cast_value(inst, int, float);
+		case BCCastKind.INT_TO_DOUBLE: 		vm.cast_value(inst, int, double);
+		case BCCastKind.FLOAT_TO_INT: 		vm.cast_value(inst, float, int);
+		case BCCastKind.FLOAT_TO_DOUBLE: 	vm.cast_value(inst, float, double);
+		case BCCastKind.DOUBLE_TO_INT:	 	vm.cast_value(inst, double, int);
+		case BCCastKind.DOUBLE_TO_FLOAT: 	vm.cast_value(inst, double, float);
+		case BCCastKind.IDENTITY: 			break;//no_op
+	}
+}
+
+macro Vm.cast_value(Vm* vm, BCInstruction* inst, $Source, $Target) {
+    $Source* source = ($Source*)&vm.stack[vm.frame.base + inst.leftOffset];
+    $Target* target = ($Target*)&vm.stack[vm.frame.base + inst.destOffset];
+    *target = ($Target)*source;
 }

@@ -456,3 +456,48 @@ fn BCOpCode select_echo_op_code(CompTypeInfo typeInfo)
     }
 	unreachable();
 }
+
+fn BCCastKind select_cast_kind(CompTypeInfo src, CompTypeInfo target)
+{
+	switch(src.type)
+	{
+		case ValueType.INT:				
+		{
+			switch(target.type)
+			{
+				case ValueType.INT:			return 	BCCastKind.IDENTITY;
+				case ValueType.FLOAT:		return 	BCCastKind.INT_TO_FLOAT;
+				case ValueType.DOUBLE:		return 	BCCastKind.INT_TO_DOUBLE;
+        		default:					log::errlogn("Unsupported cast operation (%s to %s)", src.type, target.type);
+			}
+			unreachable();
+		}
+		case ValueType.FLOAT:				
+		{
+			switch(target.type)
+			{
+				case ValueType.INT:			return 	BCCastKind.FLOAT_TO_INT;
+				case ValueType.FLOAT:		return 	BCCastKind.IDENTITY;
+				case ValueType.DOUBLE:		return 	BCCastKind.FLOAT_TO_DOUBLE;
+        		default:					log::errlogn("Unsupported cast operation (%s to %s)", src.type, target.type);
+
+			}
+			unreachable();
+		}
+		case ValueType.DOUBLE:				
+		{
+			switch(target.type)
+			{
+				case ValueType.INT:			return 	BCCastKind.DOUBLE_TO_INT;
+				case ValueType.FLOAT:		return 	BCCastKind.DOUBLE_TO_FLOAT;
+				case ValueType.DOUBLE:		return 	BCCastKind.IDENTITY;
+        		default:					log::errlogn("Unsupported cast operation (%s to %s)", src.type, target.type);
+			}
+			unreachable();
+		}
+
+		default:					log::errlogn("Unsupported cast operation (%s to %s)", src.type, target.type);
+		unreachable();
+
+	}
+}

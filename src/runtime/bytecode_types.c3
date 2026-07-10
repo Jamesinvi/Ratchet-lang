@@ -84,7 +84,21 @@ enum BCOpCode : char (String asStr)
 	ECHOD           { "echo_d" },
 	ECHOB           { "echo_b" },
 	ECHOS           { "echo_s" },
+	CAST			{ "cast__" },
 }
+
+
+enum BCCastKind : char (String asStr)
+{
+	IDENTITY			{ "nocast"},
+    INT_TO_FLOAT		{ "i->f"},	
+	INT_TO_DOUBLE		{ "i->d"},
+	FLOAT_TO_INT		{ "f->i"},
+	FLOAT_TO_DOUBLE		{ "f->d"},
+	DOUBLE_TO_INT		{ "d->i"},
+	DOUBLE_TO_FLOAT		{ "d->f"},
+}
+
 
 enum BCOpCodeCategory : char (String asStr)
 {
@@ -123,7 +137,8 @@ enum BCOperandKind : char (String asStr)
 	IMM_NULL 	{ "null" },
 	BLOCK 		{ "block" },
 	FUNCTION 	{ "fn" },
-	MOVE_SIZE	{ "mov_size"},
+	MOVE_SIZE	{ "mov_size" },
+	CAST_TYPE	{ "cast_type" },
 }
 
 struct BCInstruction
@@ -135,6 +150,7 @@ struct BCInstruction
 		bool immBool;
 		InternedString immString;
 		ushort byteCount;
+	    BCCastKind castKind;
 		BCCallInfoIdx callInfoIdx;
 		BCBlockIdx  blockToJumpTo;
     }
@@ -197,6 +213,7 @@ struct BCProjection
 
 struct BCProgram
 {
+	BCFunctionIdx 		entryFunctionIdx;
 	List{BCFunction}	functions;
 	List{BCFrameSlot} 	functionFrameSlots;
 	List{BCBlock}       blocks;
@@ -320,6 +337,7 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);
 		case BCOperandKind.MOVE_SIZE:	log::log("move %s bytes", inst.byteCount);
+		case BCOperandKind.CAST_TYPE:	log::log("| cast: %s", inst.castKind.asStr);
 		default:						log::log("<?>");
 	}
 }
