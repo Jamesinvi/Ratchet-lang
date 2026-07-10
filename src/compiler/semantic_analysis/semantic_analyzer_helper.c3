@@ -27,7 +27,6 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.FLOAT_T: 		result.type = ValueType.FLOAT;
 		case TokenType.DOUBLE_T: 		result.type = ValueType.DOUBLE;
 		case TokenType.BOOL_T: 			result.type = ValueType.BOOL;
-		case TokenType.STRING_T:		result.type = ValueType.REF;
 		case TokenType.NULL:			result.type = ValueType.NULL;
 		case TokenType.INT_REF_GC:		{ result.type = ValueType.REF; result.refToType = ValueType.INT; }
 		case TokenType.FLOAT_REF_GC:	{ result.type = ValueType.REF; result.refToType = ValueType.FLOAT; }
@@ -40,7 +39,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.IDENTIFIER:
 		{
             assert(globals::structTypes.len() < int::max);
-			String typeName = this.ast.names[input.nameIdx].text();
+			String typeName = this.ast.names[input.nameIdx].src_text();
 			if (typeName.len == 0){
 				return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			} 
@@ -69,7 +68,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.THIS:			
 		{
             assert(globals::structTypes.len() < int::max);
-			String typeName = this.ast.names[input.nameIdx].text();
+			String typeName = this.ast.names[input.nameIdx].src_text();
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.REF;
@@ -131,9 +130,9 @@ enum StructLayoutResult : char
 *>
 fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
-	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text());
+	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text());
 	CompStructTypeInfo* info = &globals::structTypes[index];
-	String name = ast.names[decl.structDecl.nameIdx].text();
+	String name = ast.names[decl.structDecl.nameIdx].src_text();
 
 	// CompStructTypeInfo owns its data, so we must  init() it
 	info.init();
@@ -166,7 +165,7 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* th
         offset = (ushort)common::align_offset((short)offset, (short)fieldAlign);
 		// FieldInfo also owns its data, so we copy the string, instead of storing an interned string
         FieldInfo fieldInfo = {
-            .name = String.copy(ast.names[field.nameIdx].text(), &globals::typeInfoAllocator),
+            .name = String.copy(ast.names[field.nameIdx].src_text(), &globals::typeInfoAllocator),
             .typeInfo = fieldType,
             .offset = offset,
         };

@@ -16,28 +16,30 @@ struct CompTypeInfo
 fn ushort get_type_size(CompTypeInfo info)
 {
     switch (info.type) {
-        case ValueType.INT:         return int::size;
-        case ValueType.FLOAT:       return float::size;
-        case ValueType.DOUBLE:      return double::size;
-        case ValueType.BOOL:        return bool::size;
-        case ValueType.REF:      	nextcase;
-        case ValueType.PTR:   		return uptr::size;
-        case ValueType.STRUCT:      return globals::structTypes[info.structTypeIndex].sizeInBytes;
-        default:                    return 0;
+        case ValueType.INT:         	return int::size;
+        case ValueType.FLOAT:       	return float::size;
+        case ValueType.DOUBLE:      	return double::size;
+        case ValueType.BOOL:        	return bool::size;
+		case ValueType.STRING_LITERAL: 	return StringID::size;
+        case ValueType.REF:      		nextcase;
+        case ValueType.PTR:   			return uptr::size;
+        case ValueType.STRUCT:      	return globals::structTypes[info.structTypeIndex].sizeInBytes;
+        default:                    	unreachable();
     }
 }
 
 fn ushort get_type_alignment(CompTypeInfo info)
 {
     switch (info.type) {
-        case ValueType.INT:         return int::alignment;
-        case ValueType.FLOAT:       return float::alignment;
-        case ValueType.DOUBLE:      return double::alignment;
-        case ValueType.BOOL:        return bool::alignment;
-        case ValueType.REF:      	nextcase;
-        case ValueType.PTR:   		return uptr::alignment;
-        case ValueType.STRUCT: 		return globals::structTypes[info.structTypeIndex].alignmentInBytes;
-        default:                    return 0;
+        case ValueType.INT:         	return int::alignment;
+        case ValueType.FLOAT:      		return float::alignment;
+        case ValueType.DOUBLE:      	return double::alignment;
+        case ValueType.BOOL:        	return bool::alignment;
+		case ValueType.STRING_LITERAL: 	return StringID::alignment;
+        case ValueType.REF:      		nextcase;
+        case ValueType.PTR:   			return uptr::alignment;
+        case ValueType.STRUCT: 			return globals::structTypes[info.structTypeIndex].alignmentInBytes;
+        default:                    	unreachable();
     }
 }
 

@@ -50,6 +50,7 @@ enum BCOpCode : char (String asStr)
 	CONSTF	        { "cnst_f" },
 	CONSTD	        { "cnst_d" },
 	CONSTB	        { "cnst_b" },
+	CONSTS	        { "cnst_s" },
 	STORI	        { "stor_i" },
 	STORF	        { "stor_f" },
 	STORD	        { "stor_d" },
@@ -82,6 +83,7 @@ enum BCOpCode : char (String asStr)
 	ECHOF           { "echo_f" },
 	ECHOD           { "echo_d" },
 	ECHOB           { "echo_b" },
+	ECHOS           { "echo_s" },
 }
 
 enum BCOpCodeCategory : char (String asStr)
@@ -117,6 +119,7 @@ enum BCOperandKind : char (String asStr)
 	IMM_FLOAT 	{ "imm_f" },
 	IMM_DOUBLE  { "imm_d" },
 	IMM_BOOL 	{ "imm_b" },
+	IMM_STRING 	{ "imm_s" },
 	IMM_NULL 	{ "null" },
 	BLOCK 		{ "block" },
 	FUNCTION 	{ "fn" },
@@ -130,6 +133,7 @@ struct BCInstruction
         float immFloat;
         double immDouble;
 		bool immBool;
+		InternedString immString;
 		ushort byteCount;
 		BCCallInfoIdx callInfoIdx;
 		BCBlockIdx  blockToJumpTo;
@@ -311,6 +315,7 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_FLOAT:	log::log("%s", inst.immFloat);
 		case BCOperandKind.IMM_DOUBLE:	log::log("%s", inst.immDouble);
 		case BCOperandKind.IMM_BOOL:	log::log("%s", inst.immBool);
+		case BCOperandKind.IMM_STRING:	log::log("%s", inst.immString.cnst_text());
 		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);

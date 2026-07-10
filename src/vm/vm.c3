@@ -94,6 +94,7 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.CONSTF:	vm.const_op(inst, float);
 			case BCOpCode.CONSTD:	vm.const_op(inst, double);
 			case BCOpCode.CONSTB:	vm.const_op(inst, bool);
+			case BCOpCode.CONSTS:	vm.const_op(inst, InternedString);
 			// Less
 			case BCOpCode.LESSI:	vm.cmp_op(inst, int, VmCmpOp.LESS);
 			case BCOpCode.LESSF:	vm.cmp_op(inst, float, VmCmpOp.LESS);
@@ -162,6 +163,13 @@ fn RunResult run(Vm* vm)
 			case BCOpCode.ECHOF:	vm.echo(inst, float);
 			case BCOpCode.ECHOD:	vm.echo(inst, double);
 			case BCOpCode.ECHOB:	vm.echo(inst, bool);
+			case BCOpCode.ECHOS:
+			{
+
+				InternedString* string = (InternedString*)&vm.stack[vm.frame.base + inst.leftOffset];
+				// use the vm output stream. stdout by default
+				io::fprintfn(vm.output, "%s", string.cnst_text());
+			}
 			// Control flow
 			case BCOpCode.BRANCH_IF_FALSE:
 			{
@@ -251,6 +259,7 @@ macro Vm.const_op(Vm* vm, BCInstruction* inst, $Type)
 		$case float: 	field = inst.immFloat;
 		$case double: 	field = inst.immDouble;
 		$case bool: 	field = inst.immBool;
+		$case InternedString: field = inst.immString;
 	$endswitch
 	*dst = field;
 }

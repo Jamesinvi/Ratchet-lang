@@ -68,6 +68,7 @@ enum MirOperandKind : char (String asStr)
 	IMM_FLOAT 	{ "imm_f" },
 	IMM_DOUBLE  { "imm_d" },
 	IMM_BOOL 	{ "imm_b" },
+	IMM_STRING	{ "imm_s" },
 	IMM_NULL 	{ "null" },
 	BLOCK 		{ "block" },
 	FUNCTION 	{ "fn" },
@@ -85,6 +86,7 @@ struct MirOperand
 		float 			immFloat;
 		double 			immDouble;
 		bool 			immBool;
+		InternedString	immString;
 	}
 	MirOperandKind kind;
 }
@@ -179,7 +181,7 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 		} else {
 			log::log("function ");
 			this.print_decl_function_name(fun.sourceDeclIdx, ast);
-			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx].text());
+			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx].src_text());
 		}
 		for(sz i = fun.blocksStart; i < fun.blocksEnd; i++){
 			this.print_block(this.blocks[i], ast);
@@ -199,10 +201,10 @@ fn void MirProgram.print_decl_function_name(MirProgram* this, DeclIdx declIdx, P
 	if (fnDecl.params.len() > 0 && fnDecl.params[0].type.tokenType == TokenType.THIS) {
 		InternedString structName = ast.names[fnDecl.params[0].type.nameIdx];
 		InternedString methodName = ast.names[fnDecl.nameIdx];
-		log::log("%s.%s", structName.text(), methodName.text());
+		log::log("%s.%s", structName.src_text(), methodName.src_text());
 		return;
 	}
-	log::log("%s", ast.names[fnDecl.nameIdx].text());
+	log::log("%s", ast.names[fnDecl.nameIdx].src_text());
 }
 
 
@@ -219,6 +221,7 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 		case MirOperandKind.IMM_FLOAT:						log::log("%s", 		op.immFloat);
 		case MirOperandKind.IMM_DOUBLE:						log::log("%s", 		op.immDouble);
 		case MirOperandKind.IMM_BOOL:						log::log("%s", 		op.immBool);
+		case MirOperandKind.IMM_STRING:						log::log("%s", 		op.immString.cnst_text());
 		case MirOperandKind.IMM_NULL:						log::log("null");
 		case MirOperandKind.BLOCK:							log::log("block_%s",op.blockIdx);
 		case MirOperandKind.FUNCTION:

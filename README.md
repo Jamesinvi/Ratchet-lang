@@ -76,8 +76,14 @@ if (score > 10) {
 2. `int`
 3. `float`
 4. `double`
-5. `string`
-6. `null` for no-return function signatures
+5. `null` for no-return function signatures
+
+### String literals
+
+String literals such as `"hello"` are compile-time constants, not values of a
+built-in `string` type. In the current executable subset, string literals can be
+printed directly with `echo`. A general-purpose `String` type is intended to be
+provided by the standard library.
 
 ### User types
 

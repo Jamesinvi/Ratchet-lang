@@ -159,13 +159,12 @@ fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand opera
 }
 
 
-
-
 fn bool is_immediate(MirOperand operand)
 {
 	return operand.kind == MirOperandKind.IMM_BOOL 
 		|| operand.kind == IMM_DOUBLE 
 		|| operand.kind == IMM_FLOAT 
+		|| operand.kind == IMM_STRING 
 		|| operand.kind == IMM_INT;
 }
 
@@ -248,6 +247,7 @@ fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand*
 		case MirOperandKind.IMM_DOUBLE:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.DOUBLE, .refToType = ValueType.NULL};
 		case MirOperandKind.IMM_BOOL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
 		case MirOperandKind.IMM_NULL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_STRING:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL};
 		case MirOperandKind.PLACE:		
 		{
 			log::logn("Places need to be implemented");
@@ -447,11 +447,12 @@ fn BCOpCode select_echo_op_code(CompTypeInfo typeInfo)
 {
     switch(typeInfo.type)
     {
-        case ValueType.INT: 		return BCOpCode.ECHOI;
-        case ValueType.FLOAT: 		return BCOpCode.ECHOF;
-        case ValueType.DOUBLE: 		return BCOpCode.ECHOD;
-        case ValueType.BOOL: 		return BCOpCode.ECHOB;
-        default:					log::errlogn("Unsupported %s operation", typeInfo.type);
+        case ValueType.INT: 			return BCOpCode.ECHOI;
+        case ValueType.FLOAT: 			return BCOpCode.ECHOF;
+        case ValueType.DOUBLE: 			return BCOpCode.ECHOD;
+        case ValueType.BOOL: 			return BCOpCode.ECHOB;
+        case ValueType.STRING_LITERAL: 	return BCOpCode.ECHOS;
+        default:						log::errlogn("Unsupported echo %s operation", typeInfo.type);
     }
 	unreachable();
 }

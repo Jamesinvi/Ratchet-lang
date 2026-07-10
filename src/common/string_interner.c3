@@ -9,9 +9,15 @@ struct InternedString
 	StringID id;
 }
 
-fn String InternedString.text(InternedString* this) @inline
+macro String InternedString.src_text(InternedString* this)
 {
     return globals::internedSourceStrings.strings[this.id];
+}
+
+
+macro String InternedString.cnst_text(InternedString* this)
+{
+	return globals::constantStrings.strings[this.id];
 }
 
 struct StringInterner

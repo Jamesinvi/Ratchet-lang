@@ -1,31 +1,6 @@
 
-struct Point {
-    int x;
-    int y;
-}
-
-struct PointZ {
-    Point p;
-    int z;
-}
 // Entry-point. Should return true if errors occurred
 fn bool program(){
-    Point a;
-    Point b;
-    a.x = 6;
-    a.y = 15;
-    b.x = 22;
-    PointZ z;
-    z.p = a;
-    z.z = b.x;
-    bool resa = isXGreaterThanTen(a);
-    bool resb = isXGreaterThanTen(b);
-    echo (resa);
-    echo (resb);
+    echo("hello");
     return false;
-}
-
-fn bool isXGreaterThanTen(Point a)
-{
-    return a.x >10;
 }

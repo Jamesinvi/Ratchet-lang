@@ -237,6 +237,15 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 			instruction.opCode = BCOpCode.CONSTB;
 			instruction.immKind = BCOperandKind.IMM_BOOL;
 		}
+		case MirOperandKind.IMM_STRING:
+		{
+			instruction.destOffset = destOffset;
+			instruction.leftOffset = runtime::NO_OFFSET;
+			instruction.rightOffset = runtime::NO_OFFSET;
+			instruction.immString = val.immString;
+			instruction.opCode = BCOpCode.CONSTS;
+			instruction.immKind = BCOperandKind.IMM_STRING;
+		}
 		default:
 		{
 			log::errlogn("Unsupported store op for %s", val.kind);

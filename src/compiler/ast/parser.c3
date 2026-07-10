@@ -650,7 +650,7 @@ fn ExprIdx Parser.string(Parser* this)
 {
 	String source   = this.previous.value();
 	NameIdx nameIdx = this.push_name_get_idx(source);
-	Expr expr       = { .kind = ExprKind.STRING, .stringLiteral = nameIdx };
+	Expr expr       = { .kind = ExprKind.STRING_LITERAL, .stringLiteral = nameIdx };
 	ExprIdx exprIdx = this.push_expr_get_idx(&expr);
 	return exprIdx;
 }

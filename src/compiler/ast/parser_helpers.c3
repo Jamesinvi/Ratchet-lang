@@ -232,7 +232,7 @@ fn String Parser.mangle_method_name(Parser* this, DeclIdx structDeclIdx, int met
     MethodDeclAst* methodDecl = &decl.structDecl.methods[methodIdx];
     InternedString structNameId = this.outputAst.names[decl.structDecl.nameIdx];
     InternedString methodNameId = this.outputAst.names[methodDecl.nameIdx];
-    return string::format(allocator, "%s_%s", structNameId.text(), methodNameId.text());
+    return string::format(allocator, "%s_%s", structNameId.src_text(), methodNameId.src_text());
 }
 
 fn void Parser.predeclare_natives(Parser* this)

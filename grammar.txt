@@ -16,7 +16,6 @@ type           -> "int"
                | "float"
                | "double"
                | "bool"
-               | "string"
                | "null"
                | "int&" | "float&" | "double&" | "bool&"
                | DECLARED_STRUCT_TYPE
@@ -61,7 +60,7 @@ primary        -> "true"
                | INTEGER
                | FLOAT
                | DOUBLE
-               | STRING
+               | STRING_LITERAL
                | IDENTIFIER
                | "new" type
                | "(" expression ")" ;

@@ -9,6 +9,6 @@ enum ValueType : char
 	STRUCT,
 	REF,
 	PTR,
-	STRING,
+	STRING_LITERAL,
 	NULL,
 }

@@ -164,7 +164,7 @@ fn void Lexer.string(Lexer* this) {
         return;
     }
 
-    this.add_token(TokenType.STRING);
+    this.add_token(TokenType.STRING_LITERAL);
     this.advance();
 
 }

@@ -13,7 +13,7 @@ enum TokenType : uint {
     GREATER, GREATER_EQUAL, LESS, LESS_EQUAL,
 
     // Literals.
-    IDENTIFIER, STRING, INTEGER, FLOAT, DOUBLE,
+    IDENTIFIER, STRING_LITERAL, INTEGER, FLOAT, DOUBLE,
 
     // Keywords.
     AND, CLASS, ELSE, FALSE, FN, FOR, IF, NULL, OR,
@@ -21,7 +21,7 @@ enum TokenType : uint {
     METHOD, AS, NEW,
 
     // Types
-    INTEGER_T, FLOAT_T, DOUBLE_T, STRING_T, STRUCT_T, BOOL_T,
+    INTEGER_T, FLOAT_T, DOUBLE_T, STRUCT_T, BOOL_T,
     INT_REF_GC, FLOAT_REF_GC, DOUBLE_REF_GC, BOOL_REF_GC,
     INT_REF_NOGC, FLOAT_REF_NOGC, DOUBLE_REF_NOGC, BOOL_REF_NOGC,
     EOF,
@@ -42,7 +42,7 @@ struct Token
 
 fn String Token.value(Token* this) @inline
 {
-	return this.string.text();
+	return this.string.src_text();
 }
 
 Keyword[*] keywords = {
@@ -67,7 +67,6 @@ Keyword[*] keywords = {
     {.tokenType = FLOAT_T, .string = "float"},
     {.tokenType = DOUBLE_T, .string = "double"},
     {.tokenType = ECHO, .string = "echo"},
-    {.tokenType = STRING_T, .string = "string"},
     {.tokenType = STRUCT_T, .string = "struct"},
     {.tokenType = BOOL_T, .string = "bool"},
     {.tokenType = NEW, .string = "new"},
@@ -134,8 +133,7 @@ fn bool TokenType.is_builtin_type(TokenType* t)
            (*t == TokenType.INTEGER_T) ||
            (*t == TokenType.FLOAT_T)   ||
            (*t == TokenType.DOUBLE_T)  ||
-           (*t == TokenType.BOOL_T)    ||
-           (*t == TokenType.STRING_T);
+           (*t == TokenType.BOOL_T);
 }
 
 fn bool TokenType.is_builtin_ref(TokenType* t)

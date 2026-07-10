@@ -1,6 +1,8 @@
 fn bool program() {
     int k = 15;
     echo("hello");
-    echo((k as string));
+    echo(k);
+    echo((k as float));
+    echo((k as double));
     return false;
 }
