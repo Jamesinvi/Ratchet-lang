@@ -125,8 +125,9 @@ enum StructLayoutResult : char
 	ERROR,
 }
 <*
-	Fills in all details of a struct declaration. This is done just before the program is fully analyzed. 
-	All types however, should be already declared in a previous pass.
+	Try to fill in a specific struct metadata. Will return an enum value based on success, error, or defer.
+	If defer is returned, it means the struct contains a field of another struct that still has undefined metadata, 
+	so it must be deferred to a later pass.
 *>
 fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
