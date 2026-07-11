@@ -137,7 +137,7 @@ struct ExprUnary    { UnOp op;           ExprIdx rhs; }
 struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
 struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd;  ExprIdx memberCaller;}
 struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
-struct ExprNew		{ TypeAst type; }
+struct ExprNew		{ TypeAst type; 	 ExprIdx init; }
 struct ExprCast 	{ ExprIdx value;	TypeAst targetType; }
 
 struct Expr
@@ -448,9 +448,10 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         }
         case ExprKind.NEW:
         {
-            log::log("new");
 			InternedString typeName = this.names[expr.new.type.nameIdx];
-			log::log("<%s>", typeName.text());
+		    log::log("new <%s> { ", typeName.text());
+			this.print_expression(&this.expressions[expr.new.init]);
+			log::log("}");
         }
         case ExprKind.GROUP:            log::log("(<group>)");
         default:                        log::log("<?expr?>");

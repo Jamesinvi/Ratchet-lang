@@ -148,7 +148,7 @@ fn void Parser.predeclare_structs(Parser* this)
             String starName = nameTok.value().concat(this.outputAllocator, "*");
             String ampName = nameTok.value().concat(this.outputAllocator, "&");
 
-            debug::@log_compilation("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
+            debug::@log_parse("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
             globals::declaredStructs.set(nameTok.value(), declIdx);
             globals::declaredStructs.set(starName, declIdx);
             globals::declaredStructs.set(ampName, declIdx);
@@ -172,7 +172,7 @@ fn void Parser.predeclare_functions(Parser* this)
             NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
             decl.fnDecl.returnType = returnTypeAst;
             decl.fnDecl.nameIdx = nameIdx;
-            debug::@log_compilation("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), typeTok.value(), nameIdx);
+            debug::@log_parse("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), typeTok.value(), nameIdx);
             DeclIdx declIdx = this.push_decl_get_idx(&decl);
             globals::declaredFunctions.set(nameTok.value(), declIdx);
         }

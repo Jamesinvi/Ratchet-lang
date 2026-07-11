@@ -62,11 +62,11 @@ primary        -> "true"
                | DOUBLE
                | STRING_LITERAL
                | IDENTIFIER
-               | "new" type
+               | "new" type "{" expression "}"
                | "(" expression ")" ;
 
 arguments      -> expression ( "," expression )* ;
 
 // Not currently parsed despite older grammar entries:
 // top-level method declarations, for statements, array/index syntax,
-// struct literals, and "new" initializers.
+// struct literals.

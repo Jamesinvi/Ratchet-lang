@@ -141,8 +141,8 @@ Ratchet makes storage mode explicit in type spelling.
 | Form | Meaning | Allocation | Copy behavior |
 | --- | --- | --- | --- |
 | `T` | Value type | Stack/inline by default | Full value copy |
-| `T&` | Managed heap reference | `new T&` | Reference copy |
-| `T*` | Manual/native pointer | `new T*` | Pointer copy |
+| `T&` | Managed heap reference | `new T& { initializer }` | Reference copy |
+| `T*` | Manual/native pointer | `new T* { initializer }` | Pointer copy |
 
 Quick examples:
 
@@ -158,6 +158,7 @@ Notes:
 1. `T`, `T&`, and `T*` are distinct and not implicitly convertible.
 2. `T&` participates in Ratchet's managed runtime.
 3. `T*` is for manual/native ownership boundaries and must be handled explicitly.
+4. Scalar `new` expressions require exactly one initializer expression inside `{ ... }`.
 
 ### Managed reference assignment
 
@@ -206,7 +207,7 @@ coroutine regen(Enemy& enemy, float amount) {
 }
 
 fn bool program() {
-    Enemy& enemy = new Enemy&();
+    Enemy& enemy = new Enemy& { hp = 0, alive = true };
     enemy.hp = 0;
     CoroutineHandle h = start_co regen(enemy, 5.0f);
 

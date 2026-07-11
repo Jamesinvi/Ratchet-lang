@@ -95,11 +95,7 @@ fn MirGenResult MirGenerator.run(MirGenerator* this)
 	return MirGenResult.OK;
 }
 
-fn void MirGenerator.lower_methods_to_functions(
-	MirGenerator* this,
-	DeclIdx structDeclIdx,
-	StructDeclAst* structDecl
-)
+fn void MirGenerator.lower_methods_to_functions(MirGenerator* this, DeclIdx structDeclIdx, StructDeclAst* structDecl)
 {
 	foreach (methodIdx, &method : structDecl.methods) {
 		assert(methodIdx < int::max);

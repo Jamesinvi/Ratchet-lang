@@ -108,7 +108,7 @@ fn StmtIdx Parser.statement(Parser* this)
 
 fn StmtIdx Parser.expression_statement(Parser* this)
 {
-	debug::@log_compilation("expression_statement at %s", (this.previous - 1).value());
+	debug::@log_parse("expression_statement at %s", (this.previous - 1).value());
 	int line        = this.current.line;
 	ExprIdx exprIdx = this.expression();
 	this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
@@ -121,7 +121,7 @@ fn StmtIdx Parser.expression_statement(Parser* this)
 
 fn StmtIdx Parser.echo_statement(Parser* this)
 {
-	debug::@log_compilation("echo_statement at %s", (this.previous - 1).value());
+	debug::@log_parse("echo_statement at %s", (this.previous - 1).value());
 	int line        = this.previous.line;
 	ExprIdx exprIdx = this.expression();
 	this.consume(TokenType.SEMICOLON, "Expected ';' after statement.");
@@ -134,7 +134,7 @@ fn StmtIdx Parser.echo_statement(Parser* this)
 
 fn StmtIdx Parser.return_statement(Parser* this)
 {
-	debug::@log_compilation("return_statement at %s at %s", this.previous.value(), this.current.value());
+	debug::@log_parse("return_statement at %s at %s", this.previous.value(), this.current.value());
 	int line = this.previous.line;
 
 	Stmt stmt = { .kind = StmtKind.RETURN };
@@ -155,7 +155,7 @@ fn StmtIdx Parser.return_statement(Parser* this)
 
 fn StmtIdx Parser.if_statement(Parser* this)
 {
-	debug::@log_compilation("if_statement at %s", this.current.value());
+	debug::@log_parse("if_statement at %s", this.current.value());
 	int line = this.previous.line;
 
 	this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
@@ -181,7 +181,7 @@ fn StmtIdx Parser.if_statement(Parser* this)
 
 fn StmtIdx Parser.while_statement(Parser* this)
 {
-	debug::@log_compilation("while_statement at %s", this.current.value());
+	debug::@log_parse("while_statement at %s", this.current.value());
 	int line = this.previous.line;
 
 	this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
@@ -239,7 +239,7 @@ fn StmtIdx Parser.statement_or_vardecl_in_block(Parser* this)
 
 fn DeclIdx Parser.struct_declaration(Parser* this)
 {
-	debug::@log_compilation("struct_declaration at %s", this.current.value());
+	debug::@log_parse("struct_declaration at %s", this.current.value());
 
 	// struct <name> { <fields> }
 	this.consume(TokenType.IDENTIFIER, "Expected struct name after 'struct'");
@@ -326,7 +326,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 
 fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
 {
-	debug::@log_compilation("dot at %s at %s", this.previous.value(), this.current.value());
+	debug::@log_parse("dot at %s at %s", this.previous.value(), this.current.value());
 
 	String memberName = this.current.value();
 	this.consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
@@ -349,7 +349,7 @@ fn ExprIdx Parser.dot(Parser* this, ExprIdx lhs)
 
 fn ExprIdx Parser.this_kwrd(Parser* this)
 {
-	debug::@log_compilation("this_kwrd at %s", this.previous.value(), this.current.value());
+	debug::@log_parse("this_kwrd at %s", this.previous.value(), this.current.value());
 
 	String memberName = this.current.value();
 	Expr expr         = { .kind = ExprKind.THIS };
@@ -363,7 +363,7 @@ fn ExprIdx Parser.this_kwrd(Parser* this)
 
 fn StmtIdx Parser.var_declaration(Parser* this)
 {
-	debug::@log_compilation("var_declaration at %s", this.current.value());
+	debug::@log_parse("var_declaration at %s", this.current.value());
 	int line = this.current.line;
 
 	TypeAst type = this.parse_type_ast();
@@ -386,7 +386,7 @@ fn StmtIdx Parser.var_declaration(Parser* this)
 
 fn ExprIdx Parser.variable(Parser* this)
 {
-	debug::@log_compilation("variable at %s", this.previous.value());
+	debug::@log_parse("variable at %s", this.previous.value());
 	NameIdx nameIdx = this.push_name_get_idx(this.previous.value());
 	Expr expr       = { .kind = ExprKind.VAR, .varExpr = nameIdx };
 	expr.span = { .line = this.previous.line };
@@ -397,7 +397,7 @@ fn ExprIdx Parser.variable(Parser* this)
 
 fn DeclIdx Parser.fun_declaration(Parser* this)
 {
-	debug::@log_compilation("fun_declaration at %s", this.current.value());
+	debug::@log_parse("fun_declaration at %s", this.current.value());
 
 	// return type
 	TypeAst ret = this.parse_type_ast(); // consumes it
@@ -408,18 +408,16 @@ fn DeclIdx Parser.fun_declaration(Parser* this)
 
 	// must exist from predeclaration
 	DeclIdx? declIdxOpt = globals::declaredFunctions.get(fnName);
-	if (catch notFound = declIdxOpt)
-	{
+	if (catch notFound = declIdxOpt) {
 		this.error("No function pre-declared with name at %s", fnName);
 		return NO_IDX;
 	}
 
 	DeclIdx declIdx = declIdxOpt;
-	Decl* decl      = &this.outputAst.declarations[declIdx];
+	Decl* decl = &this.outputAst.declarations[declIdx];
 
 	// sanity
-	if (decl.kind != DeclKind.FUNCTION)
-	{
+	if (decl.kind != DeclKind.FUNCTION)	{
 		this.error("Internal error: predecl for at %s isn't a function decl", fnName);
 		return NO_IDX;
 	}
@@ -545,11 +543,16 @@ fn ExprIdx Parser.expression(Parser* this)
 
 fn ExprIdx Parser.new_expr(Parser* this)
 {
-	debug::@log_compilation("new_expr at %s", this.previous.value());
+	debug::@log_parse("new_expr at %s", this.previous.value());
 	TypeAst targetType = this.parse_type_ast();
 	Expr expr          = { .kind = ExprKind.NEW };
 	expr.span = { .line = this.previous.line };
 	expr.new = { .type = targetType };
+	debug::@log_parse("%s", this.current.value());
+	this.consume(TokenType.LEFT_BRACE, "Expect '{' when declaring a new ref type");
+	ExprIdx initExpr = this.expression();
+	this.consume(TokenType.RIGHT_BRACE, "Expect '}' when declaring a new ref type");
+	expr.new.init = initExpr;
 	ExprIdx index = this.push_expr_get_idx(&expr);
 	return index;
 }
@@ -559,10 +562,7 @@ fn ExprIdx Parser.as(Parser* this, ExprIdx lhs)
 	// Parse a type on the RHS of `as` (e.g., "k as float")
 	TypeAst targetType = this.parse_type_ast();
 
-    Expr expr = {
-        .kind = ExprKind.CAST,
-    };
-
+    Expr expr = { .kind = ExprKind.CAST };
 	expr.cast = { .value = lhs, .targetType = targetType };
     expr.span = { .line = this.previous.line };
 	return this.push_expr_get_idx(&expr);
@@ -599,7 +599,7 @@ fn ExprIdx Parser.grouping(Parser* this)
 
 fn ExprIdx Parser.number(Parser* this)
 {
-	debug::@log_compilation("number at %s", this.previous.value());
+	debug::@log_parse("number at %s", this.previous.value());
 	Expr expr;
 	switch (this.previous.tokenType)
 	{
@@ -667,8 +667,8 @@ fn ExprIdx Parser.unary(Parser* this)
 fn ExprIdx Parser.binary(Parser* this, ExprIdx lhs)
 {
 	TokenType operatorType = this.previous.tokenType;
-	ParseRule* rule        = get_rule(operatorType);
-	ExprIdx rhs            = this.parse_precedence((Precedence)(rule.precedence.ordinal + 1));
+	ParseRule* rule = get_rule(operatorType);
+	ExprIdx rhs = this.parse_precedence((Precedence)(rule.precedence.ordinal + 1));
 	BinOp op;
 
 	switch (operatorType)
