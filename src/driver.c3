@@ -14,7 +14,7 @@ import std::io::file;
 
 alias Lexer = lexer::Lexer;
 alias Parser = parser::Parser;
-alias compilationCtx = globals::compilationCtx;
+alias ctx = globals::compilationCtx;
 
 const PRINT_COMP_PIPELINE = false;
 
@@ -24,37 +24,31 @@ enum CompilationOutcome : int
 	PARSE_ERROR,
 	ANALYSIS_ERROR,
 	MIR_ERROR,
+	BYTECODE_ERROR,
 }
 
 struct CompilationResult
 {
 	CompilationOutcome outcome;
-	BCProgram*		   compiledProgram;
+	BCProgram		   compiledProgram;
 }
 
 struct CompilationContext
 {
-	Lexer 				lexer;
-	Parser 				parser;
-	SemanticAnalyzer	analyzer;
-	MirGenerator		mirGen;
-	BCGenerator 		byteCodeGen;
-	BCProgram			compiledProgram;
-}
+	ProgramAst 			ast;
+	SymbolTable 		symbolTable;
+	MirProgram			mirProgram;
+	BCProgram			bcProgram;
 
-fn void CompilationContext.deinit(CompilationContext* this)
-{
-	this.parser.deinit();
-	this.analyzer.deinit();
-	this.mirGen.deinit();
-	this.byteCodeGen.deinit();
+	bool 				hadParseError;
+	List{TypeResult}	analysisErrors;
+	bool 				hadMirError;
+	bool 				hadBytecodeError;
 }
-
 
 fn CompilationResult compile_file(String path)
 {
 	CompilationResult result;
-	result.compiledProgram = null;
 	String? file = (String)file::load(mem,path);
 	if (catch err = file) {
 		// Print the error
@@ -66,25 +60,25 @@ fn CompilationResult compile_file(String path)
 
 	globals::initialize_globals();
 
-	compilationCtx.lexer.init(file);
-	compilationCtx.lexer.parse_tokens();
+	globals::tokens = lexer::run_lexer(file, &globals::compAllocator);
 	free(file);
 
 	// ------------ Parse, AST ------------
-    compilationCtx.parser.init();
-    if(catch err = compilationCtx.parser.parse()){
+	ProgramAst? parseResult = parser::run_parser(globals::tokens, &globals::compAllocator);
+    if(catch err = parseResult){
         log::errlogn("Parse error");
+		ctx.hadParseError = true;
 		result.outcome = CompilationOutcome.PARSE_ERROR;
 		return result;
     }
+	ctx.ast = parseResult;
 	if(PRINT_COMP_PIPELINE){
-		compilationCtx.parser.outputAst.print();
+		ctx.ast.print();
 	}
 	// ------------ Analyze, Type-Check --
-	compilationCtx.analyzer.init(&compilationCtx.parser.outputAst);
-	TypeResult typeResult = compilationCtx.analyzer.run();
-	
-	foreach(err : compilationCtx.analyzer.errors){
+	List{TypeResult} analyzerErrors = compiler::analyzer::analyze(&ctx.ast, &ctx.symbolTable, &globals::compAllocator);
+	ctx.analysisErrors = analyzerErrors;
+	foreach(err : analyzerErrors){
 		log::errlogn("Type error: %s at line %s, expected %s, got %s", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
 	}
 
@@ -92,7 +86,7 @@ fn CompilationResult compile_file(String path)
 		globals::print_struct_types();
 	}
 
-	if (typeResult.hadError || compilationCtx.analyzer.errors.len() > 0) {
+	if (analyzerErrors.len() > 0) {
 		result.outcome = CompilationOutcome.ANALYSIS_ERROR;
 		return result;
 	}else{
@@ -100,45 +94,39 @@ fn CompilationResult compile_file(String path)
 	}
 
 	// ------------ Lower, MIR -----------
-	compilationCtx.mirGen.init(&compilationCtx.parser.outputAst, &compilationCtx.analyzer.symbolTable);
-	MirGenResult mirResult = compilationCtx.mirGen.run();
-
-	if(PRINT_COMP_PIPELINE){
-		compilationCtx.mirGen.output.print(compilationCtx.mirGen.inputAst, compilationCtx.mirGen.symbolTable);
-	}
-
-	if(mirResult != MirGenResult.OK){
+	MirProgram? mirProgram = compiler::mir::generate_mir(&ctx.ast, &ctx.symbolTable, &globals::compAllocator);
+	if(catch err = mirProgram){
+        log::errlogn("Mir generation error");
+		ctx.hadMirError = true;
 		result.outcome = CompilationOutcome.MIR_ERROR;
 		return result;
-	}else{
-		log::logn("Lowered to mir successfully");
+    }
+	ctx.mirProgram = mirProgram;
+
+	if(PRINT_COMP_PIPELINE){
+		mirProgram.print(&ctx.ast, &ctx.symbolTable);
 	}
 
-	result.outcome = CompilationOutcome.NO_ERROR;
-	// Lower, Bytecode (WIP)
-	compilationCtx.byteCodeGen.init(&compilationCtx);
-	compilationCtx.byteCodeGen.run();
-	
+	// ------------ Lower, Bytecode -----------
+	BCProgram? bcProgram = compiler::bytecode::generate_bytecode(&ctx.ast, &ctx.symbolTable, &ctx.mirProgram, &globals::runtimeAllocator);
+	if(catch err = bcProgram){
+        log::errlogn("Bytecode generation error");
+		ctx.hadBytecodeError = true;
+		result.outcome = CompilationOutcome.BYTECODE_ERROR;
+		return result;
+    }
+
 	if(PRINT_COMP_PIPELINE){
-		compilationCtx.byteCodeGen.bcOutput.print();
+		bcProgram.print();
 	}
-	
-	result.compiledProgram = &compilationCtx.compiledProgram;
+	ctx.bcProgram = bcProgram;
+	result.compiledProgram = bcProgram;
 	result.outcome = CompilationOutcome.NO_ERROR;
 	return result;
 
 }
 
-fn RunResult run(BCProgram* program)
-{
-	Vm vm = {};
-    vm.init(program, io::stdout());
-	return vm::run(&vm);
-}
-
-
 fn void cleanup()
 {
 	globals::cleanup_globals();
 }
-

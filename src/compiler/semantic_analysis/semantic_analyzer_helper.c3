@@ -54,7 +54,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 				result.type = (lastChar == '&') ? ValueType.REF : ValueType.PTR;
 				result.refToType = ValueType.STRUCT;
-				result.structTypeIndex = get_struct_idx_bind_if_needed(baseName);
+				result.structTypeIndex = get_struct_idx_bind_if_needed(baseName, this.outputAllocator);
 				return type_ok(result);
 			}
 
@@ -62,7 +62,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.STRUCT;
-			result.structTypeIndex = get_struct_idx_bind_if_needed(typeName);
+			result.structTypeIndex = get_struct_idx_bind_if_needed(typeName, this.outputAllocator);
 			return type_ok(result);
 		}
 		case TokenType.THIS:			
@@ -72,7 +72,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.REF;
-			result.structTypeIndex = get_struct_idx_bind_if_needed(typeName);
+			result.structTypeIndex = get_struct_idx_bind_if_needed(typeName, this.outputAllocator);
 			result.refToType = ValueType.STRUCT;
 			return type_ok(result);
 		}
@@ -101,7 +101,7 @@ fn bool is_numeric_type(CompTypeInfo info)
 <* 
 	Helper to get a struct index in globals::structNamesToIdx. If not present, add a new entry and return the index at which it was added
 *>
-fn int get_struct_idx_bind_if_needed(String name)
+fn int get_struct_idx_bind_if_needed(String name, Allocator outputAllocator)
 {
 	int? structTypeIdx = globals::structNamesToIdx.get(name);
 	if (catch err = structTypeIdx) {
@@ -110,7 +110,7 @@ fn int get_struct_idx_bind_if_needed(String name)
 			.typeIndex = nextIdx,
 		};
 		globals::structTypes.push(structInfo);
-		String nameCopy = String.copy(name, &globals::compAllocator);
+		String nameCopy = String.copy(name, outputAllocator);
 		globals::structNamesToIdx[nameCopy] = nextIdx;
 		return nextIdx;
 	} else {
@@ -120,10 +120,68 @@ fn int get_struct_idx_bind_if_needed(String name)
 
 enum StructLayoutResult : char
 {
-	DONE,
+	OK,
 	DEFER,
 	ERROR,
 }
+
+fn TypeResult SemanticAnalyzer.fill_structs_metadata(SemanticAnalyzer* this, List{DeclIdx} structDeclIndices)
+{
+	// Allocate a temporary list to track which structs managed to determine their metadata
+	List{bool} done = {};
+	done.init(&this.localAllocator, structDeclIndices.len());
+	common::list_append_fill{bool}(&done, false, structDeclIndices.len());
+	sz remaining = structDeclIndices.len();
+	// Continue trying to loop through all structs determining their metadata. 
+	// If no progress was made in an iteration it must mean there's a circular reference
+	while(remaining > 0){
+		bool madeProgress = false;
+		for (int i = 0; i < (int)structDeclIndices.len(); i++) {
+			// Already done, early out
+			if (done[i]) {
+				continue;
+			}
+
+			DeclIdx declIdx = structDeclIndices[i];
+			Decl* decl = &this.ast.declarations[declIdx];
+			StructLayoutResult result = this.try_fill_struct_info(decl, this.ast);
+
+			switch (result) {
+				case StructLayoutResult.OK:
+					done[i] = true;
+					remaining--;
+					madeProgress = true;
+				case StructLayoutResult.DEFER:	 continue; // Try again after other structs are laid out.
+				case StructLayoutResult.ERROR:   return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, {});
+			}
+		}
+		// Break out. Special error for circular references
+		if(!madeProgress){
+			return this.type_error(ErrorKind.UNRESOLVED_STRUCT, nullType, nullType, {});
+		}
+	}
+
+	// Now do all the method info
+	for (int i = 0; i < (int)structDeclIndices.len(); i++) {
+		DeclIdx declIdx = structDeclIndices[i];
+		Decl* decl = &this.ast.declarations[declIdx];
+		int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text(), this.outputAllocator);
+		CompStructTypeInfo* structInfo = &globals::structTypes[index];
+		// Methods
+		foreach (&method : decl.structDecl.methods){
+			CompTypeInfo fieldType = this.create_type_from_ast(&method.returnType, { }).value;
+
+			MethodInfo methodInfo = {
+				.name = String.copy(this.ast.names[method.nameIdx].src_text(), &globals::typeInfoAllocator),
+				.returnType = fieldType,
+			};
+
+			structInfo.methodInfos.push(methodInfo);
+		}
+	}
+	return type_ok(nullType);
+}
+
 <*
 	Try to fill in a specific struct metadata. Will return an enum value based on success, error, or defer.
 	If defer is returned, it means the struct contains a field of another struct that still has undefined metadata, 
@@ -131,62 +189,74 @@ enum StructLayoutResult : char
 *>
 fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
-	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text());
+	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text(), this.outputAllocator);
 	CompStructTypeInfo* info = &globals::structTypes[index];
 	String name = ast.names[decl.structDecl.nameIdx].src_text();
 
+	// First pass: check if we can actually fill in the info
+	StructLayoutResult fieldsAreDefined = this.check_fields_are_defined(decl, ast);
+	if (fieldsAreDefined != StructLayoutResult.OK) return fieldsAreDefined;
+
 	// CompStructTypeInfo owns its data, so we must  init() it
 	info.init();
-    ushort offset = 0;
-    ushort maxAlign = 1;
-	// First pass: check if we can actually fill in the info
-	foreach (&field : decl.structDecl.fields) {
-        TypeResult fieldTypeResult = this.create_type_from_ast(&field.type, {});
-        if (fieldTypeResult.hadError){
-			return StructLayoutResult.ERROR;
-		} 
-        CompTypeInfo fieldType = fieldTypeResult.value;
-		if (fieldType.type == ValueType.STRUCT) {
-			int fieldStructIndex = fieldType.structTypeIndex;
-			CompStructTypeInfo* fieldStructInfo = &globals::structTypes[fieldStructIndex];
-
-			if (!fieldStructInfo.isDefined) {
-				return StructLayoutResult.DEFER;
-			}
-		}
-    }
+	ushort offset   = 0;
+	ushort maxAlign = 1;
 	// Second pass: know we know we have all the field types declared, so fill in the info
-    foreach (&field : decl.structDecl.fields) {
-        CompTypeInfo fieldType = this.create_type_from_ast(&field.type, {}).value;
-        ushort fieldAlign = compiler::get_type_alignment(fieldType);
-        ushort fieldSize = compiler::get_type_size(fieldType);
+
+	// Fiedls
+	foreach (&field : decl.structDecl.fields) {
+		CompTypeInfo fieldType = this.create_type_from_ast(&field.type, { }).value;
+		ushort fieldAlign = compiler::get_type_alignment(fieldType);
+		ushort fieldSize = compiler::get_type_size(fieldType);
 		// There's some ugliness with types and sizes, so make sure these casts are safe
 		always_assert(offset < short::max);
 		always_assert(fieldAlign < short::max);
-        offset = (ushort)common::align_offset((short)offset, (short)fieldAlign);
+		offset = (ushort)common::align_offset((short)offset, (short)fieldAlign);
 		// FieldInfo also owns its data, so we copy the string, instead of storing an interned string
-        FieldInfo fieldInfo = {
-            .name = String.copy(ast.names[field.nameIdx].src_text(), &globals::typeInfoAllocator),
-            .typeInfo = fieldType,
-            .offset = offset,
-        };
+		FieldInfo fieldInfo = {
+			.name = String.copy(ast.names[field.nameIdx].src_text(), &globals::typeInfoAllocator),
+			.typeInfo = fieldType,
+			.offset = offset,
+		};
 
-        info.fieldInfos.push(fieldInfo);
+		info.fieldInfos.push(fieldInfo);
 
-        offset += fieldSize;
-        maxAlign = max(maxAlign, fieldAlign);
-    }
+		offset += fieldSize;
+		maxAlign = max(maxAlign, fieldAlign);
+	}
+
 
 	info.name = String.copy(name, &globals::typeInfoAllocator);
 
 	// There's some ugliness with types and sizes, so make sure these casts are safe
 	always_assert(offset < short::max);
 	always_assert(maxAlign < short::max);
-    info.fieldCount = (ushort)info.fieldInfos.len();
-    info.alignmentInBytes = maxAlign;
-    info.sizeInBytes = (ushort)common::align_offset((short)offset, (short)maxAlign);
+	info.fieldCount = (ushort)info.fieldInfos.len();
+	info.alignmentInBytes = maxAlign;
+	info.sizeInBytes = (ushort)common::align_offset((short)offset, (short)maxAlign);
 	info.isDefined = true;
-	return StructLayoutResult.DONE;
+	return StructLayoutResult.OK;
+}
+
+fn StructLayoutResult SemanticAnalyzer.check_fields_are_defined(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
+{
+	foreach (&field : decl.structDecl.fields)	{
+		TypeResult fieldTypeResult = this.create_type_from_ast(&field.type, { });
+		if (fieldTypeResult.hadError) {
+			return StructLayoutResult.ERROR;
+		}
+
+		CompTypeInfo fieldType = fieldTypeResult.value;
+		if (fieldType.type == ValueType.STRUCT)	{
+			int fieldStructIndex                = fieldType.structTypeIndex;
+			CompStructTypeInfo* fieldStructInfo = &globals::structTypes[fieldStructIndex];
+
+			if (!fieldStructInfo.isDefined) {
+				return StructLayoutResult.DEFER;
+			}
+		}
+	}
+	return StructLayoutResult.OK;
 }
 
 

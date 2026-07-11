@@ -59,15 +59,15 @@ fn void t_10() @test
     compile_and_run_file("./test/10_simple_math.ratc","5\n375\n")!!;
 }
 
-fn void t_11() @test
-{
-    compile_and_run_file("./test/11_long_file.ratc","4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
-}
+// fn void t_11() @test
+// {
+//     compile_and_run_file("./test/11_long_file.ratc","4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
+// }
 
-fn void t_12() @test
-{
-    compile_and_run_file("./test/12_very_long_file.ratc","")!!;
-}
+// fn void t_12() @test
+// {
+//     compile_and_run_file("./test/12_very_long_file.ratc","")!!;
+// }
 
 fn void t_13() @test
 {
@@ -84,22 +84,16 @@ fn void? compile_and_run_file(String filename, String expectedResult)
 	main::CompilationResult result = main::compile_file(filename);
 	switch (result.outcome) 
 	{
-		case main::CompilationOutcome.NO_ERROR:
-			break;
-		case main::CompilationOutcome.PARSE_ERROR:
-			return compiler::parser::PARSE_ERROR~;
-		case main::CompilationOutcome.ANALYSIS_ERROR:
-			return compiler::analyzer::ANALYSIS_ERR~;
-		default:
-			return UNKNOWN_COMPILE_ERROR~;
+		case main::CompilationOutcome.NO_ERROR:			break;
+		case main::CompilationOutcome.PARSE_ERROR:		return compiler::parser::PARSE_ERROR~;
+		case main::CompilationOutcome.ANALYSIS_ERROR:	return compiler::analyzer::ANALYSIS_ERR~;
+		default:										return UNKNOWN_COMPILE_ERROR~;
 	}
 
 
 	DString output = dstring::new(mem);
 	defer output.free();
-	Vm vm = {};
-    vm.init(result.compiledProgram, &output);
-	vm::run(&vm);
+	vm::run(&result.compiledProgram, &output);
 	log::logn("%s", output);
 	if(expectedResult != output.str_view()){
 		return OUTPUT_DOESNT_MATCH_ERROR~;

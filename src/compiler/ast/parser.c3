@@ -10,6 +10,14 @@ alias Byte = char;
 
 faultdef PARSE_ERROR;
 
+fn ProgramAst? run_parser(List{Token} tokens, Allocator outputAllocator)
+{
+	Parser parser = { };
+	parser.init(tokens, outputAllocator);
+	defer parser.deinit();
+	return parser.run();
+}
+
 struct Parser
 {
 	List{Token} input;
@@ -19,16 +27,18 @@ struct Parser
 	bool hadError;
 	bool panicMode;
 	List{DeclIdx} structs;
-	DynamicArenaAllocator allocator;
+	Allocator outputAllocator;
+	DynamicArenaAllocator localAllocator;
 }
 
 // ---------- Lifecycle ----------
 
-fn void Parser.init(Parser* this)
+fn void Parser.init(Parser* this, List{Token} tokens, Allocator outputAllocator)
 {
-	this.allocator = { };
-	this.allocator.init(mem, 1024);
-	this.input = globals::tokens;
+	this.outputAllocator = outputAllocator;
+	this.localAllocator = { };
+	this.localAllocator.init(mem, 1024);
+	this.input = tokens;
 	this.hadError = false;
 	this.panicMode = false;
 
@@ -36,10 +46,10 @@ fn void Parser.init(Parser* this)
 	this.previous = this.current;
 
 	this.outputAst = { };
-	this.outputAst.init(&this.allocator);
+	this.outputAst.init(outputAllocator);
 
 	this.structs = { };
-	this.structs.init(&this.allocator);
+	this.structs.init(&this.localAllocator);
 
 	this.predeclare_structs();
 	this.predeclare_functions();
@@ -47,23 +57,21 @@ fn void Parser.init(Parser* this)
 
 fn void Parser.deinit(Parser* this)
 {
-	this.outputAst.free(&this.allocator);
-	this.allocator.free();
+	this.localAllocator.free();
 }
 
 // ---------- Top-level compile pipeline ----------
 
-fn void? Parser.parse(Parser* parser)
+fn ProgramAst? Parser.run(Parser* parser)
 {
-	while (!parser.match(TokenType.EOF))
-	{
+	while (!parser.match(TokenType.EOF)){
 		parser.declaration();
 	}
 	parser.desugar_methods();
-	if (parser.hadError)
-	{
+	if (parser.hadError){
 		return PARSE_ERROR~;
 	}
+	return parser.outputAst;
 }
 
 // ---------- Declarations & statements ----------
@@ -211,7 +219,7 @@ fn StmtIdx Parser.block(Parser* this)
 	stmt.span = { .line = this.previous.line };
 
 	BlockStmt blockStmt = { };
-	blockStmt.stmts.init(&this.allocator, 64);
+	blockStmt.stmts.init(this.outputAllocator, 64);
 
 	while (!this.check(TokenType.RIGHT_BRACE) && !this.check(TokenType.EOF))
 	{
@@ -261,7 +269,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 		Decl decl = { .kind = DeclKind.STRUCT };
 		decl.structDecl = { };
 		decl.structDecl.nameIdx = this.push_name_get_idx(name);
-		decl.structDecl.fields.init(&this.allocator);
+		decl.structDecl.fields.init(this.outputAllocator);
 		declIdx = this.push_decl_get_idx(&decl);
 		globals::declaredStructs.set(name, declIdx);
 	}
@@ -278,8 +286,8 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 	}
 	// Ensure fields list is initialized
 	decl.structDecl.nameIdx = this.push_name_get_idx(name);
-	decl.structDecl.fields.init(&this.allocator);
-	decl.structDecl.methods.init(&this.allocator);
+	decl.structDecl.fields.init(this.outputAllocator);
+	decl.structDecl.methods.init(this.outputAllocator);
 
 	this.consume(TokenType.LEFT_BRACE, "Expected '{' after struct name");
 	int rightBraceExpected = 1;
@@ -452,7 +460,7 @@ fn void Parser.fill_fun_params(Parser* this, List{ParamAst}* params)
 {
 	// assumes '(' has already been consumed
 	// ensure list is initialized
-	params.init(&this.allocator);
+	params.init(this.outputAllocator);
 
 	if (!this.check(TokenType.RIGHT_PAREN))
 	{

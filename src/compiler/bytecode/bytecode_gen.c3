@@ -8,28 +8,49 @@ import log;
 import debug;
 import std::collections::list;
 
+faultdef BYTECODE_GEN_ERROR;
+enum BCGenResult : char
+{
+	OK,
+	ERROR,
+}
 
 struct BCGenerator
 {
-	ProgramAst* 		inputAst;
-	SymbolTable* 		symbolTable;
-	MirProgram* 		mirInput;
-	BCProgram*			bcOutput;
-	List{short}			symbolToOffset; 	// Indexed by SymbolIdx
-	List{short}			mirRegToOffset;	  	// Indexed by MirRegisterID
-	List{CompTypeInfo}  mirRegToType;		// Indexed by MirRegisterID
-	List{BCFunctionIdx} declToBcFunction;	// Indexed by DeclIdx (source)
+	ProgramAst* 		inputAst;			// input
+	SymbolTable* 		symbolTable;		// input
+	MirProgram* 		mirInput;			// input
+	BCProgram			bcOutput;			// output
+	List{short}			symbolToOffset; 	// temp, Indexed by SymbolIdx
+	List{short}			mirRegToOffset;	  	// temp, Indexed by MirRegisterID
+	List{CompTypeInfo}  mirRegToType;		// temp, Indexed by MirRegisterID
+	List{BCFunctionIdx} declToBcFunction;	// temp, Indexed by DeclIdx (source)
+	Allocator 			outputAllocator;
 	int 				currentFrameOffset;
 	short 				localFrameOffset;
+	bool 				hadError;
 }
 
-fn void BCGenerator.init(BCGenerator* this, CompilationContext* ctx)
+fn BCProgram? generate_bytecode(ProgramAst* ast, SymbolTable* symbolTable, MirProgram* mirProgram, Allocator outputAllocator)
 {
-	this.mirInput = &ctx.mirGen.output;
-	this.inputAst = &ctx.parser.outputAst;
-	this.symbolTable = ctx.mirGen.symbolTable;
-	this.bcOutput = &ctx.compiledProgram;
-	this.bcOutput.init();
+	BCGenerator generator = {};
+	generator.init(ast, symbolTable, mirProgram, outputAllocator);
+	defer generator.deinit();
+	BCGenResult result = generator.run();
+	if(result!= BCGenResult.OK){
+		return BYTECODE_GEN_ERROR~;
+	}
+	return generator.bcOutput;
+}
+
+
+fn void BCGenerator.init(BCGenerator* this, ProgramAst* ast, SymbolTable* symbolTable, MirProgram* mirProgram, Allocator outputAllocator)
+{
+	this.inputAst = ast;
+	this.symbolTable = symbolTable;
+	this.mirInput = mirProgram;
+	this.outputAllocator = outputAllocator;
+	this.bcOutput.init(outputAllocator);
 	this.symbolToOffset.init(mem);
 	this.mirRegToOffset.init(mem);
 	this.mirRegToType.init(mem);
@@ -38,16 +59,13 @@ fn void BCGenerator.init(BCGenerator* this, CompilationContext* ctx)
 
 fn void BCGenerator.deinit(BCGenerator* this)
 {
-	if (this.bcOutput != null) {
-		this.bcOutput.deinit();
-	}
 	this.symbolToOffset.free();
 	this.mirRegToOffset.free();
 	this.mirRegToType.free();
 	this.declToBcFunction.free();
 }
 
-fn void BCGenerator.run(BCGenerator* this)
+fn BCGenResult BCGenerator.run(BCGenerator* this)
 {
 	common::list_append_fill{BCFunctionIdx}(&this.declToBcFunction, -1, this.inputAst.declarations.len());
 	// First pass: add all functions to the declToBcFuntion list
@@ -69,8 +87,13 @@ fn void BCGenerator.run(BCGenerator* this)
 		this.prepare_func_bindings(func);
 		this.lower_fun(func, funcIdx);
 	}
-	optimize(this.bcOutput);
+	optimize(&this.bcOutput);
 
+	if(this.hadError){
+		return BCGenResult.ERROR;
+	} else {
+		return BCGenResult.OK;
+	}
 }
 	
 fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunctionIdx funcOutputIdx)
@@ -283,7 +306,7 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 		default:
 		{
 			log::errlogn("Unsupported store op for %s", val.kind);
-			unreachable();
+			this.hadError = true;
 		}
 	}
 	this.bcOutput.instructions.push(instruction);
@@ -442,7 +465,7 @@ fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx termina
 		default:
 		{
 			log::errlogn("Unsupported op %s", term.opCode);
-			unreachable();
+			this.hadError = true;
 		}
 	}
 	

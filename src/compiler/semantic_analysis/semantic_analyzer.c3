@@ -9,44 +9,54 @@ import globals;
 
 faultdef ANALYSIS_ERR;
 
+fn List{TypeResult} analyze(ProgramAst* ast, SymbolTable* symbolTable, Allocator outputAllocator)
+{
+	SemanticAnalyzer analyzer = {};
+	analyzer.init(ast, symbolTable, outputAllocator);
+	analyzer.run();
+	defer analyzer.deinit();
+	return analyzer.errors;
+}
 
 struct SemanticAnalyzer
 {
-	ProgramAst* ast;
-	Expr* currentExpr;
-	SymbolTable symbolTable;
-	CompTypeInfo currentReturnType;
-	List{TypeResult} errors;
-	Stack{Scope} scopes;
-	bool returnFound;
-	int currentScopeIdx;
+	ProgramAst* ast;					// input
+	SymbolTable* symbolTable;			// input
+	List{TypeResult} errors;			// ouput
+	Stack{Scope} scopes;				// temp
+	DynamicArenaAllocator localAllocator;
+	Allocator outputAllocator;
+	Expr* currentExpr;		
+	CompTypeInfo currentReturnType;		
 	DeclIdx currentStructDeclIdx;
-	DynamicArenaAllocator allocator;
-
+	int currentScopeIdx;
+	bool returnFound;
 }
 
-fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast)
+
+fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTable* symbolTable, Allocator outputAllocator)
 {
 	this.ast = ast;
-	this.symbolTable = {};
+	this.symbolTable = symbolTable;
+	this.outputAllocator = outputAllocator;
 	this.scopes = {};
-	this.allocator = {};
-	this.allocator.init(mem, 64 * 1024);
+	this.errors.init(outputAllocator);
+	this.localAllocator = {};
+	this.localAllocator.init(mem, 64 * 1024);
 
-	this.errors.init(&this.allocator);
 	sz exprLen = this.ast.expressions.len();
 	sz stmtLen = this.ast.statements.len();
 	sz declLen = this.ast.declarations.len();
-	this.symbolTable.symbols.init(&this.allocator, exprLen + stmtLen + declLen);
-	this.symbolTable.exprSymbols.init(&this.allocator, exprLen);
-	this.symbolTable.exprTypes.init(&this.allocator, exprLen);
-	this.symbolTable.stmtSymbols.init(&this.allocator, stmtLen);
-	this.symbolTable.declSymbols.init(&this.allocator, declLen);
-	this.symbolTable.declParamRanges.init(&this.allocator, declLen);
-	this.symbolTable.declParamSymbols.init(&this.allocator, exprLen + stmtLen + declLen);
-	this.symbolTable.callTargets.init(&this.allocator, exprLen);
-	this.symbolTable.callReceiverExpr.init(&this.allocator, exprLen);
-	this.symbolTable.memberFieldIndices.init(&this.allocator, exprLen);
+	this.symbolTable.symbols.init(outputAllocator, exprLen + stmtLen + declLen);
+	this.symbolTable.exprSymbols.init(outputAllocator, exprLen);
+	this.symbolTable.exprTypes.init(outputAllocator, exprLen);
+	this.symbolTable.stmtSymbols.init(outputAllocator, stmtLen);
+	this.symbolTable.declSymbols.init(outputAllocator, declLen);
+	this.symbolTable.declParamRanges.init(outputAllocator, declLen);
+	this.symbolTable.declParamSymbols.init(outputAllocator, exprLen + stmtLen + declLen);
+	this.symbolTable.callTargets.init(outputAllocator, exprLen);
+	this.symbolTable.callReceiverExpr.init(outputAllocator, exprLen);
+	this.symbolTable.memberFieldIndices.init(outputAllocator, exprLen);
 
 	// Fill lists with defaults
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
@@ -73,7 +83,7 @@ fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
 		this.scopes.items[i].deinit();
 	}
 	this.scopes.free();
-	this.allocator.free();
+	this.localAllocator.free();
 }
 
 // ---- Entry point ----
@@ -82,70 +92,34 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	TypeResult globalReturnType = type_ok(make_type(ValueType.NULL));
 	this.begin_scope(globalReturnType, false);
 
+	// Create a temporary list in which we will store all decl indices for structs
     assert(this.ast.declarations.len() < int::max);
-	@pool()
-	{
-		// Create a temporary list in which we will store all decl indices for structs
-		List{DeclIdx} structDeclIndices = {};
-		structDeclIndices.tinit(this.ast.declarations.len() / 2);
-		// Predeclare function symbols with return types.
-		for (int i = 0; i < (int)this.ast.declarations.len(); i++){
-			Decl* decl = &this.ast.declarations[i];
-			if (decl.kind == DeclKind.FUNCTION) {
-				Span declSpan = this.ast.statements[decl.fnDecl.body].span;
-				TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
-				if (returnType.hadError) {
-					return returnType;
-				}
-				SymbolIdx symbolIdx = this.symbols_len();
-				Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
-				this.symbolTable.symbols.push(symbol);
-				this.symbolTable.declSymbols[i] = symbolIdx;
-				this.current_scope().visibleSymbols.push(symbolIdx);
-			} else if (decl.kind == DeclKind.STRUCT) {
-				get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text());
-				structDeclIndices.push(i);
+	List{DeclIdx} structDeclIndices = {};
+	structDeclIndices.init(&this.localAllocator, this.ast.declarations.len() / 2);
+	// Predeclare function symbols with return types.
+	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
+		Decl* decl = &this.ast.declarations[i];
+		if (decl.kind == DeclKind.FUNCTION) {
+			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
+			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
+			if (returnType.hadError) {
+				return returnType;
 			}
+			SymbolIdx symbolIdx = this.symbols_len();
+			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
+			this.symbolTable.symbols.push(symbol);
+			this.symbolTable.declSymbols[i] = symbolIdx;
+			this.current_scope().visibleSymbols.push(symbolIdx);
+		} else if (decl.kind == DeclKind.STRUCT) {
+			get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text(), this.outputAllocator);
+			structDeclIndices.push(i);
 		}
-
-		// Allocate a list to track which structs managed to determine their metadata
-		List{bool} done = {};
-		done.tinit(structDeclIndices.len());
-		common::list_append_fill{bool}(&done, false, structDeclIndices.len());
-		sz remaining = structDeclIndices.len();
-		// Continue trying to loop through all structs determining their metadata. 
-		// If no progress was made in an iteration it must mean there's a circular reference
-		while(remaining > 0){
-			bool madeProgress = false;
-			for (int i = 0; i < (int)structDeclIndices.len(); i++) {
-				// Already done, early out
-				if (done[i]) {
-					continue;
-				}
-
-				DeclIdx declIdx = structDeclIndices[i];
-				Decl* decl = &this.ast.declarations[declIdx];
-				StructLayoutResult result = this.try_fill_struct_info(decl, this.ast);
-
-				switch (result) {
-					case StructLayoutResult.DONE:
-					{
-						done[i] = true;
-						remaining--;
-						madeProgress = true;
-					}
-					case StructLayoutResult.DEFER:	 continue; // Try again after other structs are laid out.
-					case StructLayoutResult.ERROR:   return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, {});
-				}
-			}
-			// Break out. Special error for circular references
-			if(!madeProgress){
-				return this.type_error(ErrorKind.UNRESOLVED_STRUCT, nullType, nullType, {});
-			}
-		}
-	};
-
-
+	}
+	
+	TypeResult metaDataResult = this.fill_structs_metadata(structDeclIndices);
+	if(metaDataResult.hadError){
+		return metaDataResult;
+	}
 
 	for (int i = 0; i < this.ast.loweredMethodsStart; i++){
 		Decl* decl = &this.ast.declarations[i];

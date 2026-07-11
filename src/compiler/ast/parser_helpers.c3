@@ -146,8 +146,8 @@ fn void Parser.predeclare_structs(Parser* this)
             DeclIdx declIdx = this.push_decl_get_idx(&decl);
 
             // Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
-            String starName = nameTok.value().concat(&globals::compAllocator, "*");
-            String ampName = nameTok.value().concat(&globals::compAllocator, "&");
+            String starName = nameTok.value().concat(this.outputAllocator, "*");
+            String ampName = nameTok.value().concat(this.outputAllocator, "&");
 
             debug::@log_compilation("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
             globals::declaredStructs.set(nameTok.value(), declIdx);
@@ -187,9 +187,9 @@ fn void Parser.desugar_methods(Parser* this)
     foreach(structDeclIdx : this.structs){
         Decl* decl = &this.outputAst.declarations[structDeclIdx];
         foreach (methodIdx, &method : decl.structDecl.methods) {
-            // Lowered methods keep parser-lifetime allocations.
+            // Lowered methods are part of the returned AST.
             List{ParamAst} paramsCopy = {};
-            paramsCopy.init(&this.allocator, method.params.len() + 1);
+            paramsCopy.init(this.outputAllocator, method.params.len() + 1);
 
             // Add the implicit receiver as arg0 so call lowering can pass it explicitly.
             ParamAst selfParam = {

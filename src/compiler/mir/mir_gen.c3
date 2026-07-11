@@ -7,6 +7,7 @@ import common;
 import globals;
 import std::collections::list;
 
+faultdef MIR_GEN_ERROR;
 
 enum MirGenResult
 {
@@ -16,42 +17,55 @@ enum MirGenResult
 
 struct MirGenerator
 {
-	ProgramAst* inputAst;
-	SymbolTable* symbolTable;
-	MirProgram output;
-	DynamicArenaAllocator allocator;
+	ProgramAst* inputAst;		// input
+	SymbolTable* symbolTable;	// input
+	MirProgram output;			// output	
+	List{MirOperand} bindings; 	// temp, Indexed by SymbolIdx
+	DynamicArenaAllocator localAllocator;
+	Allocator outputAllocator;
 	MirRegisterID currentReg;
 	MirBlockIdx currentBlock;
-	List{MirOperand} bindings; // Indexed by SymbolIdx
+}
+
+fn MirProgram? generate_mir(ProgramAst* ast, SymbolTable* symbolTable, Allocator ouputAllocator)
+{
+	MirGenerator mirGenerator = {};
+	mirGenerator.init(ast, symbolTable, ouputAllocator);
+	defer mirGenerator.deinit();
+	MirGenResult mirGenResult = mirGenerator.run();
+	if(mirGenResult != MirGenResult.OK){
+		return MIR_GEN_ERROR~;
+	}
+	return mirGenerator.output;
 }
 
 
-fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable* symbolTable)
+fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable* symbolTable, Allocator outputAllocator)
 {
 	this.inputAst = inputAst;
 	this.symbolTable = symbolTable;
+	this.outputAllocator = outputAllocator;
 
-	this.allocator = {};
-	this.allocator.init(mem, 1024);
+	this.localAllocator = {};
+	this.localAllocator.init(mem, 1024);
 
 	this.output = {};
 	this.currentReg = 0;
 	this.currentBlock = 0;
 
-	this.output.init(&this.allocator, 1024);
-	this.bindings.init(&this.allocator, this.symbolTable.symbols.len());
+	this.output.init(this.outputAllocator, 1024);
+	this.bindings.init(&this.localAllocator, this.symbolTable.symbols.len());
 
 	common::list_append_fill{MirOperand}(&this.bindings, placeHolderOperand, this.symbolTable.symbols.len());
 }
 
 fn void MirGenerator.deinit(MirGenerator* this)
 {
-	this.allocator.free();
+	this.localAllocator.free();
 }
 
 fn MirGenResult MirGenerator.run(MirGenerator* this)
 {
-
 	foreach(idx, &decl : this.inputAst.declarations){
 	    assert(idx < int::max);
 	    int intIdx = (int)idx;
@@ -497,7 +511,7 @@ fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprId
 
 	List{MirOperand} callOperands = {};
 	sz operandCount = (sz)callExpr.call.argsEnd - callExpr.call.argsStart + 2;
-	callOperands.init(&this.allocator, operandCount);
+	callOperands.init(&this.localAllocator, operandCount);
 	callOperands.push(callee);
 
 	// Receiver is inserted as arg0 for method calls lowered to free functions.
@@ -535,15 +549,12 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 	Expr* expr = &this.inputAst.expressions[exprIdx];
 	switch (expr.kind) {
 		case ExprKind.VAR:
-		{
 			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
 			assert(symbolIdx < this.bindings.len());
 			MirOperand place = this.bindings[symbolIdx];
 			assert(place.kind == MirOperandKind.PLACE);
 			return place;
-		}
 		case ExprKind.MEMBER:
-		{
 			MirOperand basePlaceOperand = this.lower_place(expr.member.base);
 			assert(basePlaceOperand.kind == MirOperandKind.PLACE);
 			MirPlace basePlace = this.output.places[basePlaceOperand.placeIdx];
@@ -567,11 +578,8 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 			};
 			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
 			return {.kind = MirOperandKind.PLACE, .placeIdx = placeIdx};
-		}
 		default:
-		{
-			unreachable("Unsupported lvalue expression in lower_place");
-		}
+			unreachable("Unsupported lvalue expression in lower_place %s", expr.kind);
 	}
 
 }

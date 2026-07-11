@@ -249,10 +249,8 @@ fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand*
 		case MirOperandKind.IMM_NULL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL};
 		case MirOperandKind.IMM_STRING:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL};
 		case MirOperandKind.PLACE:		
-		{
 			log::logn("Places need to be implemented");
 			unreachable();
-		}		
 		case MirOperandKind.BLOCK:							unreachable();
 		case MirOperandKind.FUNCTION:						unreachable();
 		case MirOperandKind.INVALID:						unreachable();

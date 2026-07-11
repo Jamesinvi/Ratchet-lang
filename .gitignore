@@ -3,6 +3,7 @@ out/
 
 ## Editors
 .idea
+.vscode
 
 ## Misc
 ratchet_compiler_migration_plan.md

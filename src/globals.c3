@@ -8,9 +8,9 @@ import std::collections::map;
 alias CompilationContext = main::CompilationContext;
 
 bool globalsInitialized = false;
-DynamicArenaAllocator compAllocator;
-DynamicArenaAllocator typeInfoAllocator;
-DynamicArenaAllocator runtimeAllocator;
+DynamicArenaAllocator compAllocator;		// Freed after compilation finishes unless in debug mode
+DynamicArenaAllocator typeInfoAllocator;	// Kept at runtime until type registry is disposed before shutdown
+DynamicArenaAllocator runtimeAllocator;		// Kept at runtime until program finishes
 
 CompilationContext compilationCtx;
 List{Token} tokens;
@@ -38,11 +38,10 @@ fn void initialize_globals()
 	internedSourceStrings = { };
 	constantStrings = { };
 	compAllocator.init(mem, 64 * 1024);
-	runtimeAllocator.init(mem, 64 * 512);
-	typeInfoAllocator.init(mem, 64 * 512);
-	tokens.init(&globals::compAllocator, 1024);
-	internedSourceStrings.init(&globals::compAllocator, 1024);
-	constantStrings.init(&globals::runtimeAllocator, 1024);
+	runtimeAllocator.init(mem, 32 * 1024);
+	typeInfoAllocator.init(mem, 32 * 1024);
+	internedSourceStrings.init(&globals::compAllocator, 512);
+	constantStrings.init(&globals::runtimeAllocator, 512);
 	declaredStructs.init(&globals::compAllocator, 64);
 	declaredFunctions.init(&globals::compAllocator, 128);
 	structNamesToIdx.init(&globals::compAllocator, 64);
@@ -53,10 +52,10 @@ fn void initialize_globals()
 
 fn void cleanup_globals()
 {
-	compilationCtx.deinit();
 	compAllocator.free();
 	runtimeAllocator.free();
 	typeInfoAllocator.free();
+	compilationCtx = { };
 	tokens = { };
 	declaredStructs = { };
 	declaredFunctions = { };

@@ -159,6 +159,33 @@ Notes:
 2. `T&` participates in Ratchet's managed runtime.
 3. `T*` is for manual/native ownership boundaries and must be handled explicitly.
 
+### Managed reference assignment
+
+Managed references are rebindable. Assigning one `T&` to another changes which
+managed object the destination references; it does not copy the referenced
+value. Assigning a plain `T` directly to a `T&` is not allowed.
+
+Managed references to primitive values expose a built-in `.value` property for
+reading and mutation:
+
+```cpp
+int& first = new int& { 5 };
+int& second = new int& { 12 };
+
+first = second;       // Rebind first to the same managed integer as second.
+first.value = 20;     // Mutate the shared integer.
+echo second.value;    // 20
+
+// first = 12;        // Invalid: int cannot be assigned to int&.
+```
+
+The `.value` property applies to managed references to primitive values such as
+`int&`, `float&`, `double&`, and `bool&`. Managed references to structs access
+the struct's fields normally, such as `enemy.hp`.
+
+Equality between managed references compares object identity. To compare the
+contents of primitive references, compare their `.value` properties instead.
+
 <a id="coroutines" name="coroutines"></a>
 ## Coroutines
 

@@ -24,13 +24,13 @@ fn void CompStructTypeInfo.init(CompStructTypeInfo* this){
 
 fn void CompStructTypeInfo.print(CompStructTypeInfo* this)
 {
-	log::logn("struct %s [size: %s, alignment: %s, fieldCount: %s] {", this.name, this.sizeInBytes, this.alignmentInBytes, this.fieldCount);
+	log::logn("struct %s [size: %s, align: %s, fields: %s] {", this.name, this.sizeInBytes, this.alignmentInBytes, this.fieldCount);
 	foreach(&fieldInfo : this.fieldInfos){
 		log::logn(".   %s, %s, %s", fieldInfo.name, fieldInfo.typeInfo.type, fieldInfo.offset);
 	}
 
 	foreach(&methodInfo : this.methodInfos){
-		log::logn(".   method %s, %s", methodInfo.name, methodInfo.arity);
+		log::logn(".   method %s, %s", methodInfo.name, methodInfo.arity());
 	}
 
 	log::logn("}");
@@ -47,5 +47,11 @@ struct FieldInfo
 struct MethodInfo
 {
 	String name;
-	ushort arity;
+    CompTypeInfo returnType;
+	List{CompTypeInfo} params;
+}
+
+macro ushort MethodInfo.arity(MethodInfo* this){
+	assert(this.params.len() <= ushort::max);
+	return (ushort)this.params.len();
 }

@@ -1,6 +1,7 @@
 module main;
 import log;
 import vm;
+import std::io;
 
 fn int main(String[] args)
 {
@@ -16,7 +17,7 @@ fn int main(String[] args)
 	if(result.outcome != CompilationOutcome.NO_ERROR){
 		return (int)result.outcome;
 	}
-	RunResult runResult = run(result.compiledProgram);
+	RunResult runResult = vm::run(&result.compiledProgram, io::stdout());
 	cleanup();
     return (int)result.outcome;
 }

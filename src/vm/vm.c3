@@ -58,6 +58,13 @@ struct Vm
 	sz 						stackHead;
 }
 
+fn RunResult run(BCProgram* program, OutStream outStream)
+{
+	Vm vm = {};
+    vm.init(program, outStream);
+	return vm.execute_program();
+}
+
 fn void Vm.init(Vm* this, BCProgram* program, OutStream output)
 {
     this.program = program;
@@ -67,7 +74,7 @@ fn void Vm.init(Vm* this, BCProgram* program, OutStream output)
 	}
 }
 
-fn RunResult run(Vm* vm)
+fn RunResult Vm.execute_program(Vm* vm)
 {
 	if(vm.program.functions.len() == 0){
 		return RunResult.OK;

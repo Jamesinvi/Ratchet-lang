@@ -220,24 +220,16 @@ struct BCProgram
 	List{BCInstruction} instructions;
 	List{BCCallArg} 	callArgs;
 	List{BCCallInfo}	callInfos;
-	DynamicArenaAllocator allocator;
 }
 
-fn void BCProgram.init(BCProgram* this)
+fn void BCProgram.init(BCProgram* this, Allocator allocator)
 {
-	this.allocator = {};
-	this.allocator.init(mem, 1024);
-	this.functions.init(&this.allocator);
-	this.functionFrameSlots.init(&this.allocator);
-	this.blocks.init(&this.allocator);
-	this.instructions.init(&this.allocator);
-	this.callArgs.init(&this.allocator);
-	this.callInfos.init(&this.allocator);
-}
-
-fn void BCProgram.deinit(BCProgram* this)
-{
-	this.allocator.free();
+	this.functions.init(allocator);
+	this.functionFrameSlots.init(allocator);
+	this.blocks.init(allocator);
+	this.instructions.init(allocator);
+	this.callArgs.init(allocator);
+	this.callInfos.init(allocator);
 }
 
 fn void BCProgram.print(BCProgram* this)

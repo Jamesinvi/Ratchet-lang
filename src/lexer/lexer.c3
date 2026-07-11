@@ -7,17 +7,27 @@ import log;
 
 faultdef INVALID_TOKEN;
 
+fn List{Token} run_lexer(String inputString, Allocator outputAllocator){
+	Lexer lexer = {};
+	lexer.init(inputString, outputAllocator);
+	lexer.parse_tokens();
+	return lexer.output;
+}
+
 struct Lexer
 {
     String input;
+	List{Token} output;
     int line;
     int current;
     int column;
     int start;
 }
 
-fn void Lexer.init(Lexer* this, String inputString) {
+
+fn void Lexer.init(Lexer* this, String inputString, Allocator outputAllocator) {
 	this.input = inputString;
+	this.output.init(outputAllocator, 1024);
     this.line = 1;
     this.current = 0;
     this.column = 0;
@@ -25,7 +35,7 @@ fn void Lexer.init(Lexer* this, String inputString) {
 }
 
 fn void Lexer.print_tokens(Lexer* this){
-    foreach (t : globals::tokens){
+    foreach (t : this.output){
 		log::logn("[%s: \"%s\"]", t.tokenType, t.value());
     }
 }
@@ -146,7 +156,7 @@ fn void Lexer.add_token(Lexer* this, TokenType tokenType) {
 	String view = this.input[this.start .. this.current -1];
     InternedString internedLexeme = globals::internedSourceStrings.get_or_intern(view);
     Token token = { tokenType, this.line, internedLexeme };
-    globals::tokens.push(token);
+    this.output.push(token);
 }
 
 

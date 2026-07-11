@@ -1,6 +1,18 @@
+struct Point{
+    int x;
+    int y;
+
+    method null move(){
+        this.y = this.y - 2;
+        this.x = this.x + 1;
+    }
+}
 
 // Entry-point. Should return true if errors occurred
 fn bool program(){
-    echo("hello");
+    Point a;
+    a.y = 12;
+    a.move();
+    echo(a.y);
     return false;
 }
