@@ -23,7 +23,6 @@ struct ProgramAst
     List{Expr}      expressions;        // global expression list indexed by nodes
     List{InternedString}  names;        // global name list indexed by nodes.
 	List{ExprIdx}	args;			    // global function argument list, indices into expression list
-    DeclIdx         loweredMethodsStart;// From this idx onwards, you'll find only methods lowered to functions (in "declarations")
 }
 
 enum ParamPassMode : char (String asStr)
@@ -60,17 +59,15 @@ struct FnDeclAst
     NameIdx nameIdx;
     List{ParamAst} params;
     StmtIdx body;
-    bool isDesugaredResult;
 }
 
 struct MethodDeclAst 
 {
     TypeAst returnType;
     NameIdx nameIdx;
-	DeclIdx structIdx;
+    DeclIdx structIdx;
     List{ParamAst} params;
     StmtIdx body;
-    DeclIdx loweredFormIdx;  // Gets filled in as last step of parser
 }
 
 
@@ -259,7 +256,6 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 	{
 		case DeclKind.FUNCTION:
 		{
-            if(decl.fnDecl.isDesugaredResult) return;
 			InternedString funcName = this.names[decl.fnDecl.nameIdx];
 			InternedString retType = this.names[decl.fnDecl.returnType.nameIdx];
 			this.print_indent(indent);

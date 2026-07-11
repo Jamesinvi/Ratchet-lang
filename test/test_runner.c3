@@ -59,19 +59,26 @@ fn void t_10() @test
     compile_and_run_file("./test/10_simple_math.ratc","5\n375\n")!!;
 }
 
-// fn void t_11() @test
-// {
-//     compile_and_run_file("./test/11_long_file.ratc","4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
-// }
+fn void t_11() @test
+{
+    compile_and_run_file("./test/11_long_file.ratc", 
+	 "4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
+}
 
-// fn void t_12() @test
-// {
-//     compile_and_run_file("./test/12_very_long_file.ratc","")!!;
-// }
+fn void t_12() @test
+{
+    compile_and_run_file("./test/12_very_long_file.ratc",
+	"4598913\n1848215163\n81242\n144625\n5.000000\n7.000000\n9.000000\n2.500000\n3.500000\n4.500000\n777.892090\n-100.336113\n724.901245\n32.000000\n-2.000000\n5.000000\n11.000000\n3.000000\nfalse\nfalse\n0.350000\n0.325000\n0.525000\n0.687500\n0.156250\n0.356250\n0.344755\n0.283634\n-11.500000\n-37.000000\n")!!;
+}
 
 fn void t_13() @test
 {
     compile_and_run_file("./test/13_structs_decl_order.ratc","34\n")!!;
+}
+
+fn void t_14() @test
+{
+    compile_and_run_file("./test/14_methods.ratc", "42\n42\n7\n")!!;
 }
 
 faultdef UNKNOWN_COMPILE_ERROR;

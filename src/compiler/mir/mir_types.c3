@@ -10,12 +10,15 @@ alias MirPlaceIdx = int;
 alias MirProjectionIdx = int;
 alias MirInstructionIdx = int;
 alias MirTerminatorIdx = int;
+alias MirFunctionIdx = int;
 alias OperandIdx = int;
 
 const NO_REG = -1;
 const NO_TERMINATOR = -1;
 const NO_PROJECTION = -1;
 const NO_BLOCK = -1;
+const NO_METHOD = -1;
+const NO_FUNCTION = -1;
 
 bitstruct MirRegisterFlags : char
 {
@@ -81,7 +84,7 @@ struct MirOperand
 		MirRegisterID 	regId;
 		MirPlaceIdx 	placeIdx;
 		MirBlockIdx 	blockIdx;
-		DeclIdx 		fnCalleeIdx;
+		MirFunctionIdx 	fnCalleeIdx;
 		int 			immInt;
 		float 			immFloat;
 		double 			immDouble;
@@ -136,7 +139,11 @@ struct MirFunction
 {
 	MirBlockIdx blocksStart;
 	MirBlockIdx blocksEnd;
-	DeclIdx sourceDeclIdx;
+	DeclIdx sourceDeclIdx;		// function decl, or owning struct decl for a method
+	int sourceMethodIdx;		// NO_METHOD for a free function
+	DeclParamRange paramRange;
+	CompTypeInfo returnType;
+	SymbolIdx receiverSymbolIdx;	// NO_SYMBOL for a free function
 }
 
 struct MirProgram
@@ -165,24 +172,11 @@ fn void MirProgram.init(MirProgram* this, Allocator allocator, sz size)
 fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols)
 {
 	log::logn("------------ MIR ------------");
-	foreach(fun : this.functions)
+	foreach(funIdx, &fun : this.functions)
 	{
-		if (fun.sourceDeclIdx >= ast.declarations.len() || ast.declarations[fun.sourceDeclIdx].kind != DeclKind.FUNCTION) {
-			log::logn("function <invalid>");
-			continue;
-		}
-		FnDeclAst* funDecl = &ast.declarations[fun.sourceDeclIdx].fnDecl;
-		SymbolIdx symbolIdx = symbols.declSymbols[fun.sourceDeclIdx];
-		if (symbolIdx < symbols.symbols.len()) {
-			Symbol funSymbol = symbols.symbols[symbolIdx];
-			log::log("function ");
-			this.print_decl_function_name(fun.sourceDeclIdx, ast);
-			log::logn(" -> %s", funSymbol.type.type);
-		} else {
-			log::log("function ");
-			this.print_decl_function_name(fun.sourceDeclIdx, ast);
-			log::logn(" -> %s", ast.names[funDecl.returnType.nameIdx].text());
-		}
+		log::log("function ");
+		this.print_function_name((MirFunctionIdx)funIdx, ast);
+		log::logn(" -> %s", fun.returnType.type);
 		for(sz i = fun.blocksStart; i < fun.blocksEnd; i++){
 			this.print_block(this.blocks[i], ast);
 		}
@@ -191,20 +185,22 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 	log::logn("-----------------------------");
 }
 
-fn void MirProgram.print_decl_function_name(MirProgram* this, DeclIdx declIdx, ProgramAst* ast)
+fn void MirProgram.print_function_name(MirProgram* this, MirFunctionIdx functionIdx, ProgramAst* ast)
 {
-	if (declIdx >= ast.declarations.len() || ast.declarations[declIdx].kind != DeclKind.FUNCTION) {
+	if (functionIdx < 0 || functionIdx >= this.functions.len()) {
 		log::log("<fn?>");
 		return;
 	}
-	FnDeclAst* fnDecl = &ast.declarations[declIdx].fnDecl;
-	if (fnDecl.params.len() > 0 && fnDecl.params[0].type.tokenType == TokenType.THIS) {
-		InternedString structName = ast.names[fnDecl.params[0].type.nameIdx];
-		InternedString methodName = ast.names[fnDecl.nameIdx];
+	MirFunction* function = &this.functions[functionIdx];
+	Decl* sourceDecl = &ast.declarations[function.sourceDeclIdx];
+	if (function.sourceMethodIdx != NO_METHOD) {
+		MethodDeclAst* method = &sourceDecl.structDecl.methods[function.sourceMethodIdx];
+		InternedString structName = ast.names[sourceDecl.structDecl.nameIdx];
+		InternedString methodName = ast.names[method.nameIdx];
 		log::log("%s.%s", structName.text(), methodName.text());
 		return;
 	}
-	log::log("%s", ast.names[fnDecl.nameIdx].text());
+	log::log("%s", ast.names[sourceDecl.fnDecl.nameIdx].text());
 }
 
 
@@ -226,8 +222,7 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 		case MirOperandKind.BLOCK:							log::log("block_%s",op.blockIdx);
 		case MirOperandKind.FUNCTION:
 		{
-			DeclIdx declIdx = op.fnCalleeIdx;
-			this.print_decl_function_name(declIdx, ast);
+			this.print_function_name(op.fnCalleeIdx, ast);
 		}
 		case MirOperandKind.PLACE:					
 		{

@@ -193,8 +193,10 @@ struct BCCallInfo
 struct BCCallArg
 {
     short callerOffset; // where arg value is in caller frame
+	short calleeOffset; // aligned parameter offset in callee frame
 	short size;
     ValueType type;
+	bool copyBack; // INOUT parameters are copied back before the callee frame is discarded
 }
 
 struct BCBlock

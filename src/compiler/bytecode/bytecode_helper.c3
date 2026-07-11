@@ -136,12 +136,11 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
 *>
 fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand operand, CompTypeInfo typeInfo)
 {
-	short offset;
 	if (is_immediate(operand)){
 		short alignment = (short)compiler::get_type_alignment(typeInfo);
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
 		short size = (short)compiler::get_type_size(typeInfo);
-		offset = this.localFrameOffset;
+		short offset = this.localFrameOffset;
 		this.localFrameOffset += size;
 		BCFrameSlot slot = {
 			.symbolIdx = compiler::analyzer::NO_SYMBOL,
@@ -151,11 +150,22 @@ fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand opera
 		};
 		this.bcOutput.functionFrameSlots.push(slot);
 		this.store_value(null, operand, offset);
-	}else{
-		offset = this.bind_mir_register_get_offset(operand.regId, typeInfo);
+		return offset;
 	}
 
-    return offset;
+	switch (operand.kind) {
+		case MirOperandKind.REGISTER:
+			return this.bind_mir_register_get_offset(operand.regId, typeInfo);
+		case MirOperandKind.PLACE:
+		{
+			MirPlace* place = &this.mirInput.places[operand.placeIdx];
+			CompTypeInfo baseType = this.symbolTable.symbols[place.baseSymbolIdx].type;
+			short baseOffset = this.bind_symbol_get_offset(place.baseSymbolIdx);
+			return baseOffset + this.resolve_projection_get_offset(place.projectionIdx, &baseType);
+		}
+		default:
+			unreachable("Unsupported bytecode operand binding for %s", operand.kind);
+	}
 }
 
 

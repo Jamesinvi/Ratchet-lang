@@ -24,7 +24,6 @@ struct BCGenerator
 	List{short}			symbolToOffset; 	// temp, Indexed by SymbolIdx
 	List{short}			mirRegToOffset;	  	// temp, Indexed by MirRegisterID
 	List{CompTypeInfo}  mirRegToType;		// temp, Indexed by MirRegisterID
-	List{BCFunctionIdx} declToBcFunction;	// temp, Indexed by DeclIdx (source)
 	Allocator 			outputAllocator;
 	int 				currentFrameOffset;
 	short 				localFrameOffset;
@@ -54,7 +53,6 @@ fn void BCGenerator.init(BCGenerator* this, ProgramAst* ast, SymbolTable* symbol
 	this.symbolToOffset.init(mem);
 	this.mirRegToOffset.init(mem);
 	this.mirRegToType.init(mem);
-	this.declToBcFunction.init(mem);
 }
 
 fn void BCGenerator.deinit(BCGenerator* this)
@@ -62,30 +60,29 @@ fn void BCGenerator.deinit(BCGenerator* this)
 	this.symbolToOffset.free();
 	this.mirRegToOffset.free();
 	this.mirRegToType.free();
-	this.declToBcFunction.free();
 }
 
 fn BCGenResult BCGenerator.run(BCGenerator* this)
 {
-	common::list_append_fill{BCFunctionIdx}(&this.declToBcFunction, -1, this.inputAst.declarations.len());
-	// First pass: add all functions to the declToBcFuntion list
-	foreach(&func : this.mirInput.functions){
+	// MIR and bytecode functions deliberately use the same stable index.
+	foreach(mirFunctionIdx, &func : this.mirInput.functions){
 		BCFunction functionResult = {};
 		BCFunctionIdx funcIdx = this.push_func_get_idx(&functionResult);
-		this.declToBcFunction[func.sourceDeclIdx] = funcIdx;
-		FnDeclAst* sourceFunction = &this.inputAst.declarations[func.sourceDeclIdx].fnDecl;
-		String functionName = this.inputAst.names[sourceFunction.nameIdx].text();
-		if (functionName == "program") {
-			this.bcOutput.entryFunctionIdx = funcIdx;
+		assert(funcIdx == mirFunctionIdx);
+		if (func.sourceMethodIdx == compiler::mir::NO_METHOD) {
+			FnDeclAst* sourceFunction = &this.inputAst.declarations[func.sourceDeclIdx].fnDecl;
+			String functionName = this.inputAst.names[sourceFunction.nameIdx].text();
+			if (functionName == "program") {
+				this.bcOutput.entryFunctionIdx = funcIdx;
+			}
 		}
 	}
 	// Second pass: actually lower the function instructions
-	foreach(&func : this.mirInput.functions){
-		BCFunctionIdx funcIdx = this.declToBcFunction[func.sourceDeclIdx];
+	foreach(funcIdx, &func : this.mirInput.functions){
 		this.currentFrameOffset = 0;
 		this.localFrameOffset = 0;
 		this.prepare_func_bindings(func);
-		this.lower_fun(func, funcIdx);
+		this.lower_fun(func, (BCFunctionIdx)funcIdx);
 	}
 	optimize(&this.bcOutput);
 
@@ -101,7 +98,7 @@ fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunct
 	BCFunction* funcOutput = &this.bcOutput.functions[funcOutputIdx];
 	funcOutput.layoutStart = this.fun_frame_slots_len();
 
-	DeclParamRange params = this.symbolTable.declParamRanges[funcInput.sourceDeclIdx];
+	DeclParamRange params = funcInput.paramRange;
 	// Bind all function parameters first! before anything else. 
 	// If we don't do this, if a parameter is used after a local, vm will read the wrong offset in the stack frame
 	for (int i = params.start; i < params.end; i++) {
@@ -114,9 +111,7 @@ fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunct
 
 	for(int i = funcInput.blocksStart; i<funcInput.blocksEnd;i++){
 		BCBlockIdx loweredBlockIdx = this.lower_block(&this.mirInput.blocks[i], funcOutputIdx);
-		SymbolIdx fnSymbolIdx = this.symbolTable.declSymbols[funcInput.sourceDeclIdx];
-		CompTypeInfo returnType = this.symbolTable.symbols[fnSymbolIdx].type;
-		this.lower_terminator(this.mirInput.blocks[i].terminator, loweredBlockIdx, returnType);
+		this.lower_terminator(this.mirInput.blocks[i].terminator, loweredBlockIdx, funcInput.returnType);
 	}
 	funcOutput.layoutEnd = this.fun_frame_slots_len();
 	funcOutput.blocksEnd = this.blocks_len();
@@ -188,38 +183,51 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.CALL:
 			{
 				MirOperand callee = this.mirInput.operands[mirInstruction.operandsStart];
+				MirFunction* calleeFunction = &this.mirInput.functions[callee.fnCalleeIdx];
 				// Lower all call arguments
 				short argsStart = -1;
 				short argsEnd = -1;
 				short argsCount = 0;
+				short calleeParamOffset = 0;
 				for(int k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++){
 					BCCallArg argument = {};
 					BCArgIdx argIdx = this.push_callarg_get_idx(&argument);
 					if(argsCount == 0){
 						argsStart = argIdx;
 					}
-					// Only way to extract the type for every argument is through symbol table (for now)
-					DeclParamRange paramRange = this.symbolTable.declParamRanges[callee.fnCalleeIdx];
+					DeclParamRange paramRange = calleeFunction.paramRange;
 					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
-					CompTypeInfo argType = this.symbolTable.symbols[paramSymbolIdx].type;
+					Symbol* paramSymbol = &this.symbolTable.symbols[paramSymbolIdx];
+					CompTypeInfo argType = paramSymbol.type;
+					short argAlignment = (short)compiler::get_type_alignment(argType);
+					calleeParamOffset = common::align_offset(calleeParamOffset, argAlignment);
 					// Argumnents have bindings in both caller and callee.
 					this.bcOutput.callArgs[argIdx].callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
 					this.bcOutput.callArgs[argIdx].size = (short)compiler::get_type_size(argType);
 					this.bcOutput.callArgs[argIdx].type = argType.type;
+					this.bcOutput.callArgs[argIdx].calleeOffset = calleeParamOffset;
+					this.bcOutput.callArgs[argIdx].copyBack = paramSymbol.passMode == ParamPassMode.INOUT;
+					calleeParamOffset += this.bcOutput.callArgs[argIdx].size;
 					argsCount++;
 				}
 				argsEnd = argsStart + argsCount;
+				short returnDestOffset = runtime::NO_OFFSET;
+				short returnSize = 0;
+				if (mirInstruction.type.type != ValueType.NULL) {
+					returnDestOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+					returnSize = (short)compiler::get_type_size(mirInstruction.type);
+				}
 				// Create call info
 				BCCallInfo callInfo = {
-					.calleeIdx = this.declToBcFunction[callee.fnCalleeIdx],
+					.calleeIdx = callee.fnCalleeIdx,
 					.argsStart = argsStart,
 					.argsEnd = argsEnd,
-					.returnDestOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type),
-					.returnSize = (short)compiler::get_type_size(mirInstruction.type)
+					.returnDestOffset = returnDestOffset,
+					.returnSize = returnSize,
 				};
 				BCCallInfoIdx infoIdx = this.push_callinfo_get_idx(&callInfo);
 				BCInstruction instruction = {
-					.destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type),
+					.destOffset = returnDestOffset,
 					.leftOffset = runtime::NO_OFFSET,
 					.rightOffset = runtime::NO_OFFSET,
 					.opCode = BCOpCode.CALL,

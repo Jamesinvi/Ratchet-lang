@@ -92,6 +92,7 @@ fn RunResult Vm.execute_program(Vm* vm)
 	vm.frame = &vm.frames[0];
 	vm.frame.base = 0;
 	vm.frame.size = entry.frameSize;
+	vm.frame.callInfoIdx = -1;
 	vm.stackHead = entry.frameSize;
 	
 	while(vm.running) {
@@ -210,19 +211,17 @@ fn RunResult Vm.execute_program(Vm* vm)
 				vm.frame.size = callee.frameSize;
 				vm.stackHead += callee.frameSize;
 				vm.frame.returnPtr = vm.instructionPtr;
+				vm.frame.callInfoIdx = inst.callInfoIdx;
 				vm.instructionPtr = &vm.instructions[vm.blocks[callee.blocksStart].instructionsStart];
 				vm.frame.returnDestOffset = callInfo.returnDestOffset;
 				vm.frame.returnSize = callInfo.returnSize;
 
 				// Copy call arguments into the new stack frame
-				short paramOffset = 0; // first param is @_00
 				for(int i = callInfo.argsStart; i < callInfo.argsEnd; i++){
 					BCCallArg* arg = &vm.program.callArgs[i];
 					Byte* src = &vm.stack[callerFrame.base + arg.callerOffset];
-					Byte* dst = &vm.stack[vm.frame.base + paramOffset];
-					// TODO: Alignment here is not correct, so for now just copy byte-by-byte
+					Byte* dst = &vm.stack[vm.frame.base + arg.calleeOffset];
 					mem::copy(dst, src, (sz)arg.size, 1, 1);
-					paramOffset += arg.size; // later use real param offsets/alignment
 				}
 			}
 			case BCOpCode.RETURN:
@@ -231,6 +230,20 @@ fn RunResult Vm.execute_program(Vm* vm)
 				sz returnFrameBase = vm.frame.base;
 				short offset = vm.frame.returnDestOffset;
 				short returnSize = vm.frame.returnSize;
+
+				// INOUT uses copy-in/copy-out. Copy mutations back while both frames exist.
+				if (vm.frameCount > 1) {
+					BCCallInfo completedCall = vm.program.callInfos[vm.frame.callInfoIdx];
+					StackFrame* callerFrame = &vm.frames[vm.frameCount - 2];
+					for (int i = completedCall.argsStart; i < completedCall.argsEnd; i++) {
+						BCCallArg* arg = &vm.program.callArgs[i];
+						if (!arg.copyBack) continue;
+						Byte* src = &vm.stack[vm.frame.base + arg.calleeOffset];
+						Byte* dst = &vm.stack[callerFrame.base + arg.callerOffset];
+						mem::copy(dst, src, (sz)arg.size, 1, 1);
+					}
+				}
+
 				vm.frameCount--;
 				if(vm.frameCount == 0){
 					// Terminate the vm if we're returning from program()
@@ -238,12 +251,13 @@ fn RunResult Vm.execute_program(Vm* vm)
 					vm.running = false;
 				}else{
 					// Copy the return value in the caller's stack frame at the specified offset
-					Byte* src = &vm.stack[returnFrameBase + returnSourceOffset];
 					vm.stackHead = returnFrameBase;
 					vm.frame = &vm.frames[vm.frameCount -1];
-					Byte* dest = &vm.stack[vm.frame.base + offset];
-					// TODO: Alignment here is not correct, so for now just copy byte-by-byte
-					mem::copy(dest, src, (sz)returnSize, 1, 1);
+					if (returnSize > 0) {
+						Byte* src = &vm.stack[returnFrameBase + returnSourceOffset];
+						Byte* dest = &vm.stack[vm.frame.base + offset];
+						mem::copy(dest, src, (sz)returnSize, 1, 1);
+					}
 					vm.instructionPtr = returnPtr;
 				}
 			default:

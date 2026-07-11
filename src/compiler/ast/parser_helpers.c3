@@ -1,7 +1,6 @@
 module compiler::parser;
 import common;
 import globals;
-import common::stack;
 import std::collections::list;
 import libc;
 import debug;
@@ -181,60 +180,6 @@ fn void Parser.predeclare_functions(Parser* this)
 }
 
  
-fn void Parser.desugar_methods(Parser* this)
-{
-    this.outputAst.loweredMethodsStart = (DeclIdx)this.outputAst.declarations.len();
-    foreach(structDeclIdx : this.structs){
-        Decl* decl = &this.outputAst.declarations[structDeclIdx];
-        foreach (methodIdx, &method : decl.structDecl.methods) {
-            // Lowered methods are part of the returned AST.
-            List{ParamAst} paramsCopy = {};
-            paramsCopy.init(this.outputAllocator, method.params.len() + 1);
-
-            // Add the implicit receiver as arg0 so call lowering can pass it explicitly.
-            ParamAst selfParam = {
-                .type = {.tokenType = TokenType.THIS, .nameIdx = decl.structDecl.nameIdx},
-                .nameIdx = this.push_name_get_idx("self"),
-                .span = {},
-                .passMode = ParamPassMode.INOUT,
-            };
-            paramsCopy.push(selfParam);
-            paramsCopy.add_all(&method.params);
-
-            @pool()
-            {
-                String mangledMethodName = this.mangle_method_name(structDeclIdx, (int)methodIdx, tmem);
-                NameIdx newNameIdx = this.push_name_get_idx(mangledMethodName);
-                FnDeclAst fnEquivalent = {
-                    .returnType = method.returnType,
-                    .nameIdx = newNameIdx,
-                    .params = paramsCopy,
-                    .body = method.body,
-                    .isDesugaredResult = true,
-                };
-                 Decl newFnDecl = {
-                    .kind = DeclKind.FUNCTION,
-                    .fnDecl = fnEquivalent,
-                };
-                DeclIdx newFunDeclIdx = this.push_decl_get_idx(&newFnDecl);
-                method.loweredFormIdx = newFunDeclIdx;
-
-            };
-        }
-    }
-}
-
-
-
-fn String Parser.mangle_method_name(Parser* this, DeclIdx structDeclIdx, int methodIdx, Allocator allocator)
-{
-    Decl* decl = &this.outputAst.declarations[structDeclIdx];
-    MethodDeclAst* methodDecl = &decl.structDecl.methods[methodIdx];
-    InternedString structNameId = this.outputAst.names[decl.structDecl.nameIdx];
-    InternedString methodNameId = this.outputAst.names[methodDecl.nameIdx];
-    return string::format(allocator, "%s_%s", structNameId.text(), methodNameId.text());
-}
-
 fn void Parser.predeclare_natives(Parser* this)
 {
 }

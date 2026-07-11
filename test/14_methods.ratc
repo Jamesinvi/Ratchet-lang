@@ -1,0 +1,31 @@
+struct Counter {
+    int value;
+
+    method int addTwice(int amount) {
+        add(amount);
+        return this.add(amount);
+    }
+
+    method int add(int amount) {
+        this.value = this.value + amount;
+        return this.value;
+    }
+
+    method null set(int value) {
+        this.value = value;
+        return;
+    }
+}
+
+fn bool program() {
+    Counter counter;
+    counter.value = 40;
+
+    int returned = counter.addTwice(1);
+    echo returned;
+    echo counter.value;
+
+    counter.set(7);
+    echo counter.value;
+    return false;
+}

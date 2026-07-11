@@ -29,6 +29,7 @@ struct SemanticAnalyzer
 	Expr* currentExpr;		
 	CompTypeInfo currentReturnType;		
 	DeclIdx currentStructDeclIdx;
+	SymbolIdx currentReceiverSymbolIdx;
 	int currentScopeIdx;
 	bool returnFound;
 }
@@ -57,6 +58,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTab
 	this.symbolTable.callTargets.init(outputAllocator, exprLen);
 	this.symbolTable.callReceiverExpr.init(outputAllocator, exprLen);
 	this.symbolTable.memberFieldIndices.init(outputAllocator, exprLen);
+	this.symbolTable.methods.init(outputAllocator);
 
 	// Fill lists with defaults
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
@@ -75,6 +77,7 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTab
 	this.returnFound = false;
 	this.currentScopeIdx = 0;
 	this.currentStructDeclIdx = parser::NO_IDX;
+	this.currentReceiverSymbolIdx = NO_SYMBOL;
 }
 
 fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
@@ -121,7 +124,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 		return metaDataResult;
 	}
 
-	for (int i = 0; i < this.ast.loweredMethodsStart; i++){
+	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
 		Decl* decl = &this.ast.declarations[i];
 		switch (decl.kind)
 		{
@@ -134,8 +137,9 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 			}
 			case DeclKind.STRUCT:
 			{
-				foreach (method : decl.structDecl.methods){
-					TypeResult declType = this.analyze_method(&method);
+				foreach (methodIdx, &method : decl.structDecl.methods){
+					assert(methodIdx < int::max);
+					TypeResult declType = this.analyze_method(method, (int)methodIdx);
 					if (declType.hadError) {
 						return declType;
 					}
@@ -147,24 +151,24 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	return type_ok(make_type(ValueType.NULL));
 }
 
-fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params, DeclIdx ownerDeclIdx)
+fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params)
 {
-	int rangeStart = (int)this.symbolTable.declParamSymbols.len();
 	foreach (&param : *params){
 		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
 		if (paramType.hadError) {
 			return paramType;
 		}
 		SymbolIdx symbolIdx = this.symbols_len();
-		Symbol symbol = { .kind = SymbolKind.PARAM, .idx = (SymbolIdx)param.nameIdx, .type = paramType.value };
+		Symbol symbol = {
+			.kind = SymbolKind.PARAM,
+			.idx = (SymbolIdx)param.nameIdx,
+			.type = paramType.value,
+			.passMode = param.passMode,
+		};
 		this.symbolTable.symbols.push(symbol);
 		this.symbolTable.declParamSymbols.push(symbolIdx);
 		this.current_scope().visibleSymbols.push(symbolIdx);
 	}
-	this.symbolTable.declParamRanges[ownerDeclIdx] = {
-		.start = rangeStart,
-		.end = (int)this.symbolTable.declParamSymbols.len(),
-	};
 	return type_ok(make_type(ValueType.NULL));
 }
 
@@ -209,27 +213,42 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
 		return false;
 	}
 	
-	sz methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
+	int methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
 	if (methodIdx == parser::NO_IDX) {
 		return false;
 	}
 
-	for(sz i = call.argsStart; i < call.argsEnd; i++) {
-		ExprIdx argExprIdx = this.ast.args[i];
+	MethodDeclAst* method = &structDecl.structDecl.methods[methodIdx];
+	int argCount = call.argsEnd - call.argsStart;
+	if (argCount != (int)method.params.len()) {
+		*out = this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, span);
+		return true;
+	}
+
+	for(int i = 0; i < argCount; i++) {
+		ExprIdx argListIdx = call.argsStart + i;
+		ExprIdx argExprIdx = this.ast.args[argListIdx];
 		TypeResult argType = this.analyze_expr(argExprIdx);
 		if (argType.hadError) {
 			*out = argType;
 			return true;
 		}
+		TypeResult expectedType = this.create_type_from_ast(&method.params[i].type, span);
+		if (expectedType.hadError) {
+			*out = expectedType;
+			return true;
+		}
+		if (!compiler::type_info_matches(argType.value, expectedType.value)) {
+			*out = this.type_error(ErrorKind.TYPE_MISMATCH, argType.value, expectedType.value, span);
+			return true;
+		}
 	}
 
-	
-	MethodDeclAst* method = &structDecl.structDecl.methods[methodIdx];
-	assert(method.loweredFormIdx != parser::NO_IDX);
-	// Lower method to free function
-	this.symbolTable.callTargets[callExprIdx].kind = CallTargetKind.FREE_FUN;
-	this.symbolTable.callTargets[callExprIdx].fnDeclIdx = method.loweredFormIdx;
-
+	this.symbolTable.callTargets[callExprIdx].kind = CallTargetKind.METHOD;
+	this.symbolTable.callTargets[callExprIdx].methodId = {
+		.structDeclIdx = structDeclIdx,
+		.methodIdx = methodIdx,
+	};
 
 	*out = this.create_type_from_ast(&method.returnType, span);
 	return true;
@@ -247,11 +266,18 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 
 	this.begin_scope(expectedRetType, false);
 	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
+	SymbolIdx prevReceiverSymbolIdx = this.currentReceiverSymbolIdx;
 	this.currentStructDeclIdx = parser::NO_IDX;
-	TypeResult paramsType = this.declare_params(&fnDecl.params, ownerDeclIdx);
+	this.currentReceiverSymbolIdx = NO_SYMBOL;
+	int paramsStart = (int)this.symbolTable.declParamSymbols.len();
+	TypeResult paramsType = this.declare_params(&fnDecl.params);
 	if (paramsType.hadError) {
 		return paramsType;
 	}
+	this.symbolTable.declParamRanges[ownerDeclIdx] = {
+		.start = paramsStart,
+		.end = (int)this.symbolTable.declParamSymbols.len(),
+	};
 	// Scan and analyze all statments in the function
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
@@ -267,10 +293,11 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 	}
 	this.end_scope();
 	this.currentStructDeclIdx = prevStructDeclIdx;
+	this.currentReceiverSymbolIdx = prevReceiverSymbolIdx;
 	return type_ok(expectedRetType.value);
 }
 
-fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDeclAst* methodDecl)
+fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDeclAst* methodDecl, int methodIdx)
 {
 	
 	Span methodSpan = this.ast.statements[methodDecl.body].span;
@@ -283,12 +310,49 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 
 	this.begin_scope(expectedRetType, true);
 	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
+	SymbolIdx prevReceiverSymbolIdx = this.currentReceiverSymbolIdx;
 	this.currentStructDeclIdx = methodDecl.structIdx;
-	TypeResult paramsType = this.declare_params(&methodDecl.params, methodDecl.loweredFormIdx);
+
+	Decl* structDecl = &this.ast.declarations[methodDecl.structIdx];
+	TypeAst receiverTypeAst = {
+		.tokenType = TokenType.IDENTIFIER,
+		.nameIdx = structDecl.structDecl.nameIdx,
+	};
+	TypeResult receiverType = this.create_type_from_ast(&receiverTypeAst, methodSpan);
+	if (receiverType.hadError) {
+		return receiverType;
+	}
+
+	int paramsStart = (int)this.symbolTable.declParamSymbols.len();
+	SymbolIdx receiverSymbolIdx = this.symbols_len();
+	Symbol receiverSymbol = {
+		.kind = SymbolKind.RECEIVER,
+		.idx = NO_SYMBOL,
+		.type = receiverType.value,
+		.passMode = ParamPassMode.INOUT,
+	};
+	this.symbolTable.symbols.push(receiverSymbol);
+	this.symbolTable.declParamSymbols.push(receiverSymbolIdx);
+	this.currentReceiverSymbolIdx = receiverSymbolIdx;
+
+	TypeResult paramsType = this.declare_params(&methodDecl.params);
 
 	if (paramsType.hadError) {
 		return paramsType;
 	}
+	MethodAnalysisInfo methodInfo = {
+		.id = {
+			.structDeclIdx = methodDecl.structIdx,
+			.methodIdx = methodIdx,
+		},
+		.paramRange = {
+			.start = paramsStart,
+			.end = (int)this.symbolTable.declParamSymbols.len(),
+		},
+		.receiverSymbolIdx = receiverSymbolIdx,
+		.returnType = expectedRetType.value,
+	};
+	this.symbolTable.methods.push(methodInfo);
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
 
@@ -304,6 +368,7 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	}
 	this.end_scope();
 	this.currentStructDeclIdx = prevStructDeclIdx;
+	this.currentReceiverSymbolIdx = prevReceiverSymbolIdx;
 	return type_ok(expectedRetType.value);
 }
 
@@ -331,13 +396,14 @@ fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, int str
 	return parser::NO_IDX;
 }
 
-fn sz SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* structDecl, InternedString name)
+fn int SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* structDecl, InternedString name)
 {
 	for (sz i = 0; i < structDecl.methods.len(); i++){
 		MethodDeclAst* method = &structDecl.methods[i];
 		InternedString methodName = this.ast.names[method.nameIdx];
 		if (methodName.id == name.id) {
-			return i;
+			assert(i < int::max);
+			return (int)i;
 		}
 	}
 	return parser::NO_IDX;
@@ -638,6 +704,9 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 			}
 			return type_ok(make_type(ValueType.BOOL));
 		case BinOp.STORE:
+			if (this.ast.expressions[expr.binary.lhs].kind == ExprKind.THIS) {
+				return this.type_error(ErrorKind.INVALID_LVALUE, lhsType.value, lhsType.value, expr.span);
+			}
 			if (!compiler::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
@@ -653,12 +722,22 @@ fn TypeResult SemanticAnalyzer.analyze_expr_this(SemanticAnalyzer* this, ExprIdx
 	if (!this.is_in_method()){
 		return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, nullType, expr.span);
 	}
-	if (this.currentStructDeclIdx == parser::NO_IDX) {
+	if (this.currentStructDeclIdx == parser::NO_IDX || this.currentReceiverSymbolIdx == NO_SYMBOL) {
 		return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, expr.span);
 	}
-	NameIdx structNameIdx = this.ast.declarations[this.currentStructDeclIdx].structDecl.nameIdx;
-	TypeAst thisTypeAst = {.tokenType = TokenType.THIS, .nameIdx = structNameIdx};
-	return this.create_type_from_ast(&thisTypeAst, expr.span);
+	this.symbolTable.exprSymbols[exprIdx] = this.currentReceiverSymbolIdx;
+	return type_ok(this.symbolTable.symbols[this.currentReceiverSymbolIdx].type);
+}
+
+fn bool SemanticAnalyzer.is_place_expr(SemanticAnalyzer* this, ExprIdx exprIdx)
+{
+	Expr* expr = &this.ast.expressions[exprIdx];
+	switch (expr.kind) {
+		case ExprKind.VAR: return true;
+		case ExprKind.THIS: return true;
+		case ExprKind.MEMBER: return this.is_place_expr(expr.member.base);
+		default: return false;
+	}
 }
 
 fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx exprIdx)
@@ -674,11 +753,14 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		}
 		CompTypeInfo baseInfo = baseType.value;
 		bool isStruct = baseInfo.type == ValueType.STRUCT;
-		if (isStruct || this.is_struct_ref_like(baseInfo)) {
+		if (isStruct) {
 			DeclIdx structDeclIdx = this.find_struct_decl_idx(baseInfo.structTypeIndex);
 			InternedString methodName = this.ast.names[calleeExpr.member.memberIdx];
 			TypeResult resolved = {};
 			if (this.try_resolve_method_call(structDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved)) {
+				if (!resolved.hadError && !this.is_place_expr(calleeExpr.member.base)) {
+					return this.type_error(ErrorKind.INVALID_LVALUE, baseInfo, baseInfo, expr.span);
+				}
 				this.symbolTable.callReceiverExpr[exprIdx] = calleeExpr.member.base;
 				return resolved;
 			}

@@ -1,6 +1,5 @@
 module compiler::parser;
 import common;
-import common::stack;
 import log;
 import debug;
 import std::collections::list;
@@ -14,7 +13,6 @@ fn ProgramAst? run_parser(List{Token} tokens, Allocator outputAllocator)
 {
 	Parser parser = { };
 	parser.init(tokens, outputAllocator);
-	defer parser.deinit();
 	return parser.run();
 }
 
@@ -26,9 +24,7 @@ struct Parser
 	ProgramAst outputAst;
 	bool hadError;
 	bool panicMode;
-	List{DeclIdx} structs;
 	Allocator outputAllocator;
-	DynamicArenaAllocator localAllocator;
 }
 
 // ---------- Lifecycle ----------
@@ -36,8 +32,6 @@ struct Parser
 fn void Parser.init(Parser* this, List{Token} tokens, Allocator outputAllocator)
 {
 	this.outputAllocator = outputAllocator;
-	this.localAllocator = { };
-	this.localAllocator.init(mem, 1024);
 	this.input = tokens;
 	this.hadError = false;
 	this.panicMode = false;
@@ -48,16 +42,8 @@ fn void Parser.init(Parser* this, List{Token} tokens, Allocator outputAllocator)
 	this.outputAst = { };
 	this.outputAst.init(outputAllocator);
 
-	this.structs = { };
-	this.structs.init(&this.localAllocator);
-
 	this.predeclare_structs();
 	this.predeclare_functions();
-}
-
-fn void Parser.deinit(Parser* this)
-{
-	this.localAllocator.free();
 }
 
 // ---------- Top-level compile pipeline ----------
@@ -67,7 +53,6 @@ fn ProgramAst? Parser.run(Parser* parser)
 	while (!parser.match(TokenType.EOF)){
 		parser.declaration();
 	}
-	parser.desugar_methods();
 	if (parser.hadError){
 		return PARSE_ERROR~;
 	}
@@ -314,7 +299,6 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 			method.returnType = retType;
 			method.nameIdx = methodNameIdx;
 			method.structIdx = declIdx;
-			method.loweredFormIdx = NO_IDX;
 			// parse params + body
 			this.consume(TokenType.LEFT_PAREN, "Expected '(' after method name");
 			this.fill_fun_params(&method.params);
@@ -337,7 +321,6 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 	{
 		this.error("Expected '}' after struct fields");
 	}
-	this.structs.push(declIdx);
 	return declIdx;
 }
 

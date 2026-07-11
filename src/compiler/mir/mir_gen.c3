@@ -25,6 +25,7 @@ struct MirGenerator
 	Allocator outputAllocator;
 	MirRegisterID currentReg;
 	MirBlockIdx currentBlock;
+	SymbolIdx currentReceiverSymbolIdx;
 }
 
 fn MirProgram? generate_mir(ProgramAst* ast, SymbolTable* symbolTable, Allocator ouputAllocator)
@@ -52,6 +53,7 @@ fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable*
 	this.output = {};
 	this.currentReg = 0;
 	this.currentBlock = 0;
+	this.currentReceiverSymbolIdx = compiler::analyzer::NO_SYMBOL;
 
 	this.output.init(this.outputAllocator, 1024);
 	this.bindings.init(&this.localAllocator, this.symbolTable.symbols.len());
@@ -66,34 +68,84 @@ fn void MirGenerator.deinit(MirGenerator* this)
 
 fn MirGenResult MirGenerator.run(MirGenerator* this)
 {
-
+	// First pass: give every free function and method a stable MIR function index.
 	foreach(idx, &decl : this.inputAst.declarations){
 	    assert(idx < int::max);
 	    int intIdx = (int)idx;
 		if(decl.kind == DeclKind.FUNCTION){
-			this.lower_fun(decl, intIdx);
+			SymbolIdx symbolIdx = this.symbolTable.declSymbols[intIdx];
+			MirFunction function = {
+				.sourceDeclIdx = intIdx,
+				.sourceMethodIdx = NO_METHOD,
+				.paramRange = this.symbolTable.declParamRanges[intIdx],
+				.returnType = this.symbolTable.symbols[symbolIdx].type,
+				.receiverSymbolIdx = compiler::analyzer::NO_SYMBOL,
+			};
+			this.output.functions.push(function);
+		} else if (decl.kind == DeclKind.STRUCT) {
+			this.lower_methods_to_functions(intIdx, &decl.structDecl);
 		}
+	}
+
+	// Second pass: all callees now exist, so forward calls and recursion are safe.
+	for (int functionIdx = 0; functionIdx < (int)this.output.functions.len(); functionIdx++) {
+		this.lower_function_body(functionIdx);
 	}
 
 	return MirGenResult.OK;
 }
 
-
-fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
+fn void MirGenerator.lower_methods_to_functions(
+	MirGenerator* this,
+	DeclIdx structDeclIdx,
+	StructDeclAst* structDecl
+)
 {
-	debug::@log_mir("lowering func: '%s'", this.inputAst.names[decl.fnDecl.nameIdx].text());
+	foreach (methodIdx, &method : structDecl.methods) {
+		assert(methodIdx < int::max);
+		MethodId methodId = {
+			.structDeclIdx = structDeclIdx,
+			.methodIdx = (int)methodIdx,
+		};
+		MethodAnalysisInfo* analysis = this.symbolTable.find_method(methodId);
+		assert(analysis != null);
+		MirFunction function = {
+			.sourceDeclIdx = structDeclIdx,
+			.sourceMethodIdx = (int)methodIdx,
+			.paramRange = analysis.paramRange,
+			.returnType = analysis.returnType,
+			.receiverSymbolIdx = analysis.receiverSymbolIdx,
+		};
+		this.output.functions.push(function);
+	}
+}
+
+fn void MirGenerator.lower_function_body(MirGenerator* this, MirFunctionIdx functionIdx)
+{
+	MirFunction* function = &this.output.functions[functionIdx];
+	Decl* sourceDecl = &this.inputAst.declarations[function.sourceDeclIdx];
+	StmtIdx bodyIdx;
+	if (function.sourceMethodIdx == NO_METHOD) {
+		debug::@log_mir("lowering func: '%s'", this.inputAst.names[sourceDecl.fnDecl.nameIdx].text());
+		bodyIdx = sourceDecl.fnDecl.body;
+	} else {
+		MethodDeclAst* method = &sourceDecl.structDecl.methods[function.sourceMethodIdx];
+		debug::@log_mir("lowering method: '%s'", this.inputAst.names[method.nameIdx].text());
+		bodyIdx = method.body;
+	}
 
 	// clear out all temporaries and operands 
 	common::list_set_values{MirOperand}(&this.bindings, placeHolderOperand);
+	this.currentReg = 0;
+	this.currentReceiverSymbolIdx = function.receiverSymbolIdx;
 
-	Stmt funcBody = this.inputAst.statements[decl.fnDecl.body];
+	Stmt funcBody = this.inputAst.statements[bodyIdx];
 	BlockStmt bodyBlock = funcBody.blockStmt;
 
-	MirFunction loweredFunc = {.sourceDeclIdx = index};
-	loweredFunc.blocksStart = this.blocks_len();
+	function.blocksStart = this.blocks_len();
 
 	// Parameters behave like pre-existing locals at function entry.
-	DeclParamRange paramRange = this.symbolTable.declParamRanges[index];
+	DeclParamRange paramRange = function.paramRange;
 	for (int i = paramRange.start; i < paramRange.end; i++) {
 		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[i];
 		MirPlace paramPlace = {
@@ -131,9 +183,7 @@ fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 		};
 		loweredBlock.terminator = this.push_terminator_get_idx(&defaultTerm);
 	}
-	loweredFunc.blocksEnd = this.blocks_len();
-
-	this.output.functions.push(loweredFunc);
+	function.blocksEnd = this.blocks_len();
 }
 
 fn void MirGenerator.lower_stmt(MirGenerator* this, StmtIdx stmtIdx)
@@ -427,10 +477,9 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 		}
 		case ExprKind.CALL:
 		{
-			CallTarget target = this.symbolTable.callTargets[exprIdx];
-			assert(target.kind == CallTargetKind.FREE_FUN);
-			return this.lower_free_fun(exprIdx);
+			return this.lower_call(exprIdx);
 		}
+		case ExprKind.THIS: nextcase;
         case ExprKind.VAR:
 		{
 			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
@@ -500,29 +549,61 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 
 }
 
-fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprIdx)
+fn MirFunctionIdx MirGenerator.find_free_function(MirGenerator* this, DeclIdx declIdx)
+{
+	foreach (functionIdx, &function : this.output.functions) {
+		if (function.sourceMethodIdx == NO_METHOD && function.sourceDeclIdx == declIdx) {
+			assert(functionIdx < int::max);
+			return (MirFunctionIdx)functionIdx;
+		}
+	}
+	return NO_FUNCTION;
+}
+
+fn MirFunctionIdx MirGenerator.find_method_function(MirGenerator* this, MethodId methodId)
+{
+	foreach (functionIdx, &function : this.output.functions) {
+		if (function.sourceMethodIdx == methodId.methodIdx && function.sourceDeclIdx == methodId.structDeclIdx) {
+			assert(functionIdx < int::max);
+			return (MirFunctionIdx)functionIdx;
+		}
+	}
+	return NO_FUNCTION;
+}
+
+fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 {
 	Expr* callExpr = &this.inputAst.expressions[callExprIdx];
-	MirRegisterID resultReg = this.currentReg++;
+	CompTypeInfo returnType = this.symbolTable.exprTypes[callExprIdx];
+	MirRegisterID resultReg = returnType.type == ValueType.NULL ? NO_REG : this.currentReg++;
 
 	CallTarget target = this.symbolTable.callTargets[callExprIdx];
-	assert(target.kind == CallTargetKind.FREE_FUN);
-
-	DeclIdx fnDeclIdx = target.fnDeclIdx;
-	MirOperand callee = {.kind = MirOperandKind.FUNCTION, .fnCalleeIdx = fnDeclIdx};
+	MirFunctionIdx functionIdx = NO_FUNCTION;
+	if (target.kind == CallTargetKind.FREE_FUN) {
+		functionIdx = this.find_free_function(target.fnDeclIdx);
+	} else if (target.kind == CallTargetKind.METHOD) {
+		functionIdx = this.find_method_function(target.methodId);
+	}
+	assert(functionIdx != NO_FUNCTION);
+	MirOperand callee = {.kind = MirOperandKind.FUNCTION, .fnCalleeIdx = functionIdx};
 
 	List{MirOperand} callOperands = {};
 	sz operandCount = (sz)callExpr.call.argsEnd - callExpr.call.argsStart + 2;
 	callOperands.init(&this.localAllocator, operandCount);
 	callOperands.push(callee);
 
-	// Receiver is inserted as arg0 for method calls lowered to free functions.
-	ExprIdx receiverExprIdx = this.symbolTable.callReceiverExpr[callExprIdx];
-
-	if (receiverExprIdx != parser::NO_IDX) {
-		MirOperand receiver = this.lower_expr(receiverExprIdx);
+	if (target.kind == CallTargetKind.METHOD) {
+		ExprIdx receiverExprIdx = this.symbolTable.callReceiverExpr[callExprIdx];
+		MirOperand receiver;
+		if (receiverExprIdx != parser::NO_IDX) {
+			receiver = this.lower_place(receiverExprIdx);
+		} else {
+			assert(this.currentReceiverSymbolIdx != compiler::analyzer::NO_SYMBOL);
+			receiver = this.bindings[this.currentReceiverSymbolIdx];
+			assert(receiver.kind == MirOperandKind.PLACE);
+		}
 		callOperands.push(receiver);
-	} 
+	}
 
 	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
 		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
@@ -536,7 +617,7 @@ fn MirOperand MirGenerator.lower_free_fun(MirGenerator* this, ExprIdx callExprId
 	OperandIdx end = this.operands_len();
 	MirInstruction inst = {
 		.opCode = MirOpCode.CALL,
-		.type = this.symbolTable.exprTypes[callExprIdx],
+		.type = returnType,
 		.result = resultReg,
 		.operandsStart = start,
 		.operandsEnd = end,
@@ -550,6 +631,7 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.inputAst.expressions[exprIdx];
 	switch (expr.kind) {
+		case ExprKind.THIS: nextcase;
 		case ExprKind.VAR:
 			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
 			assert(symbolIdx < this.bindings.len());

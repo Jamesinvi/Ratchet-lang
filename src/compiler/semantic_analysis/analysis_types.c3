@@ -15,6 +15,7 @@ enum SymbolKind : char
 	FUNCTION,
 	FIELD,
 	PARAM,
+	RECEIVER,
 }
 
 struct Symbol
@@ -22,6 +23,7 @@ struct Symbol
 	SymbolIdx idx;
 	CompTypeInfo type;
 	SymbolKind kind;
+	ParamPassMode passMode;
 }
 
 struct DeclParamRange
@@ -43,6 +45,17 @@ struct SymbolTable
 	List{CallTarget} callTargets; 			// index by ExprIdx
 	List{ExprIdx} callReceiverExpr; 		// index by ExprIdx (NO_IDX when absent)
 	List{Scope} scopes; 					// name -> SymbolIdx
+	List{MethodAnalysisInfo} methods;		// semantic data for source methods
+}
+
+fn MethodAnalysisInfo* SymbolTable.find_method(SymbolTable* this, MethodId id)
+{
+	foreach (&method : this.methods) {
+		if (method.id.structDeclIdx == id.structDeclIdx && method.id.methodIdx == id.methodIdx) {
+			return method;
+		}
+	}
+	return null;
 }
 
 enum CallTargetKind : char
@@ -56,6 +69,7 @@ struct CallTarget
 {
 	CallTargetKind kind;
 	DeclIdx fnDeclIdx;
+	MethodId methodId;
 }
 
 struct MethodId
@@ -64,11 +78,22 @@ struct MethodId
 	int methodIdx;
 }
 
+struct MethodAnalysisInfo
+{
+	MethodId id;
+	DeclParamRange paramRange;	// receiver is always parameter 0
+	SymbolIdx receiverSymbolIdx;
+	CompTypeInfo returnType;
+}
+
+
 enum ErrorKind : char (String asStr)
 {
 	TYPE_MISMATCH   	{ "Type mismatch" },
 	UNRESOLVED_STRUCT	{ "Struct type was unresolved. Circular reference?"},
 	INVALID_TYPE    	{ "Invalid type" },
+	INVALID_LVALUE  	{ "Invalid lvalue" },
+	INVALID_ARITY   	{ "Invalid argument count" },
 	UNDECLARED_NAME 	{ "Undeclared name" },
 	NO_RETURN       	{ "No return" },
 }
