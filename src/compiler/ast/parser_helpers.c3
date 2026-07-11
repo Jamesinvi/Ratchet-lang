@@ -196,7 +196,7 @@ fn void Parser.desugar_methods(Parser* this)
                 .type = {.tokenType = TokenType.THIS, .nameIdx = decl.structDecl.nameIdx},
                 .nameIdx = this.push_name_get_idx("self"),
                 .span = {},
-                .passMode = ParamPassMode.IN,
+                .passMode = ParamPassMode.INOUT,
             };
             paramsCopy.push(selfParam);
             paramsCopy.add_all(&method.params);
@@ -232,7 +232,7 @@ fn String Parser.mangle_method_name(Parser* this, DeclIdx structDeclIdx, int met
     MethodDeclAst* methodDecl = &decl.structDecl.methods[methodIdx];
     InternedString structNameId = this.outputAst.names[decl.structDecl.nameIdx];
     InternedString methodNameId = this.outputAst.names[methodDecl.nameIdx];
-    return string::format(allocator, "%s_%s", structNameId.src_text(), methodNameId.src_text());
+    return string::format(allocator, "%s_%s", structNameId.text(), methodNameId.text());
 }
 
 fn void Parser.predeclare_natives(Parser* this)

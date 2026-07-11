@@ -74,7 +74,7 @@ fn BCGenResult BCGenerator.run(BCGenerator* this)
 		BCFunctionIdx funcIdx = this.push_func_get_idx(&functionResult);
 		this.declToBcFunction[func.sourceDeclIdx] = funcIdx;
 		FnDeclAst* sourceFunction = &this.inputAst.declarations[func.sourceDeclIdx].fnDecl;
-		String functionName = this.inputAst.names[sourceFunction.nameIdx].src_text();
+		String functionName = this.inputAst.names[sourceFunction.nameIdx].text();
 		if (functionName == "program") {
 			this.bcOutput.entryFunctionIdx = funcIdx;
 		}

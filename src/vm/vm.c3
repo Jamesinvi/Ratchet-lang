@@ -182,7 +182,7 @@ fn RunResult Vm.execute_program(Vm* vm)
 
 				InternedString* string = (InternedString*)&vm.stack[vm.frame.base + inst.leftOffset];
 				// use the vm output stream. stdout by default
-				io::fprintfn(vm.output, "%s", string.cnst_text());
+				io::fprintfn(vm.output, "%s", string.text());
 			}
 			// Control flow
 			case BCOpCode.BRANCH_IF_FALSE:

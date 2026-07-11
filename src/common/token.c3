@@ -42,7 +42,7 @@ struct Token
 
 fn String Token.value(Token* this) @inline
 {
-	return this.string.src_text();
+	return this.string.text();
 }
 
 Keyword[*] keywords = {

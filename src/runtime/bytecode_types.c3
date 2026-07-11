@@ -324,7 +324,7 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_FLOAT:	log::log("%s", inst.immFloat);
 		case BCOperandKind.IMM_DOUBLE:	log::log("%s", inst.immDouble);
 		case BCOperandKind.IMM_BOOL:	log::log("%s", inst.immBool);
-		case BCOperandKind.IMM_STRING:	log::log("%s", inst.immString.cnst_text());
+		case BCOperandKind.IMM_STRING:	log::log("%s", inst.immString.text());
 		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);

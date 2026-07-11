@@ -66,6 +66,7 @@ fn void MirGenerator.deinit(MirGenerator* this)
 
 fn MirGenResult MirGenerator.run(MirGenerator* this)
 {
+
 	foreach(idx, &decl : this.inputAst.declarations){
 	    assert(idx < int::max);
 	    int intIdx = (int)idx;
@@ -77,9 +78,10 @@ fn MirGenResult MirGenerator.run(MirGenerator* this)
 	return MirGenResult.OK;
 }
 
+
 fn void MirGenerator.lower_fun(MirGenerator* this, Decl* decl, DeclIdx index)
 {
-	debug::@log_mir("lowering func: '%s'", this.inputAst.names[decl.fnDecl.nameIdx].src_text());
+	debug::@log_mir("lowering func: '%s'", this.inputAst.names[decl.fnDecl.nameIdx].text());
 
 	// clear out all temporaries and operands 
 	common::list_set_values{MirOperand}(&this.bindings, placeHolderOperand);
@@ -307,7 +309,7 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
 fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 {
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
-	debug::@log_mir("lowering var decl: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].src_text());
+	debug::@log_mir("lowering var decl: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].text());
 
 	SymbolIdx stmtSymbolIdx = this.symbolTable.stmtSymbols[stmtIdx];
 	MirPlace newPlace = {.baseSymbolIdx = stmtSymbolIdx, .projectionIdx = NO_PROJECTION};
@@ -325,7 +327,7 @@ fn void MirGenerator.lower_var_init(MirGenerator* this, StmtIdx stmtIdx, SymbolI
 {
 
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
-	debug::@log_mir("lowering var init: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].src_text());
+	debug::@log_mir("lowering var init: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].text());
 
 	CompTypeInfo storeType = this.symbolTable.exprTypes[stmt.varDecl.init];
 	if (stmtSymbolIdx < this.symbolTable.symbols.len()) {
@@ -391,7 +393,7 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 		case ExprKind.STRING_LITERAL:	
 		{
 			InternedString srcString = this.inputAst.names[expr.stringLiteral];
-			InternedString allocatedConstantString = globals::constantStrings.get_or_intern(srcString.src_text());
+			InternedString allocatedConstantString = globals::constantStrings.get_or_intern(srcString.text());
 			return {.kind = MirOperandKind.IMM_STRING, 	.immString = allocatedConstantString};
 		}
 		case ExprKind.BINARY:

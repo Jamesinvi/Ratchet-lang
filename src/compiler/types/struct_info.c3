@@ -7,7 +7,7 @@ import std::collections::map;
 
 struct CompStructTypeInfo
 {
-    String name;
+    InternedString name;
     int typeIndex;                 //index in structTypes
     bool isDefined;
     ushort sizeInBytes;
@@ -24,13 +24,25 @@ fn void CompStructTypeInfo.init(CompStructTypeInfo* this){
 
 fn void CompStructTypeInfo.print(CompStructTypeInfo* this)
 {
-	log::logn("struct %s [size: %s, align: %s, fields: %s] {", this.name, this.sizeInBytes, this.alignmentInBytes, this.fieldCount);
+	log::logn("struct %s [size: %s, align: %s, fields: %s] {", this.name.text(), this.sizeInBytes, this.alignmentInBytes, this.fieldCount);
 	foreach(&fieldInfo : this.fieldInfos){
-		log::logn(".   %s, %s, %s", fieldInfo.name, fieldInfo.typeInfo.type, fieldInfo.offset);
+		log::logn(".   %s, %s, %s", fieldInfo.name.text(), fieldInfo.typeInfo.type, fieldInfo.offset);
 	}
 
 	foreach(&methodInfo : this.methodInfos){
-		log::logn(".   method %s, %s", methodInfo.name, methodInfo.arity());
+		log::log(".   method %s, [arity: %s] => [", methodInfo.name.text(), methodInfo.arity());
+		for(int i = 0; i < (int)methodInfo.paramTypes.len(); i++){
+			log::log("(", methodInfo.paramTypes[i].type, methodInfo.paramNames[i].text());
+			if(methodInfo.paramPassModes[i] != ParamPassMode.VALUE){
+				log::log("%s", methodInfo.paramPassModes[i].asStr);
+			}
+
+			log::log("<%s> %s)", methodInfo.paramTypes[i].type, methodInfo.paramNames[i].text());
+			if(i< methodInfo.paramTypes.len() -1){
+				log::logn(", ");
+			}
+		}
+		log::logn("]");
 	}
 
 	log::logn("}");
@@ -39,19 +51,21 @@ fn void CompStructTypeInfo.print(CompStructTypeInfo* this)
 
 struct FieldInfo
 {
-    String name;
+    InternedString name;
     CompTypeInfo typeInfo;
     ushort offset;
 }
 
 struct MethodInfo
 {
-	String name;
+	InternedString name;
     CompTypeInfo returnType;
-	List{CompTypeInfo} params;
+	List{CompTypeInfo} paramTypes;
+	List{InternedString} paramNames;
+	List{ParamPassMode} paramPassModes;
 }
 
 macro ushort MethodInfo.arity(MethodInfo* this){
-	assert(this.params.len() <= ushort::max);
-	return (ushort)this.params.len();
+	assert(this.paramTypes.len() <= ushort::max);
+	return (ushort)this.paramTypes.len();
 }

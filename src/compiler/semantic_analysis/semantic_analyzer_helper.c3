@@ -39,7 +39,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.IDENTIFIER:
 		{
             assert(globals::structTypes.len() < int::max);
-			String typeName = this.ast.names[input.nameIdx].src_text();
+			String typeName = this.ast.names[input.nameIdx].text();
 			if (typeName.len == 0){
 				return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			} 
@@ -68,7 +68,7 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		case TokenType.THIS:			
 		{
             assert(globals::structTypes.len() < int::max);
-			String typeName = this.ast.names[input.nameIdx].src_text();
+			String typeName = this.ast.names[input.nameIdx].text();
 			DeclIdx? found = globals::declaredStructs.get(typeName);
 			if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 			result.type = ValueType.REF;
@@ -144,7 +144,7 @@ fn TypeResult SemanticAnalyzer.fill_structs_metadata(SemanticAnalyzer* this, Lis
 
 			DeclIdx declIdx = structDeclIndices[i];
 			Decl* decl = &this.ast.declarations[declIdx];
-			StructLayoutResult result = this.try_fill_struct_info(decl, this.ast);
+			StructLayoutResult result = this.try_fill_struct_field_info(decl, this.ast);
 
 			switch (result) {
 				case StructLayoutResult.OK:
@@ -165,33 +165,21 @@ fn TypeResult SemanticAnalyzer.fill_structs_metadata(SemanticAnalyzer* this, Lis
 	for (int i = 0; i < (int)structDeclIndices.len(); i++) {
 		DeclIdx declIdx = structDeclIndices[i];
 		Decl* decl = &this.ast.declarations[declIdx];
-		int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text(), this.outputAllocator);
-		CompStructTypeInfo* structInfo = &globals::structTypes[index];
-		// Methods
-		foreach (&method : decl.structDecl.methods){
-			CompTypeInfo fieldType = this.create_type_from_ast(&method.returnType, { }).value;
-
-			MethodInfo methodInfo = {
-				.name = String.copy(this.ast.names[method.nameIdx].src_text(), &globals::typeInfoAllocator),
-				.returnType = fieldType,
-			};
-
-			structInfo.methodInfos.push(methodInfo);
-		}
+		this.fill_struct_method_info(decl, this.ast);
 	}
 	return type_ok(nullType);
 }
 
 <*
-	Try to fill in a specific struct metadata. Will return an enum value based on success, error, or defer.
+	Try to fill in a specific struct field metadata. Will return an enum value based on success, error, or defer.
 	If defer is returned, it means the struct contains a field of another struct that still has undefined metadata, 
 	so it must be deferred to a later pass.
 *>
-fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
+fn StructLayoutResult SemanticAnalyzer.try_fill_struct_field_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
-	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].src_text(), this.outputAllocator);
+	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
 	CompStructTypeInfo* info = &globals::structTypes[index];
-	String name = ast.names[decl.structDecl.nameIdx].src_text();
+	String name = ast.names[decl.structDecl.nameIdx].text();
 
 	// First pass: check if we can actually fill in the info
 	StructLayoutResult fieldsAreDefined = this.check_fields_are_defined(decl, ast);
@@ -212,9 +200,9 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* th
 		always_assert(offset < short::max);
 		always_assert(fieldAlign < short::max);
 		offset = (ushort)common::align_offset((short)offset, (short)fieldAlign);
-		// FieldInfo also owns its data, so we copy the string, instead of storing an interned string
+		// FieldInfo is type information so it should be allocated in typeInfo string interner and allocator
 		FieldInfo fieldInfo = {
-			.name = String.copy(ast.names[field.nameIdx].src_text(), &globals::typeInfoAllocator),
+			.name = globals::typeInfoStrings.get_or_intern(ast.names[field.nameIdx].text()),
 			.typeInfo = fieldType,
 			.offset = offset,
 		};
@@ -224,9 +212,7 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* th
 		offset += fieldSize;
 		maxAlign = max(maxAlign, fieldAlign);
 	}
-
-
-	info.name = String.copy(name, &globals::typeInfoAllocator);
+	info.name = globals::typeInfoStrings.get_or_intern(name);
 
 	// There's some ugliness with types and sizes, so make sure these casts are safe
 	always_assert(offset < short::max);
@@ -236,6 +222,39 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_info(SemanticAnalyzer* th
 	info.sizeInBytes = (ushort)common::align_offset((short)offset, (short)maxAlign);
 	info.isDefined = true;
 	return StructLayoutResult.OK;
+}
+
+fn void SemanticAnalyzer.fill_struct_method_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
+{
+	int index = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
+	CompStructTypeInfo* structInfo = &globals::structTypes[index];
+	// Methods
+	foreach (&method : decl.structDecl.methods) {
+		CompTypeInfo fieldType = this.create_type_from_ast(&method.returnType, { }).value;
+		List{CompTypeInfo} methodParamTypes = {};
+		List{InternedString} methodParamNames = {};
+		List{ParamPassMode} methodParamPassModes = {};
+		methodParamTypes.init(&globals::typeInfoAllocator, method.params.len());
+		methodParamNames.init(&globals::typeInfoAllocator, method.params.len());
+		methodParamPassModes.init(&globals::typeInfoAllocator, method.params.len());
+		foreach (&param: method.params){
+			CompTypeInfo methodParamType = this.create_type_from_ast(&param.type, { }).value;
+			InternedString methodParamName = globals::typeInfoStrings.get_or_intern(ast.names[param.nameIdx].text());
+			ParamPassMode methodParamPassMode = param.passMode;
+			methodParamTypes.push(methodParamType);
+			methodParamNames.push(methodParamName);
+			methodParamPassModes.push(methodParamPassMode);
+		}
+		MethodInfo methodInfo = {
+			.name = globals::typeInfoStrings.get_or_intern(this.ast.names[method.nameIdx].text()),
+			.returnType = fieldType,
+			.paramTypes = methodParamTypes,
+			.paramNames = methodParamNames,
+			.paramPassModes = methodParamPassModes,
+		};
+
+		structInfo.methodInfos.push(methodInfo);
+	}
 }
 
 fn StructLayoutResult SemanticAnalyzer.check_fields_are_defined(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
@@ -248,7 +267,7 @@ fn StructLayoutResult SemanticAnalyzer.check_fields_are_defined(SemanticAnalyzer
 
 		CompTypeInfo fieldType = fieldTypeResult.value;
 		if (fieldType.type == ValueType.STRUCT)	{
-			int fieldStructIndex                = fieldType.structTypeIndex;
+			int fieldStructIndex = fieldType.structTypeIndex;
 			CompStructTypeInfo* fieldStructInfo = &globals::structTypes[fieldStructIndex];
 
 			if (!fieldStructInfo.isDefined) {

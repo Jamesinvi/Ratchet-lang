@@ -26,11 +26,11 @@ struct ProgramAst
     DeclIdx         loweredMethodsStart;// From this idx onwards, you'll find only methods lowered to functions (in "declarations")
 }
 
-enum ParamPassMode : char
+enum ParamPassMode : char (String asStr)
 {
-    VALUE,
-    IN,
-    INOUT,
+    VALUE		{ "value" },
+    IN			{ "in" },
+    INOUT		{ "inout" },
 }
 
 struct ParamAst
@@ -263,7 +263,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 			InternedString funcName = this.names[decl.fnDecl.nameIdx];
 			InternedString retType = this.names[decl.fnDecl.returnType.nameIdx];
 			this.print_indent(indent);
-			log::log("fn %s(", funcName.src_text());
+			log::log("fn %s(", funcName.text());
 			foreach(counter, &param : decl.fnDecl.params){
                 if(counter > 0) log::log(", ");
 				InternedString paramName = this.names[param.nameIdx];
@@ -273,9 +273,9 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
                     case ParamPassMode.INOUT:  log::log("inout ");
                     default: break;
                 }
-				log::log("<%s> %s", paramType.src_text(), paramName.src_text());
+				log::log("<%s> %s", paramType.text(), paramName.text());
 			}
-			log::logn(") returns <%s>", retType.src_text());
+			log::logn(") returns <%s>", retType.text());
 
 			Stmt* stmt = &this.statements[decl.fnDecl.body];
 			this.print_statement(stmt, indent + 2);
@@ -285,26 +285,26 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 		{
 			InternedString structName = this.names[decl.structDecl.nameIdx];
 			this.print_indent(indent);
-			log::logn("struct %s \n{", structName.src_text());
+			log::logn("struct %s \n{", structName.text());
 			foreach(&field : decl.structDecl.fields){
 				InternedString fieldName = this.names[field.nameIdx];
 				InternedString fieldType = this.names[field.type.nameIdx];
 				this.print_indent(indent+2);
-				log::logn("<%s> %s", fieldType.src_text(), fieldName.src_text());
+				log::logn("<%s> %s", fieldType.text(), fieldName.text());
 			}
 			foreach(&method : decl.structDecl.methods){
 				InternedString methodName = this.names[method.nameIdx];
 				InternedString retType = this.names[method.returnType.nameIdx];
 				Decl structAtIdx = this.declarations[method.structIdx];
 				this.print_indent(indent+2);
-				log::log("method <%s> %s (", retType.src_text(), methodName.src_text());
+				log::log("method <%s> %s (", retType.text(), methodName.text());
 				foreach(idx, &param : method.params){
 					if(idx > 0) log::log(", ");
 					InternedString paramName = this.names[param.nameIdx];
 					InternedString paramType = this.names[param.type.nameIdx];
-					log::log("<%s> %s", paramType.src_text(), paramName.src_text());
+					log::log("<%s> %s", paramType.text(), paramName.text());
 				}
-				log::logn(") returns <%s>", retType.src_text());
+				log::logn(") returns <%s>", retType.text());
 				Stmt* stmt = &this.statements[method.body];
 				this.print_statement(stmt, indent + 2);
 			}
@@ -347,7 +347,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
             this.print_indent(indent);
             InternedString typeName = this.names[stmt.varDecl.type.nameIdx];
             InternedString name = this.names[stmt.varDecl.nameIdx];
-            log::log("<%s> %s", typeName.src_text(), name.src_text());
+            log::log("<%s> %s", typeName.text(), name.text());
             if (stmt.varDecl.init != NO_IDX) {
                 log::log(" = ");
                 this.print_expression(&this.expressions[stmt.varDecl.init]);
@@ -408,14 +408,14 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         case ExprKind.DOUBLE:           log::log("<double> %s", expr.doubleLiteral);
         case ExprKind.BOOL:             log::log("<bool> %s", expr.boolLiteral);
         case ExprKind.NULL:             log::log("<null>");
-        case ExprKind.STRING_LITERAL:   log::log("\"%s\"", this.names[expr.stringLiteral].src_text());
+        case ExprKind.STRING_LITERAL:   log::log("\"%s\"", this.names[expr.stringLiteral].text());
 		case ExprKind.THIS:             log::log("@this");
-        case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr].src_text());
+        case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr].text());
         case ExprKind.CAST:             
 		{
 			log::log("(");
             this.print_expression(&this.expressions[expr.cast.value]);
-			log::log(" as %s)", this.names[expr.cast.targetType.nameIdx].src_text());
+			log::log(" as %s)", this.names[expr.cast.targetType.nameIdx].text());
 		}
         case ExprKind.UNARY:
         {
@@ -448,13 +448,13 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
         {
             this.print_expression(&this.expressions[expr.member.base]);
             InternedString member = this.names[expr.member.memberIdx];
-            log::log(".%s", member.src_text());
+            log::log(".%s", member.text());
         }
         case ExprKind.NEW:
         {
             log::log("new");
 			InternedString typeName = this.names[expr.new.type.nameIdx];
-			log::log("<%s>", typeName.src_text());
+			log::log("<%s>", typeName.text());
         }
         case ExprKind.GROUP:            log::log("(<group>)");
         default:                        log::log("<?expr?>");

@@ -6,18 +6,13 @@ alias StringID = sz;
 
 struct InternedString
 {
+	StringInterner* owner;
 	StringID id;
 }
 
-macro String InternedString.src_text(InternedString* this)
+macro String InternedString.text(InternedString* this)
 {
-    return globals::internedSourceStrings.strings[this.id];
-}
-
-
-macro String InternedString.cnst_text(InternedString* this)
-{
-	return globals::constantStrings.strings[this.id];
+    return this.owner.strings[this.id];
 }
 
 struct StringInterner
@@ -41,7 +36,7 @@ fn InternedString StringInterner.get_or_intern(StringInterner* this, String inpu
         StringID nextIdx = this.strings.len();
         String stringCopy = String.copy(input, this.allocator);
         this.strings.push(stringCopy);
-        InternedString internedString = { .id = nextIdx };
+        InternedString internedString = { .owner = this, .id = nextIdx };
         this.ids[stringCopy] = internedString;
         return internedString;
     }
