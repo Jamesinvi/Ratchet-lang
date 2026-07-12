@@ -156,7 +156,16 @@ fn RunResult Vm.execute_program(Vm* vm)
 				mem::move(dst, src, inst.byteCount);
 			case BCOpCode.MOV_REF:
 				vm.mov_op(inst, uptr);
-				// heap tracker will have to do something here
+				// TODO: Managed-reference loads/stores need GC bookkeeping once the
+				// collector exists. Keep that path separate from borrow indirection.
+			case BCOpCode.LOAD_BORROW:
+				Byte* src = (Byte*)vm.load_indirect(inst.leftOffset) + inst.rightOffset;
+				Byte* dst = &vm.stack[vm.frame.base + inst.destOffset];
+				mem::copy(dst, src, inst.byteCount, 1, 1);
+			case BCOpCode.STORE_BORROW:
+				Byte* dst = (Byte*)vm.load_indirect(inst.destOffset) + inst.rightOffset;
+				Byte* src = &vm.stack[vm.frame.base + inst.leftOffset];
+				mem::copy(dst, src, inst.byteCount, 1, 1);
 
 			// Add
 			case BCOpCode.INCREMENT:
@@ -221,9 +230,26 @@ fn RunResult Vm.execute_program(Vm* vm)
 				// Copy call arguments into the new stack frame
 				for(int i = callInfo.argsStart; i < callInfo.argsEnd; i++){
 					BCCallArg* arg = &vm.program.callArgs[i];
-					Byte* src = &vm.stack[callerFrame.base + arg.callerOffset];
 					Byte* dst = &vm.stack[vm.frame.base + arg.calleeOffset];
-					mem::copy(dst, src, (sz)arg.size, 1, 1);
+					if (arg.isBorrow) {
+						// Borrow parameters receive the address of caller storage instead of a value copy.
+						uptr address;
+						if (arg.callerIsBorrow) {
+							// The caller place is itself borrowed from another function, so its slot contains the
+							// original address. Forward it instead of taking the slot's address.
+							uptr* callerBorrow = (uptr*)&vm.stack[callerFrame.base + arg.callerOffset];
+							address = *callerBorrow + (uptr)arg.projectionOffset;
+						} else {
+							// The caller owns the value in its stack frame; borrow that place directly. (copy the address of the caller's variable)
+							address = (uptr)&vm.stack[callerFrame.base + arg.callerOffset + arg.projectionOffset];
+						}
+						// The callee's parameter slot stores the resulting borrow pointer.
+						*(uptr*)dst = address;
+					} else {
+						// Simple pass-by-value case
+						Byte* src = &vm.stack[callerFrame.base + arg.callerOffset];
+						mem::copy(dst, src, (sz)arg.size, 1, 1);
+					}
 				}
 			case BCOpCode.RETURN:
 				short returnSourceOffset = inst.leftOffset;
@@ -231,19 +257,6 @@ fn RunResult Vm.execute_program(Vm* vm)
 				sz returnFrameBase = vm.frame.base;
 				short offset = vm.frame.returnDestOffset;
 				short returnSize = vm.frame.returnSize;
-
-				// INOUT uses copy-in/copy-out. Copy mutations back while both frames exist.
-				if (vm.frameCount > 1) {
-					BCCallInfo completedCall = vm.program.callInfos[vm.frame.callInfoIdx];
-					StackFrame* callerFrame = &vm.frames[vm.frameCount - 2];
-					for (int i = completedCall.argsStart; i < completedCall.argsEnd; i++) {
-						BCCallArg* arg = &vm.program.callArgs[i];
-						if (!arg.copyBack) continue;
-						Byte* src = &vm.stack[vm.frame.base + arg.calleeOffset];
-						Byte* dst = &vm.stack[callerFrame.base + arg.callerOffset];
-						mem::copy(dst, src, (sz)arg.size, 1, 1);
-					}
-				}
 
 				vm.frameCount--;
 				if(vm.frameCount == 0){
@@ -294,19 +307,19 @@ macro Vm.echo(Vm* vm, BCInstruction* inst, $Type)
 
 macro Vm.print_value_from_heap(Vm* vm, short offset, $Type)
 {
-	$Type* heapValuePtr = vm.load_value_from_heap(offset);
+	$Type* heapValuePtr = vm.load_indirect(offset);
 	io::fprintfn(vm.output, "%s", *heapValuePtr);
 }
 
-macro void* Vm.load_value_from_heap(Vm* vm, short offset)
+macro void* Vm.load_indirect(Vm* vm, short offset)
 {
-	// Get the stack slot that contains the address of the ref value
+	// Get the stack slot that contains the address of the indirect value
 	uptr* refAddress = (uptr*)&vm.stack[vm.frame.base + offset];
-	// Load the value at ref address. This is our pointer to the actual data.
-	void* heapValuePtr = (void*)*refAddress;
+	// Load the value at address. This is our pointer to the actual data.
+	void* refValuePtr = (void*)*refAddress;
 	// Outside this macro, it's possible to access the actual value by 
 	// dereferencing using a type: int v = (int)*heapValuePtr;
-	return heapValuePtr;
+	return refValuePtr;
 }
 
 

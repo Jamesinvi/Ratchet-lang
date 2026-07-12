@@ -86,6 +86,11 @@ fn void t_15() @test
     compile_and_run_file("./test/15_simple_gc_tracked_vars.ratc", "5\n12\n5.540000\n1.222222\nfalse\n1616\n")!!;
 }
 
+fn void t_16() @test
+{
+    compile_and_run_file("./test/16_borrow_params.ratc", "6\n11\n31\n17\n26\n")!!;
+}
+
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;

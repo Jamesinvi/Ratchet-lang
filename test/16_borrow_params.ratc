@@ -1,0 +1,52 @@
+struct Pair {
+    int x;
+    int y;
+
+    method null shift(int amount) {
+        this.x = this.x + amount;
+        this.y = this.y + amount;
+    }
+
+    method null shiftTwice(int amount) {
+        shift(amount);
+        shift(amount);
+    }
+}
+
+fn null increment(inout int value) {
+    value = value + 1;
+}
+
+fn null incrementNested(inout int value) {
+    increment(value);
+}
+
+fn null incrementX(inout Pair value) {
+    increment(value.x);
+}
+
+fn int sum(in Pair value) {
+    return value.x + value.y;
+}
+
+fn int sumNested(in Pair value) {
+    return sum(value);
+}
+
+fn bool program() {
+    int counter = 5;
+    incrementNested(counter);
+    echo counter;
+
+    Pair pair;
+    pair.x = 10;
+    pair.y = 20;
+    incrementX(pair);
+    echo pair.x;
+    echo sumNested(pair);
+
+    pair.shiftTwice(3);
+    echo pair.x;
+    echo pair.y;
+    return true;
+}

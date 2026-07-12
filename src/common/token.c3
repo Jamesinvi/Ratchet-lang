@@ -18,7 +18,7 @@ enum TokenType : uint {
     // Keywords.
     AND, CLASS, ELSE, FALSE, FN, FOR, IF, NULL, OR,
     PRINT, RETURN, SUPER, THIS, TRUE, WHILE, ECHO,
-    METHOD, AS, NEW,
+    METHOD, AS, NEW, IN, INOUT,
 
     // Types
     INTEGER_T, FLOAT_T, DOUBLE_T, STRUCT_T, BOOL_T,
@@ -73,6 +73,8 @@ Keyword[*] keywords = {
     {.tokenType = ECHO, .string = "echo"},
     {.tokenType = AS, .string = "as"},
     {.tokenType = METHOD, .string = "method"},
+    {.tokenType = IN, .string = "in"},
+    {.tokenType = INOUT, .string = "inout"},
 };
 
 // -------------Token based matches--------------
@@ -166,5 +168,4 @@ fn bool Token.is_builtin_ptr(Token* t)
 {
 	return t.tokenType.is_builtin_ptr();
 }
-
 

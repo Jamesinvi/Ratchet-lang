@@ -52,9 +52,11 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	// If we already have a binding then use it, else we need to create one
 	if (offset == runtime::NO_OFFSET) {
 		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
-		short alignment = (short)common::get_type_alignment(sym.type);
+		bool isBorrow = sym.passMode != ParamPassMode.VALUE;
+		// borrow params are always pointers, so they get ptr size and alignment
+		short alignment = 	isBorrow ? (short)uptr::alignment	: (short)common::get_type_alignment(sym.type);
+		short size = 		isBorrow ? (short)uptr::size 		: (short)common::get_type_size(sym.type);
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
-		short size = (short)common::get_type_size(sym.type);
 
 		offset = this.localFrameOffset;
 		this.symbolToOffset[symbolIdx] = offset;

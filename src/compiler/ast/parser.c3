@@ -464,6 +464,12 @@ fn void Parser.fill_fun_params(Parser* this, List{ParamAst}* params)
 fn ParamAst Parser.fun_param(Parser* this)
 {
 	ParamAst param = { };
+	param.passMode = ParamPassMode.VALUE;
+	if (this.match(TokenType.IN)) {
+		param.passMode = ParamPassMode.IN;
+	} else if (this.match(TokenType.INOUT)) {
+		param.passMode = ParamPassMode.INOUT;
+	}
 	TypeAst type   = this.parse_type_ast();
 
 	this.consume(TokenType.IDENTIFIER, "Expected parameter name");
@@ -472,7 +478,6 @@ fn ParamAst Parser.fun_param(Parser* this)
 	param.type = type;
 	param.nameIdx = nameIdx;
 	param.span = { .line = this.previous.line };
-	param.passMode = ParamPassMode.VALUE;
 
 	return param;
 }

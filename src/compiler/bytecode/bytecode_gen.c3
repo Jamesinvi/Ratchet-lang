@@ -161,20 +161,48 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 				MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 				MirPlace* place = &this.mirInput.places[dest.placeIdx];
 				SymbolIdx symbolIdx = place.baseSymbolIdx;
+				Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 				TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
-				// destOffset = base offset + sum of all projection offsets
-				short destOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-				this.store_value(mirInstruction, source, destOffset);
+				short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
+				short baseOffset = this.bind_symbol_get_offset(symbolIdx);
+				// Analysis guarantees that stores through borrowed parameters only target inout parameters.
+				if (symbol.passMode != ParamPassMode.VALUE) {
+					short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
+					BCInstruction instruction = {
+						.opCode = BCOpCode.STORE_BORROW,
+						.destOffset = baseOffset,
+						.leftOffset = sourceOffset,
+						.rightOffset = projectionOffset,
+						.byteCount = common::get_type_size(mirInstruction.type),
+						.immKind = BCOperandKind.MOVE_SIZE,
+					};
+					this.push_instruction_get_idx(&instruction);
+				} else {
+					this.store_value(mirInstruction, source, baseOffset + projectionOffset);
+				}
 			case MirOpCode.LOAD:
 				MirRegisterID dest = mirInstruction.result;
 				MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
 				MirPlace* place = &this.mirInput.places[source.placeIdx];
 				SymbolIdx symbolIdx = place.baseSymbolIdx;
+				Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 				TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
-				// destOffset = base offset + sum of all projection offsets
-				short srcOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
+				short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
+				short srcOffset = this.bind_symbol_get_offset(symbolIdx);
 				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
-				this.load_value(mirInstruction.type, srcOffset, destOffset);
+				if (symbol.passMode != ParamPassMode.VALUE) {
+					BCInstruction instruction = {
+						.opCode = BCOpCode.LOAD_BORROW,
+						.destOffset = destOffset,
+						.leftOffset = srcOffset,
+						.rightOffset = projectionOffset,
+						.byteCount = common::get_type_size(mirInstruction.type),
+						.immKind = BCOperandKind.MOVE_SIZE,
+					};
+					this.push_instruction_get_idx(&instruction);
+				} else {
+					this.load_value(mirInstruction.type, srcOffset + projectionOffset, destOffset);
+				}
 			case MirOpCode.CALL:
 				MirOperand callee = this.mirInput.operands[mirInstruction.operandsStart];
 				MirFunction* calleeFunction = &this.mirInput.functions[callee.fnCalleeIdx];
@@ -193,14 +221,31 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
 					Symbol* paramSymbol = &this.symbolTable.symbols[paramSymbolIdx];
 					TypeInfo argType = paramSymbol.type;
-					short argAlignment = (short)common::get_type_alignment(argType);
+					ParamPassMode passMode = paramSymbol.passMode;
+					bool isBorrow = passMode != ParamPassMode.VALUE;
+					short argAlignment = isBorrow
+						? (short)uptr::alignment
+						: (short)common::get_type_alignment(argType);
 					calleeParamOffset = common::align_offset(calleeParamOffset, argAlignment);
-					// Argumnents have bindings in both caller and callee.
-					this.bcOutput.callArgs[argIdx].callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
-					this.bcOutput.callArgs[argIdx].size = (short)common::get_type_size(argType);
-					this.bcOutput.callArgs[argIdx].type = argType.type;
-					this.bcOutput.callArgs[argIdx].calleeOffset = calleeParamOffset;
-					this.bcOutput.callArgs[argIdx].copyBack = paramSymbol.passMode == ParamPassMode.INOUT;
+					BCCallArg* callArg = &this.bcOutput.callArgs[argIdx];
+					callArg.isBorrow = isBorrow;
+					callArg.type = argType.type;
+					callArg.calleeOffset = calleeParamOffset;
+					if (isBorrow) {
+						MirOperand argOperand = this.mirInput.operands[k];
+						assert(argOperand.kind == MirOperandKind.PLACE);
+						MirPlace* argPlace = &this.mirInput.places[argOperand.placeIdx];
+						Symbol* callerSymbol = &this.symbolTable.symbols[argPlace.baseSymbolIdx];
+						TypeInfo callerBaseType = callerSymbol.type;
+						callArg.callerOffset = this.bind_symbol_get_offset(argPlace.baseSymbolIdx);
+						callArg.projectionOffset = this.resolve_projection_get_offset(argPlace.projectionIdx, &callerBaseType);
+						callArg.callerIsBorrow = callerSymbol.passMode != ParamPassMode.VALUE;
+						callArg.size = (short)uptr::size;
+						// Analysis guarantees that the argument place is compatible with the borrow mode.
+					} else {
+						callArg.callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
+						callArg.size = (short)common::get_type_size(argType);
+					}
 					calleeParamOffset += this.bcOutput.callArgs[argIdx].size;
 					argsCount++;
 				}

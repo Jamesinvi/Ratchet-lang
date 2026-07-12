@@ -22,7 +22,7 @@ type           -> "int"
                | DECLARED_STRUCT_REF_OR_PTR ;
 
 parameters     -> parameter ( "," parameter )* ;
-parameter      -> type IDENTIFIER ;
+parameter      -> ( "in" | "inout" )? type IDENTIFIER ;
 
 // Statements
 statement      -> echoStmt

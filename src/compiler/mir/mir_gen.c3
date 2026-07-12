@@ -610,9 +610,18 @@ fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 		callOperands.push(receiver);
 	}
 
+	MirFunction* calleeFunction = &this.output.functions[functionIdx];
+	int explicitParamOffset = target.kind == CallTargetKind.METHOD ? 1 : 0;
+	int explicitArgIdx = 0;
 	for(ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++){
-		MirOperand arg = this.lower_expr(this.inputAst.args[i]);
+		sz paramIdx = (sz)(calleeFunction.paramRange.start + explicitParamOffset + explicitArgIdx);
+		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[paramIdx];
+		ParamPassMode passMode = this.symbolTable.symbols[paramSymbolIdx].passMode;
+		ExprIdx argExprIdx = this.inputAst.args[i];
+		// in/inout params are "places"
+		MirOperand arg = passMode == ParamPassMode.VALUE ? this.lower_expr(argExprIdx): this.lower_place(argExprIdx);
 		callOperands.push(arg);
+		explicitArgIdx++;
 	}
 
 	// Child expressions may have emitted their own operands already; append only the

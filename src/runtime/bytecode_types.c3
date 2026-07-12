@@ -44,6 +44,8 @@ enum BCOpCode : char (String asStr)
 	MOVD	        { "mov__d" },
 	MOVB	        { "mov__b" },
 	MOV_REF	        { "mov__&" },
+	LOAD_BORROW		{ "ld_bor" },
+	STORE_BORROW	{ "st_bor" },
 	AND				{ "and__b" },
 	OR				{ "or___b" },
 	MOV_BYTES	    { "movbts" },
@@ -197,11 +199,13 @@ struct BCCallInfo
 
 struct BCCallArg
 {
-    short callerOffset; // where arg value is in caller frame
+	short callerOffset; // value offset, or base-place offset for a borrow
 	short calleeOffset; // aligned parameter offset in callee frame
 	short size;
+	short projectionOffset;
     ValueType type;
-	bool copyBack; // INOUT parameters are copied back before the callee frame is discarded
+	bool isBorrow;
+	bool callerIsBorrow;
 }
 
 struct BCBlock
