@@ -25,13 +25,6 @@ struct ProgramAst
 	List{ExprIdx}	args;			    // global function argument list, indices into expression list
 }
 
-enum ParamPassMode : char (String asStr)
-{
-    VALUE		{ "value" },
-    IN			{ "in" },
-    INOUT		{ "inout" },
-}
-
 struct ParamAst
 {
     TypeAst type;

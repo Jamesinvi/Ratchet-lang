@@ -30,7 +30,7 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 	}
 	// Fill the lists with invalid bytecode registers, they will be bound as soon as they're needed
 	common::list_append_fill{short}(&this.mirRegToOffset, runtime::NO_OFFSET, (sz)maxMirReg +1 );
-	common::list_append_fill{CompTypeInfo}(&this.mirRegToType,   {}, (sz)maxMirReg +1);
+	common::list_append_fill{TypeInfo}(&this.mirRegToType,   {}, (sz)maxMirReg +1);
 	common::list_append_fill{short}(&this.symbolToOffset, runtime::NO_OFFSET, (sz)this.symbolTable.symbols.len() +1);
 }
 
@@ -52,9 +52,9 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	// If we already have a binding then use it, else we need to create one
 	if (offset == runtime::NO_OFFSET) {
 		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
-		short alignment = (short)compiler::get_type_alignment(sym.type);
+		short alignment = (short)common::get_type_alignment(sym.type);
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
-		short size = (short)compiler::get_type_size(sym.type);
+		short size = (short)common::get_type_size(sym.type);
 
 		offset = this.localFrameOffset;
 		this.symbolToOffset[symbolIdx] = offset;
@@ -76,7 +76,7 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	Recurses all projections to get the offset into the type. NOTE: the passed in type will be modified!
 	Make sure it's a local value and not some external reference or it will clobber the data.
 *>
-fn short BCGenerator.resolve_projection_get_offset(BCGenerator* this, MirProjectionIdx idx, CompTypeInfo* type)
+fn short BCGenerator.resolve_projection_get_offset(BCGenerator* this, MirProjectionIdx idx, TypeInfo* type)
 {
 	if (idx == mir::NO_PROJECTION){
 		return 0;
@@ -98,7 +98,7 @@ fn short BCGenerator.resolve_projection_get_offset(BCGenerator* this, MirProject
 	Else, it will bind the offset to the register and will create a BCFrameSlot
 	The value will be stored in mirRegToOffset and indexed by MirRegisterID.
 *>
-fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegisterID mirRegId, CompTypeInfo type)
+fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegisterID mirRegId, TypeInfo type)
 {
 	if (mirRegId == compiler::mir::NO_REG) {
 		return runtime::NO_OFFSET;
@@ -107,9 +107,9 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     short offset = this.mirRegToOffset[mirRegId];
 	// If we already have a binding then use it, else we need to create one
     if (offset == runtime::NO_OFFSET) {
-		short alignment = (short)compiler::get_type_alignment(type);
+		short alignment = (short)common::get_type_alignment(type);
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
-        short size = (short)compiler::get_type_size(type);
+        short size = (short)common::get_type_size(type);
 
         offset = this.localFrameOffset;
 
@@ -134,12 +134,12 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
  	Helper to bind a mir operand to an offset. If the operand is an immediate, it will emit a mov
 	instruction to store the value in a new BCFrameSlot. Else, it will bind a register to it.
 *>
-fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand operand, CompTypeInfo typeInfo)
+fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand operand, TypeInfo typeInfo)
 {
 	if (is_immediate(operand)){
-		short alignment = (short)compiler::get_type_alignment(typeInfo);
+		short alignment = (short)common::get_type_alignment(typeInfo);
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
-		short size = (short)compiler::get_type_size(typeInfo);
+		short size = (short)common::get_type_size(typeInfo);
 		short offset = this.localFrameOffset;
 		this.localFrameOffset += size;
 		BCFrameSlot slot = {
@@ -159,7 +159,7 @@ fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand opera
 		case MirOperandKind.PLACE:
 		{
 			MirPlace* place = &this.mirInput.places[operand.placeIdx];
-			CompTypeInfo baseType = this.symbolTable.symbols[place.baseSymbolIdx].type;
+			TypeInfo baseType = this.symbolTable.symbols[place.baseSymbolIdx].type;
 			short baseOffset = this.bind_symbol_get_offset(place.baseSymbolIdx);
 			return baseOffset + this.resolve_projection_get_offset(place.projectionIdx, &baseType);
 		}
@@ -222,6 +222,18 @@ fn BCBlockIdx BCGenerator.push_block_get_idx(BCGenerator* this, BCBlock* block)
     return index;
 }
 
+<* 
+ 	Helper to push a string (immediate value) get the index it was added at. Note it pushes a Copy of the string
+	so the BCProgram output can own it directly. This function uses the BCGenerator.outputAllocator
+*>
+fn StringIdx BCGenerator.push_string_imm_get_idx(BCGenerator* this, String string)
+{
+	StringIdx index = (StringIdx)this.bcOutput.strings.len();
+	String stringCopy = String.copy(string, this.outputAllocator);
+	this.bcOutput.strings.push(stringCopy);
+    return index;
+}
+
 macro BCFrameSlotIdx BCGenerator.fun_frame_slots_len(BCGenerator* this)
 {
 	assert(this.bcOutput.functionFrameSlots.len() < int::max);
@@ -240,24 +252,24 @@ macro BCInstructionIdx BCGenerator.instructions_len(BCGenerator* this)
     return (BCInstructionIdx)this.bcOutput.instructions.len();
 }
 
-fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand* operand)
+fn TypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand* operand)
 {
 	switch (operand.kind)
 	{
 		case MirOperandKind.REGISTER:			
 		{
 
-    		CompTypeInfo type = this.mirRegToType[operand.regId];
+    		TypeInfo type = this.mirRegToType[operand.regId];
 			// This ensures we have already bound the operand to a proper type
 			assert(type.type != ValueType.NULL || type.refToType != ValueType.NULL);
 			return type;
 		}			
-		case MirOperandKind.IMM_INT:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.INT, .refToType = ValueType.NULL};
-		case MirOperandKind.IMM_FLOAT:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.FLOAT, .refToType = ValueType.NULL};
-		case MirOperandKind.IMM_DOUBLE:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.DOUBLE, .refToType = ValueType.NULL};
-		case MirOperandKind.IMM_BOOL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
-		case MirOperandKind.IMM_NULL:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL};
-		case MirOperandKind.IMM_STRING:						return {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_INT:						return {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.INT, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_FLOAT:						return {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.FLOAT, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_DOUBLE:						return {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.DOUBLE, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_BOOL:						return {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_NULL:						return {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL};
+		case MirOperandKind.IMM_STRING:						return {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL};
 		case MirOperandKind.PLACE:		
 			log::logn("Places need to be implemented");
 			unreachable();
@@ -275,7 +287,7 @@ fn CompTypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand*
 	Helper to select a move op code. byteCount is an out parameter that will contain the number of bytes
 	to move. The value will be 0 for built-in values (since instruction encodes the size), and non-zero for structs
 *>
-fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo, ushort* byteCount)
+fn BCOpCode select_mov_op_code(TypeInfo typeInfo, ushort* byteCount)
 {
 	*byteCount = 0;
 	switch (typeInfo.type)
@@ -284,9 +296,10 @@ fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo, ushort* byteCount)
 		case ValueType.FLOAT:		return BCOpCode.MOVF;
 		case ValueType.DOUBLE:		return BCOpCode.MOVD;
 		case ValueType.BOOL:		return BCOpCode.MOVB;
+		case ValueType.REF:			return BCOpCode.MOV_REF;
 		case ValueType.STRUCT:		
 		{
-			*byteCount = (ushort)compiler::get_type_size(typeInfo);
+			*byteCount = (ushort)common::get_type_size(typeInfo);
 			return BCOpCode.MOV_BYTES;
 		}
 		default:					log::errlogn("Type not supported by bytecode");
@@ -295,7 +308,7 @@ fn BCOpCode select_mov_op_code(CompTypeInfo typeInfo, ushort* byteCount)
 }
 
 
-fn BCOpCode select_math_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_math_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch (opCodeCategory)
 	{
@@ -308,7 +321,7 @@ fn BCOpCode select_math_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCa
 	unreachable();
 }
 
-fn BCOpCode select_cmp_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_cmp_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch (opCodeCategory)
 	{
@@ -326,7 +339,7 @@ fn BCOpCode select_cmp_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 }
 
 
-fn BCOpCode select_add_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_add_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -338,7 +351,7 @@ fn BCOpCode select_add_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 	unreachable();
 }
 
-fn BCOpCode select_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_eq_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -352,7 +365,7 @@ fn BCOpCode select_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCate
 }
 
 
-fn BCOpCode select_neq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_neq_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -365,7 +378,7 @@ fn BCOpCode select_neq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 	unreachable();
 }
 
-fn BCOpCode select_less_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_less_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -377,7 +390,7 @@ fn BCOpCode select_less_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCa
 	unreachable();
 }
 
-fn BCOpCode select_less_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_less_eq_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -389,7 +402,7 @@ fn BCOpCode select_less_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCod
 	unreachable();
 }
 
-fn BCOpCode select_grter_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_grter_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -401,7 +414,7 @@ fn BCOpCode select_grter_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeC
 	unreachable();
 }
 
-fn BCOpCode select_grter_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_grter_eq_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -415,7 +428,7 @@ fn BCOpCode select_grter_eq_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCo
 
 
 
-fn BCOpCode select_sub_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_sub_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -427,7 +440,7 @@ fn BCOpCode select_sub_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 	unreachable();
 }
 
-fn BCOpCode select_mul_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_mul_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -439,7 +452,7 @@ fn BCOpCode select_mul_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 	unreachable();
 }
 
-fn BCOpCode select_div_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
+fn BCOpCode select_div_op_code(TypeInfo typeInfo, BCOpCodeCategory opCodeCategory)
 {
 	switch(typeInfo.type)
 	{
@@ -451,7 +464,7 @@ fn BCOpCode select_div_op_code(CompTypeInfo typeInfo, BCOpCodeCategory opCodeCat
 	unreachable();
 }
 
-fn BCOpCode select_echo_op_code(CompTypeInfo typeInfo)
+fn BCOpCode select_echo_op_code(TypeInfo typeInfo)
 {
     switch(typeInfo.type)
     {
@@ -460,12 +473,13 @@ fn BCOpCode select_echo_op_code(CompTypeInfo typeInfo)
         case ValueType.DOUBLE: 			return BCOpCode.ECHOD;
         case ValueType.BOOL: 			return BCOpCode.ECHOB;
         case ValueType.STRING_LITERAL: 	return BCOpCode.ECHOS;
+        case ValueType.REF: 			return BCOpCode.ECHO_REF;
         default:						log::errlogn("Unsupported echo %s operation", typeInfo.type);
     }
 	unreachable();
 }
 
-fn BCCastKind select_cast_kind(CompTypeInfo src, CompTypeInfo target)
+fn BCCastKind select_cast_kind(TypeInfo src, TypeInfo target)
 {
 	switch(src.type)
 	{

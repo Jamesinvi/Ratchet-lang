@@ -35,7 +35,7 @@ macro @log_bytecode(String msg, args ...){
     $endif
 }
 
-macro @print_type_stack(Stack{CompTypeInfo}* typeStack)
+macro @print_type_stack(Stack{TypeInfo}* typeStack)
 {
     $if ($feature(TRACE_COMPILATION)):
         log::logn("------Compilation type stack-----");

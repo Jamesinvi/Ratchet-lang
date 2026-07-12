@@ -43,6 +43,7 @@ enum BCOpCode : char (String asStr)
 	MOVF	        { "mov__f" },
 	MOVD	        { "mov__d" },
 	MOVB	        { "mov__b" },
+	MOV_REF	        { "mov__&" },
 	AND				{ "and__b" },
 	OR				{ "or___b" },
 	MOV_BYTES	    { "movbts" },
@@ -84,7 +85,9 @@ enum BCOpCode : char (String asStr)
 	ECHOD           { "echo_d" },
 	ECHOB           { "echo_b" },
 	ECHOS           { "echo_s" },
+	ECHO_REF        { "echo_&" },
 	CAST			{ "cast__" },
+	ALLOC_GC		{ "alloc&" },
 }
 
 
@@ -139,6 +142,7 @@ enum BCOperandKind : char (String asStr)
 	FUNCTION 	{ "fn" },
 	MOVE_SIZE	{ "mov_size" },
 	CAST_TYPE	{ "cast_type" },
+	TYPE_INFO	{ "type_info" },
 }
 
 struct BCInstruction
@@ -148,7 +152,8 @@ struct BCInstruction
         float immFloat;
         double immDouble;
 		bool immBool;
-		InternedString immString;
+		StringIdx immStringIdx;
+		TypeInfo typeInfo;
 		ushort byteCount;
 	    BCCastKind castKind;
 		BCCallInfoIdx callInfoIdx;
@@ -215,13 +220,14 @@ struct BCProjection
 
 struct BCProgram
 {
-	BCFunctionIdx 		entryFunctionIdx;
-	List{BCFunction}	functions;
-	List{BCFrameSlot} 	functionFrameSlots;
-	List{BCBlock}       blocks;
-	List{BCInstruction} instructions;
-	List{BCCallArg} 	callArgs;
-	List{BCCallInfo}	callInfos;
+	BCFunctionIdx 			entryFunctionIdx;
+	List{BCFunction}		functions;
+	List{BCFrameSlot} 		functionFrameSlots;
+	List{BCBlock}       	blocks;
+	List{BCInstruction} 	instructions;
+	List{BCCallArg} 		callArgs;
+	List{BCCallInfo}		callInfos;
+	List{String}			strings;	// Indexed by StringIdx
 }
 
 fn void BCProgram.init(BCProgram* this, Allocator allocator)
@@ -232,6 +238,7 @@ fn void BCProgram.init(BCProgram* this, Allocator allocator)
 	this.instructions.init(allocator);
 	this.callArgs.init(allocator);
 	this.callInfos.init(allocator);
+	this.strings.init(allocator);
 }
 
 fn void BCProgram.print(BCProgram* this)
@@ -326,12 +333,17 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_FLOAT:	log::log("%s", inst.immFloat);
 		case BCOperandKind.IMM_DOUBLE:	log::log("%s", inst.immDouble);
 		case BCOperandKind.IMM_BOOL:	log::log("%s", inst.immBool);
-		case BCOperandKind.IMM_STRING:	log::log("%s", inst.immString.text());
+		case BCOperandKind.IMM_STRING:	log::log("%s", this.strings[inst.immStringIdx]);
 		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);
 		case BCOperandKind.MOVE_SIZE:	log::log("move %s bytes", inst.byteCount);
 		case BCOperandKind.CAST_TYPE:	log::log("| cast: %s", inst.castKind.asStr);
+		case BCOperandKind.TYPE_INFO:
+			log::log("| type: %s", inst.typeInfo.type);
+			if(inst.typeInfo.type == ValueType.REF || inst.typeInfo.type == ValueType.PTR){
+				log::log(" to %s", inst.typeInfo.refToType);
+			}
 		default:						log::log("<?>");
 	}
 }

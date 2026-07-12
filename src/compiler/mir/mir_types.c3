@@ -29,7 +29,7 @@ bitstruct MirRegisterFlags : char
 
 struct MirRegister
 {
-	CompTypeInfo 		type;
+	TypeInfo 		type;
 	MirRegisterID 		id;
 	MirRegisterFlags	flags;
 }
@@ -53,6 +53,7 @@ enum MirOpCode : char (String asStr)
 	CALL  		{ "call" },
 	LOAD 		{ "load" },
 	ECHO 		{ "echo" },
+	ALLOC_GC	{ "alloc_gc"},
 }
 
 enum MirTerminatorOp : char (String asStr)
@@ -104,7 +105,7 @@ struct MirInstruction
 	}
 	MirRegisterID result;
 	MirOpCode opCode;
-	CompTypeInfo type;
+	TypeInfo type;
 }
 
 struct MirPlace
@@ -142,7 +143,7 @@ struct MirFunction
 	DeclIdx sourceDeclIdx;		// function decl, or owning struct decl for a method
 	int sourceMethodIdx;		// NO_METHOD for a free function
 	DeclParamRange paramRange;
-	CompTypeInfo returnType;
+	TypeInfo returnType;
 	SymbolIdx receiverSymbolIdx;	// NO_SYMBOL for a free function
 }
 
@@ -246,6 +247,9 @@ fn void MirProgram.print_instruction(MirProgram* this, MirInstruction inst, Prog
 		log::log("_r%s = ", inst.result);
 	}
 	log::log("%s %s", inst.opCode.asStr, inst.type.type);
+	if(inst.type.type == ValueType.REF){
+		log::log("->%s", inst.type.refToType);
+	}	
 	if (inst.operandsStart < inst.operandsEnd) {
 		log::log(" ");
 	}

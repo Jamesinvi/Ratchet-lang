@@ -23,7 +23,7 @@ struct BCGenerator
 	BCProgram			bcOutput;			// output
 	List{short}			symbolToOffset; 	// temp, Indexed by SymbolIdx
 	List{short}			mirRegToOffset;	  	// temp, Indexed by MirRegisterID
-	List{CompTypeInfo}  mirRegToType;		// temp, Indexed by MirRegisterID
+	List{TypeInfo}  mirRegToType;		// temp, Indexed by MirRegisterID
 	Allocator 			outputAllocator;
 	int 				currentFrameOffset;
 	short 				localFrameOffset;
@@ -139,11 +139,11 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.MUL:			this.lower_math_op(BCOpCodeCategory.MUL, mirInstruction);
 			case MirOpCode.DIV:			this.lower_math_op(BCOpCodeCategory.DIV, mirInstruction);
 			case MirOpCode.ECHO:		this.lower_echo(mirInstruction);
+			case MirOpCode.ALLOC_GC:	this.lower_alloc(mirInstruction, true);
 			case MirOpCode.AS:
-			{
 				MirOperand source =	this.mirInput.operands[mirInstruction.operandsStart];
-				CompTypeInfo sourceType = this.get_type_from_operand(&source);
-				CompTypeInfo targetType = mirInstruction.type;
+				TypeInfo sourceType = this.get_type_from_operand(&source);
+				TypeInfo targetType = mirInstruction.type;
 
 				short sourceOffset = this.bind_operand_get_offset(source, sourceType);
 				short destinationOffset = this.bind_mir_register_get_offset( mirInstruction.result, targetType);
@@ -156,32 +156,26 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 					.immKind = BCOperandKind.CAST_TYPE,
 				};
 				this.push_instruction_get_idx(&instruction);
-			}
 			case MirOpCode.STORE:
-			{
 				MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
 				MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 				MirPlace* place = &this.mirInput.places[dest.placeIdx];
 				SymbolIdx symbolIdx = place.baseSymbolIdx;
-				CompTypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+				TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
 				// destOffset = base offset + sum of all projection offsets
 				short destOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 				this.store_value(mirInstruction, source, destOffset);
-			}
 			case MirOpCode.LOAD:
-			{
 				MirRegisterID dest = mirInstruction.result;
 				MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
 				MirPlace* place = &this.mirInput.places[source.placeIdx];
 				SymbolIdx symbolIdx = place.baseSymbolIdx;
-				CompTypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+				TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
 				// destOffset = base offset + sum of all projection offsets
 				short srcOffset = this.bind_symbol_get_offset(symbolIdx) + this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
 				this.load_value(mirInstruction.type, srcOffset, destOffset);
-			}
 			case MirOpCode.CALL:
-			{
 				MirOperand callee = this.mirInput.operands[mirInstruction.operandsStart];
 				MirFunction* calleeFunction = &this.mirInput.functions[callee.fnCalleeIdx];
 				// Lower all call arguments
@@ -198,12 +192,12 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 					DeclParamRange paramRange = calleeFunction.paramRange;
 					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
 					Symbol* paramSymbol = &this.symbolTable.symbols[paramSymbolIdx];
-					CompTypeInfo argType = paramSymbol.type;
-					short argAlignment = (short)compiler::get_type_alignment(argType);
+					TypeInfo argType = paramSymbol.type;
+					short argAlignment = (short)common::get_type_alignment(argType);
 					calleeParamOffset = common::align_offset(calleeParamOffset, argAlignment);
 					// Argumnents have bindings in both caller and callee.
 					this.bcOutput.callArgs[argIdx].callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
-					this.bcOutput.callArgs[argIdx].size = (short)compiler::get_type_size(argType);
+					this.bcOutput.callArgs[argIdx].size = (short)common::get_type_size(argType);
 					this.bcOutput.callArgs[argIdx].type = argType.type;
 					this.bcOutput.callArgs[argIdx].calleeOffset = calleeParamOffset;
 					this.bcOutput.callArgs[argIdx].copyBack = paramSymbol.passMode == ParamPassMode.INOUT;
@@ -215,7 +209,7 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 				short returnSize = 0;
 				if (mirInstruction.type.type != ValueType.NULL) {
 					returnDestOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
-					returnSize = (short)compiler::get_type_size(mirInstruction.type);
+					returnSize = (short)common::get_type_size(mirInstruction.type);
 				}
 				// Create call info
 				BCCallInfo callInfo = {
@@ -235,7 +229,6 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 					.immKind = BCOperandKind.FUNCTION,
 				};
 				this.push_instruction_get_idx(&instruction);
-			}
 			default:
 			{
 				log::errlogn("Instruction \"%s\" is unsupported by compiler", mirInstruction.opCode);
@@ -307,7 +300,7 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 			instruction.destOffset = destOffset;
 			instruction.leftOffset = runtime::NO_OFFSET;
 			instruction.rightOffset = runtime::NO_OFFSET;
-			instruction.immString = val.immString;
+			instruction.immStringIdx = this.push_string_imm_get_idx(val.immString.text());
 			instruction.opCode = BCOpCode.CONSTS;
 			instruction.immKind = BCOperandKind.IMM_STRING;
 		}
@@ -321,7 +314,7 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 
 }
 
-fn void BCGenerator.load_value(BCGenerator* this, CompTypeInfo typeInfo, short srcOffset, short destOffset)
+fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOffset, short destOffset)
 {
 	ushort bytesToMove = 0;
 	BCOpCode opCode = select_mov_op_code(typeInfo, &bytesToMove);
@@ -343,13 +336,17 @@ fn void BCGenerator.lower_echo(BCGenerator* this, MirInstruction* mirInstruction
     // Bind what we're trying to "echo" to a specific offset in the current stack-frame slots
     short leftOffset = this.bind_operand_get_offset(left, mirInstruction.type);
     BCOpCode finalOpCode = select_echo_op_code(mirInstruction.type);
+	TypeInfo typeInfo = {};
+	if(finalOpCode == BCOpCode.ECHO_REF){
+		typeInfo = mirInstruction.type;
+	}
     BCInstruction instruction = {
         .destOffset = runtime::NO_OFFSET,
         .leftOffset = leftOffset,
         .rightOffset = runtime::NO_OFFSET,
-        .immInt = runtime::NO_OFFSET,
+        .typeInfo = typeInfo,
         .opCode = finalOpCode,
-        .immKind = BCOperandKind.INVALID,
+		.immKind = finalOpCode == BCOpCode.ECHO_REF ? BCOperandKind.TYPE_INFO: BCOperandKind.INVALID,
     };
     this.bcOutput.instructions.push(instruction);
 }
@@ -383,9 +380,9 @@ fn void BCGenerator.lower_cmp_op(BCGenerator* this, BCOpCodeCategory opCodeCateg
 	MirOperand left = this.mirInput.operands[mirInstruction.operandsStart];
 	MirOperand right = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 	// Create a return type that is always bool, because comparison can never return anything else
-	CompTypeInfo boolType = {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
+	TypeInfo boolType = {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
 	// Operand type is assumed to be uniform once we reach byecode (equal types)
-	CompTypeInfo operandsType = this.get_type_from_operand(&left);
+	TypeInfo operandsType = this.get_type_from_operand(&left);
 	// Bind operands to specific offsets in the current stack-frame slots
 	short leftOffset = this.bind_operand_get_offset(left, operandsType);
 	short rightOffset = this.bind_operand_get_offset(right, operandsType);
@@ -402,8 +399,36 @@ fn void BCGenerator.lower_cmp_op(BCGenerator* this, BCOpCodeCategory opCodeCateg
 	this.bcOutput.instructions.push(instruction);
 }
 
+fn void BCGenerator.lower_alloc(BCGenerator* this, MirInstruction* mirInstruction, bool tracked)
+{
+	MirRegisterID dest = mirInstruction.result;
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	// example:
+	// int& a = new int& {12} lowers to:
+	// _r0 = alloc_gc REF->INT 12
+	// store REF->INT _2, _r0
 
-fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx, BCBlockIdx currentBlockIdx, CompTypeInfo typeInfo)
+	// srcType is int it maps to  12's type
+	// allocType is int& because we're alllocating a handle to an int which is always uptr sized
+	TypeInfo srcType = this.get_type_from_operand(&source);
+	TypeInfo allocType = mirInstruction.type;
+
+	short sourceOffset = this.bind_operand_get_offset(source, srcType);
+	// alloc results always map to a register
+	short destinationOffset = this.bind_mir_register_get_offset(dest, allocType);
+	BCInstruction instruction = {
+		.opCode = BCOpCode.ALLOC_GC,
+		.destOffset = destinationOffset,
+		.leftOffset = sourceOffset,
+		.rightOffset = runtime::NO_OFFSET,
+		.typeInfo = allocType,
+		.immKind = BCOperandKind.TYPE_INFO,
+	};
+	this.push_instruction_get_idx(&instruction);
+}
+
+
+fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx terminatorIdx, BCBlockIdx currentBlockIdx, TypeInfo typeInfo)
 {
 	MirTerminator term = this.mirInput.terminators[terminatorIdx];
 	short returnSourceOffset = runtime::NO_OFFSET;
@@ -432,7 +457,7 @@ fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx termina
             MirOperand condition = this.mirInput.operands[term.operandsStart];
             MirBlockIdx ifBlock = this.mirInput.operands[(sz)term.operandsStart + 1].blockIdx;
             MirBlockIdx elseBlock = this.mirInput.operands[(sz)term.operandsStart + 2].blockIdx;
-            CompTypeInfo conditionType = {.structTypeIndex = compiler::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
+            TypeInfo conditionType = {.structTypeIndex = common::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL};
             short conditionOffset = this.bind_operand_get_offset(condition, conditionType);
 			BCInstruction elseInstruction = {
 				.destOffset = runtime::NO_OFFSET,

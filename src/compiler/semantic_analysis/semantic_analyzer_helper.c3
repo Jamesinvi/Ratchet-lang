@@ -6,7 +6,7 @@ import globals;
 import std::collections::list;
 import log;
 	
-CompTypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT };
+TypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT };
 
 
 fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
@@ -20,7 +20,7 @@ fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
 *>
 fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, TypeAst* input, Span span)
 {
-	CompTypeInfo result = {.type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT};
+	TypeInfo result = {.type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT};
 	switch (input.tokenType)
 	{
 		case TokenType.INTEGER_T: 		result.type = ValueType.INT;
@@ -81,19 +81,19 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 	return type_ok(result);
 }
 
-fn CompTypeInfo make_type(ValueType type)
+fn TypeInfo make_type(ValueType type)
 {
-	CompTypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = compiler::NOT_STRUCT };
+	TypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT };
 	return info;
 }
 
-fn CompTypeInfo make_ref_type(ValueType refToType, int structIndex)
+fn TypeInfo make_ref_type(ValueType refToType, int structIndex)
 {
-	CompTypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex };
+	TypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex };
 	return info;
 }
 
-fn bool is_numeric_type(CompTypeInfo info)
+fn bool is_numeric_type(TypeInfo info)
 {
 	return info.type == ValueType.INT || info.type == ValueType.FLOAT || info.type == ValueType.DOUBLE;
 }
@@ -193,9 +193,9 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_field_info(SemanticAnalyz
 
 	// Fiedls
 	foreach (&field : decl.structDecl.fields) {
-		CompTypeInfo fieldType = this.create_type_from_ast(&field.type, { }).value;
-		ushort fieldAlign = compiler::get_type_alignment(fieldType);
-		ushort fieldSize = compiler::get_type_size(fieldType);
+		TypeInfo fieldType = this.create_type_from_ast(&field.type, { }).value;
+		ushort fieldAlign = common::get_type_alignment(fieldType);
+		ushort fieldSize = common::get_type_size(fieldType);
 		// There's some ugliness with types and sizes, so make sure these casts are safe
 		always_assert(offset < short::max);
 		always_assert(fieldAlign < short::max);
@@ -230,15 +230,15 @@ fn void SemanticAnalyzer.fill_struct_method_info(SemanticAnalyzer* this, Decl* d
 	CompStructTypeInfo* structInfo = &globals::structTypes[index];
 	// Methods
 	foreach (&method : decl.structDecl.methods) {
-		CompTypeInfo fieldType = this.create_type_from_ast(&method.returnType, { }).value;
-		List{CompTypeInfo} methodParamTypes = {};
+		TypeInfo fieldType = this.create_type_from_ast(&method.returnType, { }).value;
+		List{TypeInfo} methodParamTypes = {};
 		List{InternedString} methodParamNames = {};
 		List{ParamPassMode} methodParamPassModes = {};
 		methodParamTypes.init(&globals::typeInfoAllocator, method.params.len());
 		methodParamNames.init(&globals::typeInfoAllocator, method.params.len());
 		methodParamPassModes.init(&globals::typeInfoAllocator, method.params.len());
 		foreach (&param: method.params){
-			CompTypeInfo methodParamType = this.create_type_from_ast(&param.type, { }).value;
+			TypeInfo methodParamType = this.create_type_from_ast(&param.type, { }).value;
 			InternedString methodParamName = globals::typeInfoStrings.get_or_intern(ast.names[param.nameIdx].text());
 			ParamPassMode methodParamPassMode = param.passMode;
 			methodParamTypes.push(methodParamType);
@@ -265,7 +265,7 @@ fn StructLayoutResult SemanticAnalyzer.check_fields_are_defined(SemanticAnalyzer
 			return StructLayoutResult.ERROR;
 		}
 
-		CompTypeInfo fieldType = fieldTypeResult.value;
+		TypeInfo fieldType = fieldTypeResult.value;
 		if (fieldType.type == ValueType.STRUCT)	{
 			int fieldStructIndex = fieldType.structTypeIndex;
 			CompStructTypeInfo* fieldStructInfo = &globals::structTypes[fieldStructIndex];

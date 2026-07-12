@@ -81,6 +81,11 @@ fn void t_14() @test
     compile_and_run_file("./test/14_methods.ratc", "42\n42\n7\n")!!;
 }
 
+fn void t_15() @test
+{
+    compile_and_run_file("./test/15_simple_gc_tracked_vars.ratc", "5\n12\n5.540000\n1.222222\nfalse\n1616\n")!!;
+}
+
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;

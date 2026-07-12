@@ -27,7 +27,7 @@ struct SemanticAnalyzer
 	DynamicArenaAllocator localAllocator;
 	Allocator outputAllocator;
 	Expr* currentExpr;		
-	CompTypeInfo currentReturnType;		
+	TypeInfo currentReturnType;		
 	DeclIdx currentStructDeclIdx;
 	SymbolIdx currentReceiverSymbolIdx;
 	int currentScopeIdx;
@@ -238,7 +238,7 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
 			*out = expectedType;
 			return true;
 		}
-		if (!compiler::type_info_matches(argType.value, expectedType.value)) {
+		if (!common::type_info_matches(argType.value, expectedType.value)) {
 			*out = this.type_error(ErrorKind.TYPE_MISMATCH, argType.value, expectedType.value, span);
 			return true;
 		}
@@ -434,7 +434,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 				if (rhsType.hadError) {
 					return rhsType;
 				}
-				if (compiler::type_info_matches(lhsType.value, rhsType.value)){
+				if (common::type_info_matches(lhsType.value, rhsType.value)){
 					return type_ok(lhsType.value);
 				}
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
@@ -458,7 +458,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 		}
 		case StmtKind.IF:
 		{
-			CompTypeInfo boolType = make_type(ValueType.BOOL);
+			TypeInfo boolType = make_type(ValueType.BOOL);
 			Expr* condExpr = &this.ast.expressions[stmt.ifStmt.cond];
 			TypeResult condType = this.analyze_expr(stmt.ifStmt.cond);
 			if (condType.hadError) {
@@ -481,7 +481,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 		}
 		case StmtKind.WHILE:
 		{
-			CompTypeInfo boolType = make_type(ValueType.BOOL);
+			TypeInfo boolType = make_type(ValueType.BOOL);
 			Expr* condExpr = &this.ast.expressions[stmt.whileStmt.cond];
 			TypeResult condType = this.analyze_expr(stmt.whileStmt.cond);
 			if (condType.hadError) {
@@ -505,7 +505,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 			if (valueType.hadError) {
 				return valueType;
 			}
-			if (!compiler::type_info_matches(this.currentReturnType, valueType.value)){
+			if (!common::type_info_matches(this.currentReturnType, valueType.value)){
 				return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
 			}
 			return type_ok(valueType.value);
@@ -546,7 +546,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 	return result;
 }
 
-fn bool SemanticAnalyzer.is_struct_ref_like(SemanticAnalyzer* this, CompTypeInfo info)
+fn bool SemanticAnalyzer.is_struct_ref_like(SemanticAnalyzer* this, TypeInfo info)
 {
 	return (info.type == ValueType.REF ||
 			info.type == ValueType.PTR) &&
@@ -675,14 +675,14 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 		case BinOp.MUL:			nextcase;
 		case BinOp.DIV:
 		{
-			if (!is_numeric_type(lhsType.value) || !compiler::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!is_numeric_type(lhsType.value) || !common::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(lhsType.value);
 		}
 		case BinOp.EQ:			nextcase;
 		case BinOp.NEQ:
-			if (!compiler::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!common::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
@@ -690,7 +690,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 		case BinOp.LESS_EQ:		nextcase;
 		case BinOp.GREATER:		nextcase;
 		case BinOp.GREATER_EQ:
-			if (!is_numeric_type(lhsType.value) || !compiler::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!is_numeric_type(lhsType.value) || !common::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
@@ -707,7 +707,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 			if (this.ast.expressions[expr.binary.lhs].kind == ExprKind.THIS) {
 				return this.type_error(ErrorKind.INVALID_LVALUE, lhsType.value, lhsType.value, expr.span);
 			}
-			if (!compiler::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!common::type_info_matches(lhsType.value, rhsType.value)) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(lhsType.value);
@@ -751,7 +751,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		if (baseType.hadError) {
 			return baseType;
 		}
-		CompTypeInfo baseInfo = baseType.value;
+		TypeInfo baseInfo = baseType.value;
 		bool isStruct = baseInfo.type == ValueType.STRUCT;
 		if (isStruct) {
 			DeclIdx structDeclIdx = this.find_struct_decl_idx(baseInfo.structTypeIndex);
@@ -807,12 +807,12 @@ fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprI
 	if (baseType.hadError) {
 		return baseType;
 	}
-	CompTypeInfo baseInfo = baseType.value;
+	TypeInfo baseInfo = baseType.value;
 	bool isStruct = baseInfo.type == ValueType.STRUCT;
 	if (!isStruct && !this.is_struct_ref_like(baseInfo)) {
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
-	if (baseInfo.structTypeIndex == compiler::NOT_STRUCT) {
+	if (baseInfo.structTypeIndex == common::NOT_STRUCT) {
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
 

@@ -375,7 +375,7 @@ fn void MirGenerator.lower_var_init(MirGenerator* this, StmtIdx stmtIdx, SymbolI
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
 	debug::@log_mir("lowering var init: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].text());
 
-	CompTypeInfo storeType = this.symbolTable.exprTypes[stmt.varDecl.init];
+	TypeInfo storeType = this.symbolTable.exprTypes[stmt.varDecl.init];
 	if (stmtSymbolIdx < this.symbolTable.symbols.len()) {
 		storeType = this.symbolTable.symbols[stmtSymbolIdx].type;
 	}
@@ -436,14 +436,8 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 		case ExprKind.DOUBLE:			return {.kind = MirOperandKind.IMM_DOUBLE, 	.immDouble = expr.doubleLiteral};
 		case ExprKind.BOOL:				return {.kind = MirOperandKind.IMM_BOOL, 	.immBool = expr.boolLiteral};
 		case ExprKind.NULL:				return {.kind = MirOperandKind.IMM_NULL, 	.immInt = 0};
-		case ExprKind.STRING_LITERAL:	
-		{
-			InternedString srcString = this.inputAst.names[expr.stringLiteral];
-			InternedString allocatedConstantString = globals::constantStrings.get_or_intern(srcString.text());
-			return {.kind = MirOperandKind.IMM_STRING, 	.immString = allocatedConstantString};
-		}
+		case ExprKind.STRING_LITERAL:	return {.kind = MirOperandKind.IMM_STRING, 	.immString = this.inputAst.names[expr.stringLiteral]};
 		case ExprKind.BINARY:
-		{
 			MirOpCode opCode = ast_to_mir_op(expr.binary.op);
 			MirOperand rhs = this.lower_expr(expr.binary.rhs);
 			MirOperand lhs;
@@ -470,16 +464,11 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			};
 			this.output.instructions.push(inst);
 			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
-		}
-		case ExprKind.CALL:
-		{
-			return this.lower_call(exprIdx);
-		}
+		case ExprKind.CALL:	return this.lower_call(exprIdx);
 		case ExprKind.THIS: nextcase;
         case ExprKind.VAR:
-		{
 			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			CompTypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
+			TypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
 			MirOperand place = this.bindings[varExprSymbolIdx];
 			MirRegisterID resultReg = this.currentReg++;
 			OperandIdx start = this.operands_len();
@@ -496,11 +485,32 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			};
 			this.output.instructions.push(inst);
 			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
-		}
+		case ExprKind.NEW:
+			// We have type which stores the whole ref type
+			// We only need 1 operand: the value to which initialize the ref
+			// Store in a register
+			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
+			TypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
+			MirRegisterID resultReg = this.currentReg++;
+			OperandIdx start = this.operands_len();
+			MirOperand val = this.lower_expr(expr.new.init);
+			this.output.operands.push(val);
+			OperandIdx end = this.operands_len();
+
+			MirInstruction inst = {
+				.opCode = MirOpCode.ALLOC_GC,
+				.type = varExprType,
+				.result = resultReg,
+				.operandsStart = start,
+				.operandsEnd = end,
+				.sourceExprIdx = exprIdx,
+			};
+
+			this.output.instructions.push(inst);
+			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
 		case ExprKind.MEMBER:
-		{
 			// Basically the same as VAR but we lower the place since we know it's a member
-			CompTypeInfo memberType = this.symbolTable.exprTypes[exprIdx];
+			TypeInfo memberType = this.symbolTable.exprTypes[exprIdx];
 			MirOperand place = this.lower_place(exprIdx);
 			MirRegisterID resultReg = this.currentReg++;
 			OperandIdx start = this.operands_len();
@@ -518,7 +528,6 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 
 			this.output.instructions.push(inst);
 			return {.kind = MirOperandKind.REGISTER, .regId = resultReg};
-		}
 		case ExprKind.CAST:
 		    MirOperand source = this.lower_expr(expr.cast.value);
 			MirRegisterID result = this.currentReg++;
@@ -570,7 +579,7 @@ fn MirFunctionIdx MirGenerator.find_method_function(MirGenerator* this, MethodId
 fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 {
 	Expr* callExpr = &this.inputAst.expressions[callExprIdx];
-	CompTypeInfo returnType = this.symbolTable.exprTypes[callExprIdx];
+	TypeInfo returnType = this.symbolTable.exprTypes[callExprIdx];
 	MirRegisterID resultReg = returnType.type == ValueType.NULL ? NO_REG : this.currentReg++;
 
 	CallTarget target = this.symbolTable.callTargets[callExprIdx];

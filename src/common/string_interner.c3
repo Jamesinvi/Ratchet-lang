@@ -3,6 +3,7 @@ import globals;
 import std::collections::list;
 import std::collections::map;
 alias StringID = sz;
+alias StringIdx = int;
 
 struct InternedString
 {

@@ -21,7 +21,7 @@ enum SymbolKind : char
 struct Symbol
 {
 	SymbolIdx idx;
-	CompTypeInfo type;
+	TypeInfo type;
 	SymbolKind kind;
 	ParamPassMode passMode;
 }
@@ -36,7 +36,7 @@ struct SymbolTable
 {
 	List{Symbol} symbols;
 	List{SymbolIdx} exprSymbols; 			// index by ExprIdx
-	List{CompTypeInfo} exprTypes; 			// index by ExprIdx
+	List{TypeInfo} exprTypes; 			// index by ExprIdx
 	List{SymbolIdx} stmtSymbols; 			// index by StmtIdx
 	List{SymbolIdx} declSymbols; 			// index by DeclIdx
 	List{DeclParamRange} declParamRanges; 	// index by DeclIdx
@@ -83,7 +83,7 @@ struct MethodAnalysisInfo
 	MethodId id;
 	DeclParamRange paramRange;	// receiver is always parameter 0
 	SymbolIdx receiverSymbolIdx;
-	CompTypeInfo returnType;
+	TypeInfo returnType;
 }
 
 
@@ -100,14 +100,14 @@ enum ErrorKind : char (String asStr)
 
 struct TypeResult
 {
-	CompTypeInfo value;
-	CompTypeInfo expected;
+	TypeInfo value;
+	TypeInfo expected;
 	Span errSpan;
 	ErrorKind errKind;
 	bool hadError;
 }
 
-fn TypeResult type_ok(CompTypeInfo expected)
+fn TypeResult type_ok(TypeInfo expected)
 {
 	TypeResult result = { };
 	result.value = expected;
@@ -119,8 +119,8 @@ fn TypeResult type_ok(CompTypeInfo expected)
 fn TypeResult SemanticAnalyzer.type_error(
 	SemanticAnalyzer* this,
 	ErrorKind kind,
-	CompTypeInfo value,
-	CompTypeInfo expected,
+	TypeInfo value,
+	TypeInfo expected,
 	Span span
 )
 {

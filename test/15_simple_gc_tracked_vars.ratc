@@ -1,7 +1,3 @@
-struct Point{
-	int x;
-	int y;
-}
 // Entry-point. Should return true if errors occurred
 fn bool program(){
     int z = 5;

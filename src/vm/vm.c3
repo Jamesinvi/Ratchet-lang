@@ -84,6 +84,12 @@ fn RunResult Vm.execute_program(Vm* vm)
 	vm.instructions = vm.program.instructions.entries;
 	vm.blocks = vm.program.blocks.entries;
 
+	vm.trackedHeap = {};
+	vm.trackedHeap.init("tracked heap");
+
+	vm.untrackedHeap = {};
+	vm.untrackedHeap.init("untracked heap");
+
 	BCFunction* entry = &vm.functions[vm.program.entryFunctionIdx];
 	BCBlock* entryBlock = &vm.blocks[entry.blocksStart];
 	vm.instructionPtr =  &vm.instructions[entryBlock.instructionsStart];
@@ -109,7 +115,7 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.CONSTF:	vm.const_op(inst, float);
 			case BCOpCode.CONSTD:	vm.const_op(inst, double);
 			case BCOpCode.CONSTB:	vm.const_op(inst, bool);
-			case BCOpCode.CONSTS:	vm.const_op(inst, InternedString);
+			case BCOpCode.CONSTS:	vm.const_op(inst, StringIdx);
 			// Less
 			case BCOpCode.LESSI:	vm.cmp_op(inst, int, VmCmpOp.LESS);
 			case BCOpCode.LESSF:	vm.cmp_op(inst, float, VmCmpOp.LESS);
@@ -144,19 +150,19 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.MOVD:		vm.mov_op(inst, double);
 			case BCOpCode.MOVB:		vm.mov_op(inst, bool);
 			case BCOpCode.MOV_BYTES:
-			{
 				Byte* dst = (Byte*)&vm.stack[vm.frame.base + inst.destOffset];
 				Byte* src = (Byte*)&vm.stack[vm.frame.base + inst.leftOffset];
 				// memmove handles overlapping memory correctly. memcpy is undefined
 				mem::move(dst, src, inst.byteCount);
-			}
+			case BCOpCode.MOV_REF:
+				vm.mov_op(inst, uptr);
+				// heap tracker will have to do something here
+
 			// Add
 			case BCOpCode.INCREMENT:
-			{
 				int* v = (int*)&vm.stack[vm.frame.base + inst.destOffset];
 				*v  = (*v) + 1;
 
-			}
 			case BCOpCode.ADDI:		vm.bin_math_op(inst, int, VmMathOp.ADD);
 			case BCOpCode.ADDF:		vm.bin_math_op(inst, float, VmMathOp.ADD);
 			case BCOpCode.ADDD:		vm.bin_math_op(inst, double, VmMathOp.ADD);
@@ -178,29 +184,25 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.ECHOF:	vm.echo(inst, float);
 			case BCOpCode.ECHOD:	vm.echo(inst, double);
 			case BCOpCode.ECHOB:	vm.echo(inst, bool);
-			case BCOpCode.ECHOS:
-			{
-
-				InternedString* string = (InternedString*)&vm.stack[vm.frame.base + inst.leftOffset];
+			case BCOpCode.ECHO_REF:	vm.echo(inst, uptr);
+			case BCOpCode.ECHOS:	
+				StringIdx* stringIdx = (StringIdx*)&vm.stack[vm.frame.base + inst.leftOffset];
 				// use the vm output stream. stdout by default
-				io::fprintfn(vm.output, "%s", string.text());
-			}
+				io::fprintfn(vm.output, "%s", vm.program.strings[*stringIdx]);
+			
+			// Allocation
+			case BCOpCode.ALLOC_GC:	vm.alloc_gc(inst);
 			// Control flow
 			case BCOpCode.BRANCH_IF_FALSE:
-			{
 			    bool* condition = (bool*)&vm.stack[vm.frame.base + inst.leftOffset];
 			    if(!*condition){
 			        BCBlock* block = &vm.blocks[inst.blockToJumpTo];
 		            vm.instructionPtr = &vm.instructions[(sz)block.instructionsStart]; 
 			    }
-			}
             case BCOpCode.JUMP:
-            {
                 BCBlock* block = &vm.blocks[inst.blockToJumpTo];
                 vm.instructionPtr = &vm.instructions[(sz)block.instructionsStart]; 
-            }
 			case BCOpCode.CALL:
-			{
 				BCCallInfo callInfo = vm.program.callInfos[inst.callInfoIdx];
 				BCFunction callee = vm.functions[callInfo.calleeIdx];
 				// Setup the new stack frame
@@ -223,7 +225,6 @@ fn RunResult Vm.execute_program(Vm* vm)
 					Byte* dst = &vm.stack[vm.frame.base + arg.calleeOffset];
 					mem::copy(dst, src, (sz)arg.size, 1, 1);
 				}
-			}
 			case BCOpCode.RETURN:
 				short returnSourceOffset = inst.leftOffset;
 				BCInstruction* returnPtr = vm.frame.returnPtr;
@@ -267,14 +268,45 @@ fn RunResult Vm.execute_program(Vm* vm)
 	} 
 
 	// vm.print_stack();
+	vm.trackedHeap.free();	
+	vm.untrackedHeap.free();	
 	return RunResult.OK;
 }
 
 macro Vm.echo(Vm* vm, BCInstruction* inst, $Type)
 {
-	$Type* val = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
 	// use the vm output stream. stdout by default
-    io::fprintfn(vm.output, "%s", *val);
+	$if $Type == uptr:
+    	TypeInfo pointeeType = common::pointee_from_ref(inst.typeInfo);
+		switch (pointeeType.type)
+		{
+			case ValueType.INT:		vm.print_value_from_heap(inst.leftOffset, int);
+			case ValueType.FLOAT:	vm.print_value_from_heap(inst.leftOffset, float);
+			case ValueType.DOUBLE:	vm.print_value_from_heap(inst.leftOffset, double);
+			case ValueType.BOOL:	vm.print_value_from_heap(inst.leftOffset, bool);
+			default:				unreachable();
+		}
+	$else		
+		$Type* val = ($Type*)&vm.stack[vm.frame.base + inst.leftOffset];
+    	io::fprintfn(vm.output, "%s", *val);
+	$endif
+}
+
+macro Vm.print_value_from_heap(Vm* vm, short offset, $Type)
+{
+	$Type* heapValuePtr = vm.load_value_from_heap(offset);
+	io::fprintfn(vm.output, "%s", *heapValuePtr);
+}
+
+macro void* Vm.load_value_from_heap(Vm* vm, short offset)
+{
+	// Get the stack slot that contains the address of the ref value
+	uptr* refAddress = (uptr*)&vm.stack[vm.frame.base + offset];
+	// Load the value at ref address. This is our pointer to the actual data.
+	void* heapValuePtr = (void*)*refAddress;
+	// Outside this macro, it's possible to access the actual value by 
+	// dereferencing using a type: int v = (int)*heapValuePtr;
+	return heapValuePtr;
 }
 
 
@@ -283,11 +315,11 @@ macro Vm.const_op(Vm* vm, BCInstruction* inst, $Type)
 	$Type* dst = ($Type*)&vm.stack[vm.frame.base + inst.destOffset];
 	$Type field;
 	$switch $Type:
-		$case int: 		field = inst.immInt;
-		$case float: 	field = inst.immFloat;
-		$case double: 	field = inst.immDouble;
-		$case bool: 	field = inst.immBool;
-		$case InternedString: field = inst.immString;
+		$case int: 			field = inst.immInt;
+		$case float: 		field = inst.immFloat;
+		$case double: 		field = inst.immDouble;
+		$case bool: 		field = inst.immBool;
+		$case StringIdx: 	field = inst.immStringIdx;
 	$endswitch
 	*dst = field;
 }
@@ -383,6 +415,26 @@ macro Vm.cmp_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 	*dst = result;
 }
 
+fn void Vm.alloc_gc(Vm* vm, BCInstruction* inst)
+{
+	// Get information about the type we need to allocate
+    TypeInfo pointeeType = common::pointee_from_ref(inst.typeInfo);
+    sz size = common::get_type_size(pointeeType);
+    sz alignment = common::get_type_alignment(pointeeType);
+
+	// src is the data we need to store at the allocated location
+    Byte* src = &vm.stack[vm.frame.base + inst.leftOffset];
+    void* allocated = vm.trackedHeap.alloc(size, alignment);
+	// copy the src data into the newly allocated spot
+    mem::copy(allocated, src, size, 1, 1);
+
+	// Store the address to the newly allocated data into dest. 
+	// This is what is moved around when copying an int& around
+    uptr* dest = (uptr*)&vm.stack[vm.frame.base + inst.destOffset];
+    *dest = (uptr)allocated;
+}
+
+
 fn void Vm.cast_op(Vm* vm, BCInstruction* inst)
 {
 	switch(inst.castKind)
@@ -393,7 +445,7 @@ fn void Vm.cast_op(Vm* vm, BCInstruction* inst)
 		case BCCastKind.FLOAT_TO_DOUBLE: 	vm.cast_value(inst, float, double);
 		case BCCastKind.DOUBLE_TO_INT:	 	vm.cast_value(inst, double, int);
 		case BCCastKind.DOUBLE_TO_FLOAT: 	vm.cast_value(inst, double, float);
-		case BCCastKind.IDENTITY: 			break;//no_op
+		case BCCastKind.IDENTITY: 			break;	//no_op
 	}
 }
 
