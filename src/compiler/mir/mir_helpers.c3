@@ -51,6 +51,33 @@ fn MirBlockIdx MirGenerator.push_empty_block_get_idx(MirGenerator* this)
     return idx;
 }
 
+fn MirOperand MirGenerator.get_or_bind_place(MirGenerator* this, SymbolIdx symbolIdx)
+{
+    MirOperand place = this.bindings[symbolIdx];
+    if (place.kind == MirOperandKind.PLACE) {
+        return place;
+    }
+
+    Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
+    assert(symbol.kind == SymbolKind.GLOBAL_VAR);
+
+    MirPlace globalPlace = {
+        .baseSymbolIdx = symbolIdx,
+        .projectionIdx = NO_PROJECTION,
+        .isGlobal = true,
+    };
+    MirPlaceIdx placeIdx = this.push_place_get_idx(&globalPlace);
+
+    place = {
+        .kind = MirOperandKind.PLACE,
+        .placeIdx = placeIdx,
+    };
+    this.bindings[symbolIdx] = place;
+    return place;
+}
+
+
+
 
 fn MirOpCode ast_to_mir_op(BinOp astBinOp) @inline
 {

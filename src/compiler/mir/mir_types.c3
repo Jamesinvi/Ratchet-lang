@@ -113,6 +113,7 @@ struct MirPlace
 	int idx;
 	SymbolIdx baseSymbolIdx;
 	MirProjectionIdx projectionIdx;
+	bool isGlobal;
 }
 
 struct MirProjection
@@ -147,8 +148,17 @@ struct MirFunction
 	SymbolIdx receiverSymbolIdx;	// NO_SYMBOL for a free function
 }
 
+struct MirGlobal
+{
+	SymbolIdx symbolIdx;
+	TypeInfo type;
+	MirOperand initialValue;
+	bool hasInitializer;
+}
+
 struct MirProgram
 {
+	List{MirGlobal} globals;
 	List{MirFunction} functions;
 	List{MirInstruction} instructions;
 	List{MirTerminator} terminators;
@@ -160,6 +170,7 @@ struct MirProgram
 
 fn void MirProgram.init(MirProgram* this, Allocator allocator, sz size)
 {
+	this.globals.init(allocator, size);
 	this.functions.init(allocator, size);
 	this.instructions.init(allocator, size);
 	this.terminators.init(allocator, size);
@@ -173,8 +184,20 @@ fn void MirProgram.init(MirProgram* this, Allocator allocator, sz size)
 fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols)
 {
 	log::logn("------------ MIR ------------");
-	foreach(funIdx, &fun : this.functions)
-	{
+	log::logn("globals: ");
+	foreach (globalIdx, &global : this.globals) {
+		StmtIdx stmtIdx = (StmtIdx)symbols.symbols[global.symbolIdx].idx;
+		Stmt* globalDecl = &ast.statements[stmtIdx];
+		InternedString name = ast.names[globalDecl.varDecl.nameIdx];
+		log::log("  %s %s", ast.names[globalDecl.varDecl.type.nameIdx].text(), name.text());
+		if (global.hasInitializer) {
+			log::log(" = ");
+			this.print_operand(global.initialValue, ast);
+		}
+		log::logn("");
+	}
+	log::log("\n");
+	foreach(funIdx, &fun : this.functions){
 		log::log("function ");
 		this.print_function_name((MirFunctionIdx)funIdx, ast);
 		log::logn(" -> %s", fun.returnType.type);
@@ -228,6 +251,9 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 		case MirOperandKind.PLACE:					
 		{
 			MirPlace* place = &this.places[op.placeIdx];
+			if(place.isGlobal){
+				log::log("global ");
+			}
 			if(place.projectionIdx == NO_PROJECTION){
 				log::log("_%s", place.baseSymbolIdx);
 				return;

@@ -16,6 +16,7 @@ enum SymbolKind : char
 	FIELD,
 	PARAM,
 	RECEIVER,
+	GLOBAL_VAR,
 }
 
 struct Symbol
@@ -36,7 +37,7 @@ struct SymbolTable
 {
 	List{Symbol} symbols;
 	List{SymbolIdx} exprSymbols; 			// index by ExprIdx
-	List{TypeInfo} exprTypes; 			// index by ExprIdx
+	List{TypeInfo} exprTypes; 				// index by ExprIdx
 	List{SymbolIdx} stmtSymbols; 			// index by StmtIdx
 	List{SymbolIdx} declSymbols; 			// index by DeclIdx
 	List{DeclParamRange} declParamRanges; 	// index by DeclIdx
@@ -96,6 +97,7 @@ enum ErrorKind : char (String asStr)
 	INVALID_ARITY   	{ "Invalid argument count" },
 	UNDECLARED_NAME 	{ "Undeclared name" },
 	NO_RETURN       	{ "No return" },
+	INVALID_GLOBAL_INITIALIZER { "Global initializer must be a constant value" },
 }
 
 struct TypeResult

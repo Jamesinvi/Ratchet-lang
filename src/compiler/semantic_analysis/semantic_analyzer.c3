@@ -100,8 +100,9 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	List{DeclIdx} structDeclIndices = {};
 	structDeclIndices.init(&this.localAllocator, this.ast.declarations.len() / 2);
 	// Predeclare function symbols with return types.
-	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
-		Decl* decl = &this.ast.declarations[i];
+	for (int i = 0; i < (int)this.ast.globalBlock.globalDeclarations.len(); i++){
+		DeclIdx declIdx = (DeclIdx)this.ast.globalBlock.globalDeclarations[i];
+		Decl* decl = &this.ast.declarations[declIdx];
 		if (decl.kind == DeclKind.FUNCTION) {
 			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
 			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
@@ -109,19 +110,27 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 				return returnType;
 			}
 			SymbolIdx symbolIdx = this.symbols_len();
-			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = i, .type = returnType.value };
+			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = declIdx, .type = returnType.value };
 			this.symbolTable.symbols.push(symbol);
-			this.symbolTable.declSymbols[i] = symbolIdx;
+			this.symbolTable.declSymbols[declIdx] = symbolIdx;
 			this.current_scope().visibleSymbols.push(symbolIdx);
 		} else if (decl.kind == DeclKind.STRUCT) {
 			get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
-			structDeclIndices.push(i);
+			structDeclIndices.push(declIdx);
 		}
 	}
+
 	
+	// Structs info (metadata). This uses the temp structDeclIndices
 	TypeResult metaDataResult = this.fill_structs_metadata(structDeclIndices);
 	if(metaDataResult.hadError){
 		return metaDataResult;
+	}
+
+	// Global symbols
+	TypeResult globalsResult = this.fill_globals();
+	if(globalsResult.hadError){
+		return globalsResult;
 	}
 
 	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
@@ -590,6 +599,13 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Inte
 		if (symbol.kind == SymbolKind.FUNCTION) {
 			Decl* decl = &this.ast.declarations[(DeclIdx)symbol.idx];
 			InternedString declName = this.ast.names[decl.fnDecl.nameIdx];
+			if (declName.id == name.id){
+				*outSymbolIdx = symbolIdx;
+				return true;
+			}
+		}else if (symbol.kind == SymbolKind.GLOBAL_VAR) {
+			Stmt* stmt = &this.ast.statements[(StmtIdx)symbol.idx];
+			InternedString declName = this.ast.names[stmt.varDecl.nameIdx];
 			if (declName.id == name.id){
 				*outSymbolIdx = symbolIdx;
 				return true;

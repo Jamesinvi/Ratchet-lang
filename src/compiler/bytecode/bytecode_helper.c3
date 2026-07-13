@@ -74,6 +74,36 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 	return offset;
 }
 
+
+<* 
+*>
+fn short BCGenerator.bind_global_symbol_get_offset(BCGenerator* this, SymbolIdx symbolIdx)
+{
+	Symbol* sym = &this.symbolTable.symbols[symbolIdx];
+	assert(sym.kind == SymbolKind.GLOBAL_VAR);
+	short offset = this.symbolToGlobal[symbolIdx];
+	// If we already have a binding then use it, else we need to create one
+	if (offset == runtime::NO_OFFSET) {
+		short alignment = (short)common::get_type_alignment(sym.type);
+		short size = (short)common::get_type_size(sym.type);
+		this.globalOffset = common::align_offset(this.globalOffset, alignment);
+
+		offset = this.globalOffset;
+		this.symbolToGlobal[symbolIdx] = offset;
+		this.globalOffset += size;
+
+		BCGlobalSlot slot = {
+			.symbolIdx = symbolIdx,
+			.offset = offset,
+			.size = size,
+			.type = sym.type.type,
+		};
+
+		this.bcOutput.globalSlots.push(slot);
+	}
+	return offset;
+}
+
 <*
 	Recurses all projections to get the offset into the type. NOTE: the passed in type will be modified!
 	Make sure it's a local value and not some external reference or it will clobber the data.

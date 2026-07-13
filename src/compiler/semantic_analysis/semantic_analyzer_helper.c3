@@ -5,6 +5,7 @@ import common;
 import globals;
 import std::collections::list;
 import log;
+import debug;
 	
 TypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT };
 
@@ -79,6 +80,51 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 		default: 						return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 	}
 	return type_ok(result);
+}
+
+fn TypeResult SemanticAnalyzer.fill_globals(SemanticAnalyzer* this)
+{
+	for (int i = 0; i < (int)this.ast.globalBlock.globalStatements.len(); i++){
+		StmtIdx stmtIdx = (StmtIdx)this.ast.globalBlock.globalStatements[i];
+		Stmt* stmt = &this.ast.statements[stmtIdx];
+		if (stmt.kind == StmtKind.DECL) {
+			TypeResult lhsType = this.create_type_from_ast(&stmt.varDecl.type, stmt.span);
+			if (lhsType.hadError) {
+				return lhsType;
+			}
+			// If type was valid, add this global declaration (+ assignment) to visible symbols to scope 0 
+			SymbolIdx symbolIdx = this.symbols_len();
+			Symbol symbol = { .kind = SymbolKind.GLOBAL_VAR, .idx = stmtIdx, .type = lhsType.value };
+			this.symbolTable.symbols.push(symbol);
+			this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
+			this.current_scope().visibleSymbols.push(symbolIdx);
+			debug::@log_analysis("statement %s: %s is of type %s", stmt.kind, this.ast.names[stmt.varDecl.nameIdx].text(), lhsType.value.type);
+			if (stmt.varDecl.init != parser::NO_IDX) {
+				Expr* initExpr = &this.ast.expressions[stmt.varDecl.init];
+				switch (initExpr.kind) {
+					case ExprKind.INT: 				break;
+					case ExprKind.FLOAT: 			break;
+					case ExprKind.DOUBLE: 			break;
+					case ExprKind.BOOL: 			break;
+					case ExprKind.NULL: 			break;
+					case ExprKind.STRING_LITERAL: 	break;
+					default:
+						return this.type_error(ErrorKind.INVALID_GLOBAL_INITIALIZER, nullType, lhsType.value, initExpr.span);
+				}
+				TypeResult rhsType = this.analyze_expr(stmt.varDecl.init);
+				if (rhsType.hadError) {
+					return rhsType;
+				}
+				if (!common::type_info_matches(lhsType.value, rhsType.value)){
+					return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
+				}
+			}
+		} else {
+			// If we have a global statement that is not a variable declaration, then we have a problem
+			return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, nullType, {});
+		}
+	}
+	return type_ok(nullType);
 }
 
 fn TypeInfo make_type(ValueType type)

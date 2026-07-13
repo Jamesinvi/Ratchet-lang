@@ -46,6 +46,8 @@ enum BCOpCode : char (String asStr)
 	MOV_REF	        { "mov__&" },
 	LOAD_BORROW		{ "ld_bor" },
 	STORE_BORROW	{ "st_bor" },
+	LOAD_GLOBAL		{ "ld_glb" },
+	STORE_GLOBAL	{ "st_glb" },
 	AND				{ "and__b" },
 	OR				{ "or___b" },
 	MOV_BYTES	    { "movbts" },
@@ -182,7 +184,14 @@ struct BCFunction
 struct BCFrameSlot
 {
 	SymbolIdx 		symbolIdx;
-	short			sloIdx;
+	short 			offset;
+	short 			size;
+	ValueType 		type;
+}
+
+struct BCGlobalSlot
+{
+	SymbolIdx 		symbolIdx;
 	short 			offset;
 	short 			size;
 	ValueType 		type;
@@ -221,7 +230,6 @@ struct BCProjection
 	int placeholder;
 }
 
-
 struct BCProgram
 {
 	BCFunctionIdx 			entryFunctionIdx;
@@ -232,11 +240,16 @@ struct BCProgram
 	List{BCCallArg} 		callArgs;
 	List{BCCallInfo}		callInfos;
 	List{String}			strings;	// Indexed by StringIdx
+	List{BCGlobalSlot} 		globalSlots;
+	List{char}				globalInitialData;
+	short					globalMemorySize;
 }
 
 fn void BCProgram.init(BCProgram* this, Allocator allocator)
 {
 	this.functions.init(allocator);
+	this.globalSlots.init(allocator);
+	this.globalInitialData.init(allocator);
 	this.functionFrameSlots.init(allocator);
 	this.blocks.init(allocator);
 	this.instructions.init(allocator);
@@ -248,6 +261,11 @@ fn void BCProgram.init(BCProgram* this, Allocator allocator)
 fn void BCProgram.print(BCProgram* this)
 {
 	log::logn("---------- BYTECODE ----------");
+	log::logn("global slots:");
+	foreach (&slot : this.globalSlots) {
+		log::logn("  symbolIdx:%s | offset:%s | size:%s | type:%s", slot.symbolIdx, slot.offset, slot.size, slot.type);
+	}
+	log::logn("");
 	foreach (&fun : this.functions)
 	{
 		log::logn("function_%s symbolIdx=%s", fun.idx, fun.symbolIdx);

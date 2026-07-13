@@ -18,11 +18,18 @@ enum DeclKind : char
 
 struct ProgramAst
 {
+	GlobalBlock		globalBlock;
     List{Decl}      declarations;
     List{Stmt}      statements;         // global statement list indexed by nodes
     List{Expr}      expressions;        // global expression list indexed by nodes
     List{InternedString}  names;        // global name list indexed by nodes.
 	List{ExprIdx}	args;			    // global function argument list, indices into expression list
+}
+
+struct GlobalBlock
+{
+	List{DeclIdx} 	globalDeclarations;
+	List{StmtIdx}	globalStatements;
 }
 
 struct ParamAst
@@ -195,6 +202,9 @@ struct Stmt
 
 fn void ProgramAst.init(ProgramAst* this, Allocator allocator)
 {
+	this.globalBlock = {};
+	this.globalBlock.globalDeclarations.init(allocator, 512);
+	this.globalBlock.globalStatements.init(allocator, 512);
     this.declarations.init(allocator, 1024);
     this.statements.init(allocator, 1024);
     this.expressions.init(allocator, 1024);
@@ -227,6 +237,8 @@ fn void ProgramAst.free(ProgramAst* this, Allocator allocator)
     this.statements.free();
     this.expressions.free();
 	this.args.free();
+	this.globalBlock.globalStatements.free();
+	this.globalBlock.globalDeclarations.free();
 }
 
 fn void ProgramAst.print_indent(ProgramAst* this, int indent)
@@ -237,9 +249,12 @@ fn void ProgramAst.print_indent(ProgramAst* this, int indent)
 fn void ProgramAst.print(ProgramAst* this)
 {
     log::logn("------------Printing Generated AST------------");
-    foreach(&declaration : this.declarations){
-        this.print_declaration(declaration, 0);
-    }
+	foreach(stmtIdx : this.globalBlock.globalStatements){
+        this.print_statement(&this.statements[stmtIdx], 0);
+	}
+	foreach(declIdx : this.globalBlock.globalDeclarations){
+        this.print_declaration(&this.declarations[declIdx], 0);
+	}
     log::logn("-----------------------------------");
 }
 
@@ -248,7 +263,6 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 	switch(decl.kind)
 	{
 		case DeclKind.FUNCTION:
-		{
 			InternedString funcName = this.names[decl.fnDecl.nameIdx];
 			InternedString retType = this.names[decl.fnDecl.returnType.nameIdx];
 			this.print_indent(indent);
@@ -268,10 +282,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 
 			Stmt* stmt = &this.statements[decl.fnDecl.body];
 			this.print_statement(stmt, indent + 2);
-		}
-				
 		case DeclKind.STRUCT:
-		{
 			InternedString structName = this.names[decl.structDecl.nameIdx];
 			this.print_indent(indent);
 			log::logn("struct %s \n{", structName.text());
@@ -297,10 +308,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 				Stmt* stmt = &this.statements[method.body];
 				this.print_statement(stmt, indent + 2);
 			}
-
-
 			log::logn("}");
-		}
 	}
 }
 

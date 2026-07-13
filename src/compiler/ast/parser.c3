@@ -65,15 +65,19 @@ fn void Parser.declaration(Parser* this)
 {
 	if (this.match(TokenType.FN))
 	{
-		this.fun_declaration();
+		this.outputAst.globalBlock.globalDeclarations.push(this.fun_declaration());
 	}
 	else if (this.match(TokenType.STRUCT_T))
 	{
-		this.struct_declaration();
+		this.outputAst.globalBlock.globalDeclarations.push(this.struct_declaration());
+	}
+	else if (this.check_any_type_token())
+	{
+		this.outputAst.globalBlock.globalStatements.push(this.var_declaration());
 	}
 	else
-	{
-		this.error("Only function/struct declarations are allowed at top level.");
+	{		
+		this.error("Only declarations are allowed at top level.");
 		this.advance();
 	}
 }

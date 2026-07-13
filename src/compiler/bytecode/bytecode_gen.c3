@@ -8,6 +8,8 @@ import log;
 import debug;
 import std::collections::list;
 
+alias Byte = char;
+
 faultdef BYTECODE_GEN_ERROR;
 enum BCGenResult : char
 {
@@ -21,11 +23,13 @@ struct BCGenerator
 	SymbolTable* 		symbolTable;		// input
 	MirProgram* 		mirInput;			// input
 	BCProgram			bcOutput;			// output
+	List{short}			symbolToGlobal; 	// temp, Indexed by SymbolIdx
 	List{short}			symbolToOffset; 	// temp, Indexed by SymbolIdx
 	List{short}			mirRegToOffset;	  	// temp, Indexed by MirRegisterID
-	List{TypeInfo}  mirRegToType;		// temp, Indexed by MirRegisterID
+	List{TypeInfo}  	mirRegToType;		// temp, Indexed by MirRegisterID
 	Allocator 			outputAllocator;
 	int 				currentFrameOffset;
+	short 				globalOffset;
 	short 				localFrameOffset;
 	bool 				hadError;
 }
@@ -50,6 +54,7 @@ fn void BCGenerator.init(BCGenerator* this, ProgramAst* ast, SymbolTable* symbol
 	this.mirInput = mirProgram;
 	this.outputAllocator = outputAllocator;
 	this.bcOutput.init(outputAllocator);
+	this.symbolToGlobal.init(mem);
 	this.symbolToOffset.init(mem);
 	this.mirRegToOffset.init(mem);
 	this.mirRegToType.init(mem);
@@ -57,6 +62,7 @@ fn void BCGenerator.init(BCGenerator* this, ProgramAst* ast, SymbolTable* symbol
 
 fn void BCGenerator.deinit(BCGenerator* this)
 {
+	this.symbolToGlobal.free();
 	this.symbolToOffset.free();
 	this.mirRegToOffset.free();
 	this.mirRegToType.free();
@@ -77,6 +83,17 @@ fn BCGenResult BCGenerator.run(BCGenerator* this)
 			}
 		}
 	}
+
+	common::list_append_fill{short}(&this.symbolToGlobal, runtime::NO_OFFSET, this.symbolTable.symbols.len());
+	foreach (&global : this.mirInput.globals) {
+		this.bind_global_symbol_get_offset(global.symbolIdx);
+	}
+	this.bcOutput.globalMemorySize = common::align_offset(this.globalOffset, (short)uptr::alignment);
+	common::list_append_fill{char}(&this.bcOutput.globalInitialData, 0, (sz)this.bcOutput.globalMemorySize);
+	foreach (&global : this.mirInput.globals) {
+		this.write_global_initial_value(global);
+	}
+
 	// Second pass: actually lower the function instructions
 	foreach(funcIdx, &func : this.mirInput.functions){
 		this.currentFrameOffset = 0;
@@ -90,6 +107,24 @@ fn BCGenResult BCGenerator.run(BCGenerator* this)
 		return BCGenResult.ERROR;
 	} else {
 		return BCGenResult.OK;
+	}
+}
+
+fn void BCGenerator.write_global_initial_value(BCGenerator* this, MirGlobal* global)
+{
+	if (!global.hasInitializer) {
+		return;
+	}
+	short offset = this.symbolToGlobal[global.symbolIdx];
+	Byte* destination = &this.bcOutput.globalInitialData[offset];
+	switch (global.initialValue.kind) {
+		case MirOperandKind.IMM_INT:		*(int*)destination = global.initialValue.immInt;
+		case MirOperandKind.IMM_FLOAT:		*(float*)destination = global.initialValue.immFloat;
+		case MirOperandKind.IMM_DOUBLE:		*(double*)destination = global.initialValue.immDouble;
+		case MirOperandKind.IMM_BOOL:		*(bool*)destination = global.initialValue.immBool;
+		case MirOperandKind.IMM_STRING:		*(StringIdx*)destination = this.push_string_imm_get_idx(global.initialValue.immString.text());
+		case MirOperandKind.IMM_NULL:		return;
+		default:							unreachable("Unsupported static global initializer %s", global.initialValue.kind);
 	}
 }
 	
@@ -140,144 +175,11 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.DIV:			this.lower_math_op(BCOpCodeCategory.DIV, mirInstruction);
 			case MirOpCode.ECHO:		this.lower_echo(mirInstruction);
 			case MirOpCode.ALLOC_GC:	this.lower_alloc(mirInstruction, true);
-			case MirOpCode.AS:
-				MirOperand source =	this.mirInput.operands[mirInstruction.operandsStart];
-				TypeInfo sourceType = this.get_type_from_operand(&source);
-				TypeInfo targetType = mirInstruction.type;
-
-				short sourceOffset = this.bind_operand_get_offset(source, sourceType);
-				short destinationOffset = this.bind_mir_register_get_offset( mirInstruction.result, targetType);
-				BCInstruction instruction = {
-					.opCode = BCOpCode.CAST,
-					.leftOffset = sourceOffset,
-					.rightOffset = runtime::NO_OFFSET,
-					.destOffset = destinationOffset,
-					.castKind = select_cast_kind(sourceType, targetType),
-					.immKind = BCOperandKind.CAST_TYPE,
-				};
-				this.push_instruction_get_idx(&instruction);
-			case MirOpCode.STORE:
-				MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
-				MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
-				MirPlace* place = &this.mirInput.places[dest.placeIdx];
-				SymbolIdx symbolIdx = place.baseSymbolIdx;
-				Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
-				TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
-				short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-				short baseOffset = this.bind_symbol_get_offset(symbolIdx);
-				// Analysis guarantees that stores through borrowed parameters only target inout parameters.
-				if (symbol.passMode != ParamPassMode.VALUE) {
-					short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
-					BCInstruction instruction = {
-						.opCode = BCOpCode.STORE_BORROW,
-						.destOffset = baseOffset,
-						.leftOffset = sourceOffset,
-						.rightOffset = projectionOffset,
-						.byteCount = common::get_type_size(mirInstruction.type),
-						.immKind = BCOperandKind.MOVE_SIZE,
-					};
-					this.push_instruction_get_idx(&instruction);
-				} else {
-					this.store_value(mirInstruction, source, baseOffset + projectionOffset);
-				}
-			case MirOpCode.LOAD:
-				MirRegisterID dest = mirInstruction.result;
-				MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
-				MirPlace* place = &this.mirInput.places[source.placeIdx];
-				SymbolIdx symbolIdx = place.baseSymbolIdx;
-				Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
-				TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
-				short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-				short srcOffset = this.bind_symbol_get_offset(symbolIdx);
-				short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
-				if (symbol.passMode != ParamPassMode.VALUE) {
-					BCInstruction instruction = {
-						.opCode = BCOpCode.LOAD_BORROW,
-						.destOffset = destOffset,
-						.leftOffset = srcOffset,
-						.rightOffset = projectionOffset,
-						.byteCount = common::get_type_size(mirInstruction.type),
-						.immKind = BCOperandKind.MOVE_SIZE,
-					};
-					this.push_instruction_get_idx(&instruction);
-				} else {
-					this.load_value(mirInstruction.type, srcOffset + projectionOffset, destOffset);
-				}
-			case MirOpCode.CALL:
-				MirOperand callee = this.mirInput.operands[mirInstruction.operandsStart];
-				MirFunction* calleeFunction = &this.mirInput.functions[callee.fnCalleeIdx];
-				// Lower all call arguments
-				short argsStart = -1;
-				short argsEnd = -1;
-				short argsCount = 0;
-				short calleeParamOffset = 0;
-				for(int k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++){
-					BCCallArg argument = {};
-					BCArgIdx argIdx = this.push_callarg_get_idx(&argument);
-					if(argsCount == 0){
-						argsStart = argIdx;
-					}
-					DeclParamRange paramRange = calleeFunction.paramRange;
-					SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
-					Symbol* paramSymbol = &this.symbolTable.symbols[paramSymbolIdx];
-					TypeInfo argType = paramSymbol.type;
-					ParamPassMode passMode = paramSymbol.passMode;
-					bool isBorrow = passMode != ParamPassMode.VALUE;
-					short argAlignment = isBorrow
-						? (short)uptr::alignment
-						: (short)common::get_type_alignment(argType);
-					calleeParamOffset = common::align_offset(calleeParamOffset, argAlignment);
-					BCCallArg* callArg = &this.bcOutput.callArgs[argIdx];
-					callArg.isBorrow = isBorrow;
-					callArg.type = argType.type;
-					callArg.calleeOffset = calleeParamOffset;
-					if (isBorrow) {
-						MirOperand argOperand = this.mirInput.operands[k];
-						assert(argOperand.kind == MirOperandKind.PLACE);
-						MirPlace* argPlace = &this.mirInput.places[argOperand.placeIdx];
-						Symbol* callerSymbol = &this.symbolTable.symbols[argPlace.baseSymbolIdx];
-						TypeInfo callerBaseType = callerSymbol.type;
-						callArg.callerOffset = this.bind_symbol_get_offset(argPlace.baseSymbolIdx);
-						callArg.projectionOffset = this.resolve_projection_get_offset(argPlace.projectionIdx, &callerBaseType);
-						callArg.callerIsBorrow = callerSymbol.passMode != ParamPassMode.VALUE;
-						callArg.size = (short)uptr::size;
-						// Analysis guarantees that the argument place is compatible with the borrow mode.
-					} else {
-						callArg.callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
-						callArg.size = (short)common::get_type_size(argType);
-					}
-					calleeParamOffset += this.bcOutput.callArgs[argIdx].size;
-					argsCount++;
-				}
-				argsEnd = argsStart + argsCount;
-				short returnDestOffset = runtime::NO_OFFSET;
-				short returnSize = 0;
-				if (mirInstruction.type.type != ValueType.NULL) {
-					returnDestOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
-					returnSize = (short)common::get_type_size(mirInstruction.type);
-				}
-				// Create call info
-				BCCallInfo callInfo = {
-					.calleeIdx = callee.fnCalleeIdx,
-					.argsStart = argsStart,
-					.argsEnd = argsEnd,
-					.returnDestOffset = returnDestOffset,
-					.returnSize = returnSize,
-				};
-				BCCallInfoIdx infoIdx = this.push_callinfo_get_idx(&callInfo);
-				BCInstruction instruction = {
-					.destOffset = returnDestOffset,
-					.leftOffset = runtime::NO_OFFSET,
-					.rightOffset = runtime::NO_OFFSET,
-					.opCode = BCOpCode.CALL,
-					.callInfoIdx = infoIdx,
-					.immKind = BCOperandKind.FUNCTION,
-				};
-				this.push_instruction_get_idx(&instruction);
-			default:
-			{
-				log::errlogn("Instruction \"%s\" is unsupported by compiler", mirInstruction.opCode);
-			}
+			case MirOpCode.LOAD:		this.lower_load(mirInstruction);
+			case MirOpCode.STORE:		this.lower_store(mirInstruction);
+			case MirOpCode.CALL:		this.lower_call(mirInstruction);
+			case MirOpCode.AS:			this.lower_cast(mirInstruction);
+			default:					unreachable("Instruction \"%s\" is unsupported by compiler", mirInstruction.opCode);
 		}
 	}
     BCBlock block = {
@@ -359,6 +261,44 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 
 }
 
+fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirRegisterID dest = mirInstruction.result;
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	MirPlace* place = &this.mirInput.places[source.placeIdx];
+	SymbolIdx symbolIdx = place.baseSymbolIdx;
+	Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
+	TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+	short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
+	short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
+	if (place.isGlobal) {
+		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
+		BCInstruction instruction = {
+			.opCode = BCOpCode.LOAD_GLOBAL,
+			.destOffset = destOffset,
+			.leftOffset = globalOffset + projectionOffset,
+			.rightOffset = runtime::NO_OFFSET,
+			.byteCount = common::get_type_size(mirInstruction.type),
+			.immKind = BCOperandKind.MOVE_SIZE,
+		};
+		this.push_instruction_get_idx(&instruction);
+	} else if (symbol.passMode != ParamPassMode.VALUE) {
+		short srcOffset = this.bind_symbol_get_offset(symbolIdx);
+		BCInstruction instruction = {
+			.opCode = BCOpCode.LOAD_BORROW,
+			.destOffset = destOffset,
+			.leftOffset = srcOffset,
+			.rightOffset = projectionOffset,
+			.byteCount = common::get_type_size(mirInstruction.type),
+			.immKind = BCOperandKind.MOVE_SIZE,
+		};
+		this.push_instruction_get_idx(&instruction);
+	} else {
+		short srcOffset = this.bind_symbol_get_offset(symbolIdx);
+		this.load_value(mirInstruction.type, srcOffset + projectionOffset, destOffset);
+	}
+}
+
 fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOffset, short destOffset)
 {
 	ushort bytesToMove = 0;
@@ -373,6 +313,46 @@ fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOf
 		.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.MOVE_SIZE: BCOperandKind.INVALID,
 	};
 	this.bcOutput.instructions.push(instruction);
+}
+
+fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
+	MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
+	MirPlace* place = &this.mirInput.places[dest.placeIdx];
+	SymbolIdx symbolIdx = place.baseSymbolIdx;
+	Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
+	TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+	short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
+	if (place.isGlobal) {
+		short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
+		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
+		BCInstruction instruction = {
+			.opCode = BCOpCode.STORE_GLOBAL,
+			.destOffset = globalOffset + projectionOffset,
+			.leftOffset = sourceOffset,
+			.rightOffset = runtime::NO_OFFSET,
+			.byteCount = common::get_type_size(mirInstruction.type),
+			.immKind = BCOperandKind.MOVE_SIZE,
+		};
+		this.push_instruction_get_idx(&instruction);
+	} else if (symbol.passMode != ParamPassMode.VALUE) {
+		short baseOffset = this.bind_symbol_get_offset(symbolIdx);
+		// Analysis guarantees that stores through borrowed parameters only target inout parameters.
+		short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
+		BCInstruction instruction = {
+			.opCode = BCOpCode.STORE_BORROW,
+			.destOffset = baseOffset,
+			.leftOffset = sourceOffset,
+			.rightOffset = projectionOffset,
+			.byteCount = common::get_type_size(mirInstruction.type),
+			.immKind = BCOperandKind.MOVE_SIZE,
+		};
+		this.push_instruction_get_idx(&instruction);
+	} else {
+		short baseOffset = this.bind_symbol_get_offset(symbolIdx);
+		this.store_value(mirInstruction, source, baseOffset + projectionOffset);
+	}
 }
 
 fn void BCGenerator.lower_echo(BCGenerator* this, MirInstruction* mirInstruction)
@@ -549,4 +529,97 @@ fn void BCGenerator.lower_terminator(BCGenerator* this, MirTerminatorIdx termina
 	
 	this.bcOutput.blocks[currentBlockIdx].terminatorsStart = terminatorsStart;
 	this.bcOutput.blocks[currentBlockIdx].terminatorsEnd = this.instructions_len();
+}
+
+fn void BCGenerator.lower_cast(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirOperand source =	this.mirInput.operands[mirInstruction.operandsStart];
+	TypeInfo sourceType = this.get_type_from_operand(&source);
+	TypeInfo targetType = mirInstruction.type;
+
+	short sourceOffset = this.bind_operand_get_offset(source, sourceType);
+	short destinationOffset = this.bind_mir_register_get_offset( mirInstruction.result, targetType);
+	BCInstruction instruction = {
+		.opCode = BCOpCode.CAST,
+		.leftOffset = sourceOffset,
+		.rightOffset = runtime::NO_OFFSET,
+		.destOffset = destinationOffset,
+		.castKind = select_cast_kind(sourceType, targetType),
+		.immKind = BCOperandKind.CAST_TYPE,
+	};
+	this.push_instruction_get_idx(&instruction);
+}
+
+fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirOperand callee = this.mirInput.operands[mirInstruction.operandsStart];
+	MirFunction* calleeFunction = &this.mirInput.functions[callee.fnCalleeIdx];
+	// Lower all call arguments
+	short argsStart = -1;
+	short argsEnd = -1;
+	short argsCount = 0;
+	short calleeParamOffset = 0;
+	for(int k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++){
+		BCCallArg argument = {};
+		BCArgIdx argIdx = this.push_callarg_get_idx(&argument);
+		if(argsCount == 0){
+			argsStart = argIdx;
+		}
+		DeclParamRange paramRange = calleeFunction.paramRange;
+		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
+		Symbol* paramSymbol = &this.symbolTable.symbols[paramSymbolIdx];
+		TypeInfo argType = paramSymbol.type;
+		ParamPassMode passMode = paramSymbol.passMode;
+		bool isBorrow = passMode != ParamPassMode.VALUE;
+		short argAlignment = isBorrow
+			? (short)uptr::alignment
+			: (short)common::get_type_alignment(argType);
+		calleeParamOffset = common::align_offset(calleeParamOffset, argAlignment);
+		BCCallArg* callArg = &this.bcOutput.callArgs[argIdx];
+		callArg.isBorrow = isBorrow;
+		callArg.type = argType.type;
+		callArg.calleeOffset = calleeParamOffset;
+		if (isBorrow) {
+			MirOperand argOperand = this.mirInput.operands[k];
+			assert(argOperand.kind == MirOperandKind.PLACE);
+			MirPlace* argPlace = &this.mirInput.places[argOperand.placeIdx];
+			Symbol* callerSymbol = &this.symbolTable.symbols[argPlace.baseSymbolIdx];
+			TypeInfo callerBaseType = callerSymbol.type;
+			callArg.callerOffset = this.bind_symbol_get_offset(argPlace.baseSymbolIdx);
+			callArg.projectionOffset = this.resolve_projection_get_offset(argPlace.projectionIdx, &callerBaseType);
+			callArg.callerIsBorrow = callerSymbol.passMode != ParamPassMode.VALUE;
+			callArg.size = (short)uptr::size;
+			// Analysis guarantees that the argument place is compatible with the borrow mode.
+		} else {
+			callArg.callerOffset = this.bind_operand_get_offset(this.mirInput.operands[k], argType);
+			callArg.size = (short)common::get_type_size(argType);
+		}
+		calleeParamOffset += this.bcOutput.callArgs[argIdx].size;
+		argsCount++;
+	}
+	argsEnd = argsStart + argsCount;
+	short returnDestOffset = runtime::NO_OFFSET;
+	short returnSize = 0;
+	if (mirInstruction.type.type != ValueType.NULL) {
+		returnDestOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+		returnSize = (short)common::get_type_size(mirInstruction.type);
+	}
+	// Create call info
+	BCCallInfo callInfo = {
+		.calleeIdx = callee.fnCalleeIdx,
+		.argsStart = argsStart,
+		.argsEnd = argsEnd,
+		.returnDestOffset = returnDestOffset,
+		.returnSize = returnSize,
+	};
+	BCCallInfoIdx infoIdx = this.push_callinfo_get_idx(&callInfo);
+	BCInstruction instruction = {
+		.destOffset = returnDestOffset,
+		.leftOffset = runtime::NO_OFFSET,
+		.rightOffset = runtime::NO_OFFSET,
+		.opCode = BCOpCode.CALL,
+		.callInfoIdx = infoIdx,
+		.immKind = BCOperandKind.FUNCTION,
+	};
+	this.push_instruction_get_idx(&instruction);
 }

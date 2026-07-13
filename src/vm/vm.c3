@@ -50,6 +50,7 @@ struct Vm
 	BCInstruction* 			instructions;
 	BCFunction* 			functions;
 	BCBlock* 				blocks;
+	Byte* 					globalMemory;
     HeapTracker 			trackedHeap;
     HeapTracker 			untrackedHeap;
     OutStream 				output;
@@ -89,6 +90,10 @@ fn RunResult Vm.execute_program(Vm* vm)
 
 	vm.untrackedHeap = {};
 	vm.untrackedHeap.init("untracked heap");
+	if (vm.program.globalMemorySize > 0) {
+		vm.globalMemory = (Byte*)vm.untrackedHeap.alloc((sz)vm.program.globalMemorySize, uptr::alignment);
+		mem::copy(vm.globalMemory, vm.program.globalInitialData.entries, vm.program.globalInitialData.len(), 1, 1);
+	}
 
 	BCFunction* entry = &vm.functions[vm.program.entryFunctionIdx];
 	BCBlock* entryBlock = &vm.blocks[entry.blocksStart];
@@ -167,6 +172,17 @@ fn RunResult Vm.execute_program(Vm* vm)
 				Byte* src = &vm.stack[vm.frame.base + inst.leftOffset];
 				mem::copy(dst, src, inst.byteCount, 1, 1);
 
+			// Globals. We could have typed opcodes, but for now, they're type-agnostic. Copy byte-by-byte
+			case BCOpCode.LOAD_GLOBAL:
+				Byte* src = &vm.globalMemory[inst.leftOffset];
+				Byte* dst = &vm.stack[vm.frame.base + inst.destOffset];
+				mem::copy(dst, src, inst.byteCount, 1, 1);
+
+			case BCOpCode.STORE_GLOBAL:
+				Byte* dst = &vm.globalMemory[inst.destOffset];
+				Byte* src = &vm.stack[vm.frame.base + inst.leftOffset];
+				mem::copy(dst, src, inst.byteCount, 1, 1);
+			
 			// Add
 			case BCOpCode.INCREMENT:
 				int* v = (int*)&vm.stack[vm.frame.base + inst.destOffset];

@@ -69,9 +69,10 @@ fn void MirGenerator.deinit(MirGenerator* this)
 fn MirGenResult MirGenerator.run(MirGenerator* this)
 {
 	// First pass: give every free function and method a stable MIR function index.
-	foreach(idx, &decl : this.inputAst.declarations){
+	foreach(idx : this.inputAst.globalBlock.globalDeclarations){
 	    assert(idx < int::max);
 	    int intIdx = (int)idx;
+		Decl* decl = &this.inputAst.declarations[intIdx];
 		if(decl.kind == DeclKind.FUNCTION){
 			SymbolIdx symbolIdx = this.symbolTable.declSymbols[intIdx];
 			MirFunction function = {
@@ -87,12 +88,42 @@ fn MirGenResult MirGenerator.run(MirGenerator* this)
 		}
 	}
 
-	// Second pass: all callees now exist, so forward calls and recursion are safe.
+	// Global declarations carry static initial values; they do not emit executable MIR.
+	foreach (stmtIdx : this.inputAst.globalBlock.globalStatements) {
+		Stmt* stmt = &this.inputAst.statements[stmtIdx];
+		assert(stmt.kind == StmtKind.DECL);
+		SymbolIdx symbolIdx = this.symbolTable.stmtSymbols[stmtIdx];
+		MirGlobal global = {
+			.symbolIdx = symbolIdx,
+			.type = this.symbolTable.symbols[symbolIdx].type,
+			.hasInitializer = stmt.varDecl.init != parser::NO_IDX,
+		};
+		if (global.hasInitializer) {
+			global.initialValue = this.lower_global_initializer(stmt.varDecl.init);
+		}
+		this.output.globals.push(global);
+	}
+
+	// Function pass: all callees now exist, so forward calls and recursion are safe.
 	for (int functionIdx = 0; functionIdx < (int)this.output.functions.len(); functionIdx++) {
 		this.lower_function_body(functionIdx);
 	}
 
 	return MirGenResult.OK;
+}
+
+fn MirOperand MirGenerator.lower_global_initializer(MirGenerator* this, ExprIdx exprIdx)
+{
+	Expr* expr = &this.inputAst.expressions[exprIdx];
+	switch (expr.kind) {
+		case ExprKind.INT: 				return { .kind = MirOperandKind.IMM_INT, .immInt = expr.intLiteral };
+		case ExprKind.FLOAT: 			return { .kind = MirOperandKind.IMM_FLOAT, .immFloat = expr.floatLiteral };
+		case ExprKind.DOUBLE: 			return { .kind = MirOperandKind.IMM_DOUBLE, .immDouble = expr.doubleLiteral };
+		case ExprKind.BOOL: 			return { .kind = MirOperandKind.IMM_BOOL, .immBool = expr.boolLiteral };
+		case ExprKind.NULL: 			return { .kind = MirOperandKind.IMM_NULL, .immInt = 0 };
+		case ExprKind.STRING_LITERAL:	return { .kind = MirOperandKind.IMM_STRING, .immString = this.inputAst.names[expr.stringLiteral] };
+		default: 						unreachable("Analysis should guarantee constant global initializers");
+	}
 }
 
 fn void MirGenerator.lower_methods_to_functions(MirGenerator* this, DeclIdx structDeclIdx, StructDeclAst* structDecl)
@@ -358,7 +389,12 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 	debug::@log_mir("lowering var decl: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].text());
 
 	SymbolIdx stmtSymbolIdx = this.symbolTable.stmtSymbols[stmtIdx];
-	MirPlace newPlace = {.baseSymbolIdx = stmtSymbolIdx, .projectionIdx = NO_PROJECTION};
+	Symbol* symbol = &this.symbolTable.symbols[stmtSymbolIdx];
+	MirPlace newPlace = {
+		.baseSymbolIdx = stmtSymbolIdx,
+		.projectionIdx = NO_PROJECTION,
+		.isGlobal = symbol.kind == SymbolKind.GLOBAL_VAR,
+	};
 	MirPlaceIdx placeIdx = this.push_place_get_idx(&newPlace);
 	MirOperand operand = {.kind = MirOperandKind.PLACE, .placeIdx = placeIdx};
 
@@ -469,7 +505,7 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
         case ExprKind.VAR:
 			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
 			TypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
-			MirOperand place = this.bindings[varExprSymbolIdx];
+			MirOperand place = this.get_or_bind_place(varExprSymbolIdx);
 			MirRegisterID resultReg = this.currentReg++;
 			OperandIdx start = this.operands_len();
 			this.output.operands.push(place);
@@ -648,8 +684,9 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 		case ExprKind.THIS: nextcase;
 		case ExprKind.VAR:
 			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
+			Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 			assert(symbolIdx < this.bindings.len());
-			MirOperand place = this.bindings[symbolIdx];
+			MirOperand place = this.get_or_bind_place(symbolIdx);
 			assert(place.kind == MirOperandKind.PLACE);
 			return place;
 		case ExprKind.MEMBER:
@@ -673,6 +710,7 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 			MirPlace memberPlace = {
 				.baseSymbolIdx = basePlace.baseSymbolIdx,
 				.projectionIdx = projectionIdx,
+				.isGlobal = basePlace.isGlobal,
 			};
 			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
 			return {.kind = MirOperandKind.PLACE, .placeIdx = placeIdx};

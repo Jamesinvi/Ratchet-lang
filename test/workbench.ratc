@@ -1,22 +1,9 @@
-struct Point{
-	int x;
-	int y;
-}
+
+int a = 15;
 // Entry-point. Should return true if errors occurred
 fn bool program(){
-    int z = 5;
-    int& a = new int& {12};
-    float& b = new float& {5.54f};
-    double& c = new double& {1.222222};
-    bool& d = new bool& {false};
-
-    int& notInit;
-    notInit = new int& {1616};
-    echo (z);
-    echo (a);
-    echo (b);
-    echo (c);
-    echo (d);
-    echo (notInit);
-    return false;
+	float b = 12.4f;
+	a = a + 32;
+	echo (a);
+	return false;
 }
