@@ -78,6 +78,12 @@ enum MirOperandKind : char (String asStr)
 	FUNCTION 	{ "fn" },
 }
 
+enum MirPlaceKind : char (String asStr)
+{
+	FIELD				{ "field" },				// important that this is the default!
+	BUILT_IN_REF_VALUE	{ "built_in_ref_value" }	// used for int&.value built-in assignments
+}
+
 
 struct MirOperand
 {
@@ -113,6 +119,7 @@ struct MirPlace
 	int idx;
 	SymbolIdx baseSymbolIdx;
 	MirProjectionIdx projectionIdx;
+	MirPlaceKind kind;
 	bool isGlobal;
 }
 
@@ -251,15 +258,24 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 		case MirOperandKind.PLACE:					
 		{
 			MirPlace* place = &this.places[op.placeIdx];
-			if(place.isGlobal){
+			if(place.isGlobal) {
 				log::log("global ");
 			}
-			if(place.projectionIdx == NO_PROJECTION){
-				log::log("_%s", place.baseSymbolIdx);
-				return;
+			log::log("in ", place.baseSymbolIdx);
+
+			if(place.kind == MirPlaceKind.BUILT_IN_REF_VALUE){
+				log::log("%s", place.kind.asStr);
+			}else {
+				if(place.projectionIdx == NO_PROJECTION) {
+					log::log("_%s", place.baseSymbolIdx);
+					return;
+				} else {
+					MirProjection* projection = &this.projections[place.projectionIdx];
+					log::log("%s, _%s_@fieldIdx:%s", place.kind.asStr, place.baseSymbolIdx, projection.fieldIdx);
+				}
 			}
-			MirProjection* projection = &this.projections[place.projectionIdx];
-			log::log("_%s_@fieldIdx:%s", place.baseSymbolIdx, projection.fieldIdx);
+
+		
 		}	
 		default:
 			log::log("<?>");

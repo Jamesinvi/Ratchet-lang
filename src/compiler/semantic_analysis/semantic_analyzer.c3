@@ -292,6 +292,7 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 	this.returnFound = false;
 	foreach (stmtIdx : stmtsIndices){
 		TypeResult resultType = this.analyze_stmt(stmtIdx);
+
 		if (resultType.hadError) {
 			return resultType;
 		}
@@ -421,6 +422,7 @@ fn int SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* s
 fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmtIdx)
 {
 	Stmt* stmt = &this.ast.statements[stmtIdx];
+	debug::@log_analysis("starting analysis on statement %s", stmt.kind);
 	switch (stmt.kind)
 	{
 		case StmtKind.EXPR:					return this.analyze_expr(stmt.exprStmt);
@@ -446,6 +448,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 				if (common::type_info_matches(lhsType.value, rhsType.value)){
 					return type_ok(lhsType.value);
 				}
+
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
 			}
 			return type_ok(lhsType.value);
@@ -458,6 +461,7 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 			this.begin_scope(scopeReturnType, insideMethod);
 			foreach (childIdx : stmt.blockStmt.stmts){
 				TypeResult result = this.analyze_stmt(childIdx);
+
 				if (result.hadError) {
 					return result;
 				}
@@ -530,6 +534,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		return type_ok(make_type(ValueType.NULL));
 	}
 	Expr* expr = &this.ast.expressions[exprIdx];
+	debug::@log_analysis("starting analysis on expressions %s", expr.kind,);
 	TypeResult result = {};
 	switch(expr.kind)
 	{
@@ -555,17 +560,9 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 	return result;
 }
 
-fn bool SemanticAnalyzer.is_struct_ref_like(SemanticAnalyzer* this, TypeInfo info)
-{
-	return (info.type == ValueType.REF ||
-			info.type == ValueType.PTR) &&
-			info.refToType == ValueType.STRUCT;
-}
-
 fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, InternedString name, SymbolIdx* outSymbolIdx)
 {
 	sz scopeIdx = this.currentScopeIdx;
-	
 	// Start from the current scope's visible symbols and traverse upwards, looking for a match
 	while (scopeIdx!=0){
 		Stack{SymbolIdx}* visibleSymbols = &this.scopes.items[scopeIdx].visibleSymbols;
@@ -612,7 +609,6 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Inte
 			}
 		}
 	}
-
 	return false;
 }
 
@@ -621,6 +617,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_var(SemanticAnalyzer* this, ExprIdx 
 	Expr* expr = &this.ast.expressions[exprIdx];
 	InternedString name = this.ast.names[expr.varExpr];
 	SymbolIdx symbolIdx = NO_SYMBOL;
+	debug::@log_analysis("analyzing expr_var '%s'", name.text());
 	if (this.try_resolve_visible_symbol(name, &symbolIdx)){
 		this.symbolTable.exprSymbols[exprIdx] = symbolIdx;
 		return type_ok(this.symbolTable.symbols[symbolIdx].type);
@@ -676,13 +673,17 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 {
 	Expr* expr = &this.ast.expressions[exprIdx];
 	TypeResult lhsType = this.analyze_expr(expr.binary.lhs);
+
 	if (lhsType.hadError) {
 		return lhsType;
 	}
+
 	TypeResult rhsType = this.analyze_expr(expr.binary.rhs);
 	if (rhsType.hadError) {
 		return rhsType;
 	}
+
+	debug::@log_analysis("analysis on binary going forward: left %s, right %s", lhsType.value.type, rhsType.value.type);
 
 	switch (expr.binary.op)
 	{
@@ -824,8 +825,20 @@ fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprI
 		return baseType;
 	}
 	TypeInfo baseInfo = baseType.value;
+
+	// If we're analyzing a member of a (for example) int&
+	// We only accept the built-int .value property, reject anything else
+	if(baseInfo.is_builtin_ref_like()){
+		InternedString fieldName = this.ast.names[expr.member.memberIdx];
+		TypeInfo builtinPointee = baseInfo.pointee_type();
+		if(fieldName.text() == "value"){
+			return type_ok(builtinPointee);
+		}else{
+			return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, builtinPointee, expr.span);
+		}
+	}
 	bool isStruct = baseInfo.type == ValueType.STRUCT;
-	if (!isStruct && !this.is_struct_ref_like(baseInfo)) {
+	if (!isStruct && !baseInfo.is_struct_ref_like()) {
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
 	if (baseInfo.structTypeIndex == common::NOT_STRUCT) {

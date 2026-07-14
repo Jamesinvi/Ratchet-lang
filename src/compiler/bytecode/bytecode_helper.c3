@@ -54,8 +54,8 @@ fn short BCGenerator.bind_symbol_get_offset(BCGenerator* this, SymbolIdx symbolI
 		Symbol* sym = &this.symbolTable.symbols[symbolIdx];
 		bool isBorrow = sym.passMode != ParamPassMode.VALUE;
 		// borrow params are always pointers, so they get ptr size and alignment
-		short alignment = 	isBorrow ? (short)uptr::alignment	: (short)common::get_type_alignment(sym.type);
-		short size = 		isBorrow ? (short)uptr::size 		: (short)common::get_type_size(sym.type);
+		short alignment = 	isBorrow ? (short)uptr::alignment	: (short)sym.type.alignment();
+		short size = 		isBorrow ? (short)uptr::size 		: (short)sym.type.size();
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
 
 		offset = this.localFrameOffset;
@@ -84,8 +84,8 @@ fn short BCGenerator.bind_global_symbol_get_offset(BCGenerator* this, SymbolIdx 
 	short offset = this.symbolToGlobal[symbolIdx];
 	// If we already have a binding then use it, else we need to create one
 	if (offset == runtime::NO_OFFSET) {
-		short alignment = (short)common::get_type_alignment(sym.type);
-		short size = (short)common::get_type_size(sym.type);
+		short alignment = (short)sym.type.alignment();
+		short size = (short)sym.type.size();
 		this.globalOffset = common::align_offset(this.globalOffset, alignment);
 
 		offset = this.globalOffset;
@@ -139,9 +139,9 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
     short offset = this.mirRegToOffset[mirRegId];
 	// If we already have a binding then use it, else we need to create one
     if (offset == runtime::NO_OFFSET) {
-		short alignment = (short)common::get_type_alignment(type);
+		short alignment = (short)type.alignment();
+        short size = (short)type.size();
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
-        short size = (short)common::get_type_size(type);
 
         offset = this.localFrameOffset;
 
@@ -169,9 +169,9 @@ fn short BCGenerator.bind_mir_register_get_offset(BCGenerator* this, MirRegister
 fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand operand, TypeInfo typeInfo)
 {
 	if (is_immediate(operand)){
-		short alignment = (short)common::get_type_alignment(typeInfo);
+		short alignment = (short)typeInfo.alignment();
+		short size = (short)typeInfo.size();
 		this.localFrameOffset = common::align_offset(this.localFrameOffset, alignment);
-		short size = (short)common::get_type_size(typeInfo);
 		short offset = this.localFrameOffset;
 		this.localFrameOffset += size;
 		BCFrameSlot slot = {
@@ -331,7 +331,7 @@ fn BCOpCode select_mov_op_code(TypeInfo typeInfo, ushort* byteCount)
 		case ValueType.REF:			return BCOpCode.MOV_REF;
 		case ValueType.STRUCT:		
 		{
-			*byteCount = (ushort)common::get_type_size(typeInfo);
+			*byteCount = (ushort)typeInfo.size();
 			return BCOpCode.MOV_BYTES;
 		}
 		default:					log::errlogn("Type not supported by bytecode");

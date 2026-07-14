@@ -89,7 +89,7 @@ fn bool Token.is_any_type(Token* t)
 {
     return  t.is_builtin_type() 		||
             t.is_struct_type()          ||
-            t.is_builtin_ref()   		||
+            t.is_builtin_ref_like()   		||
             t.is_builtin_ptr()   		||
             t.is_struct_ref()			||
             t.is_struct_ptr();
@@ -138,7 +138,7 @@ fn bool TokenType.is_builtin_type(TokenType* t)
            (*t == TokenType.BOOL_T);
 }
 
-fn bool TokenType.is_builtin_ref(TokenType* t)
+fn bool TokenType.is_builtin_ref_like(TokenType* t)
 {
     return (*t == TokenType.INT_REF_GC)		||
            (*t == TokenType.FLOAT_REF_GC)	||
@@ -159,9 +159,9 @@ fn bool Token.is_builtin_type(Token* t)
 	return t.tokenType.is_builtin_type();
 }
 
-fn bool Token.is_builtin_ref(Token* t)
+fn bool Token.is_builtin_ref_like(Token* t)
 {
-	return t.tokenType.is_builtin_ref();
+	return t.tokenType.is_builtin_ref_like();
 }
 
 fn bool Token.is_builtin_ptr(Token* t)

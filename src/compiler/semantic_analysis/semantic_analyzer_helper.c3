@@ -240,8 +240,8 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_field_info(SemanticAnalyz
 	// Fiedls
 	foreach (&field : decl.structDecl.fields) {
 		TypeInfo fieldType = this.create_type_from_ast(&field.type, { }).value;
-		ushort fieldAlign = common::get_type_alignment(fieldType);
-		ushort fieldSize = common::get_type_size(fieldType);
+		ushort fieldAlign = fieldType.alignment();
+		ushort fieldSize = fieldType.size();
 		// There's some ugliness with types and sizes, so make sure these casts are safe
 		always_assert(offset < short::max);
 		always_assert(fieldAlign < short::max);

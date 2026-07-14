@@ -700,18 +700,30 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 			//										   |_ index is NO_PROJECTION
 			// Projection chains are stored backwards: newest node points to previous one.
 			// This lets places share common prefixes (e.g. `a.x` reused by `a.x.y`).
-			MemberIdx fieldIdx = this.symbolTable.memberFieldIndices[exprIdx];
-			MirProjection projection = {
-				.fieldIdx = fieldIdx,
-				.prevProjectionIdx = basePlace.projectionIdx,
-			};
-			MirProjectionIdx projectionIdx = this.push_projection_get_idx(&projection);
+
+			TypeInfo symbolType = this.symbolTable.exprTypes[expr.member.base];
+			bool isBuiltinRef = symbolType.is_builtin_ref_like();
+			MirProjectionIdx projectionIdx = basePlace.projectionIdx;
+			MirPlaceKind placeKind;
+			if(isBuiltinRef){
+				placeKind = MirPlaceKind.BUILT_IN_REF_VALUE;
+			}else{
+				placeKind = MirPlaceKind.FIELD;
+				MemberIdx fieldIdx = this.symbolTable.memberFieldIndices[exprIdx];
+				MirProjection projection = {
+					.fieldIdx = fieldIdx,
+					.prevProjectionIdx = basePlace.projectionIdx,
+				};
+				projectionIdx = this.push_projection_get_idx(&projection);
+			}
 
 			MirPlace memberPlace = {
 				.baseSymbolIdx = basePlace.baseSymbolIdx,
 				.projectionIdx = projectionIdx,
 				.isGlobal = basePlace.isGlobal,
+				.kind = placeKind,
 			};
+
 			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
 			return {.kind = MirOperandKind.PLACE, .placeIdx = placeIdx};
 		default:
