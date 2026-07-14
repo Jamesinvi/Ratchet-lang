@@ -1,10 +1,14 @@
 fn bool program(){
-    int a = 0;
-    int b = 3;
-    while(a<2000000000){
-        a = a+b;
-        b = b +1;
-    }
-    echo (a);
+	int i = 0;
+	while (i < 2000){
+		int a = 0;
+		int b = 3;
+		while (a<2000000000){
+			a = a+b;
+			b = b + 1;
+		}
+		i = i + 1;
+	}
+    echo (i);
     return false;
 }
