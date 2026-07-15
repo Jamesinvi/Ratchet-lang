@@ -46,8 +46,10 @@ enum BCOpCode : char (String asStr)
 	MOV_REF	        			{ "mov___ref" },
 	LOAD_BORROW					{ "load_borw" },
 	LOAD_REF_VALUE				{ "loadref_v" },
+	LOAD_REF_FIELD				{ "loadref_f" },
 	STORE_BORROW				{ "stor_borw" },
 	STORE_REF_VALUE				{ "storref_v" },
+	STORE_REF_FIELD				{ "storref_f" },
 	LOAD_GLOBAL					{ "load__glb" },
 	LOAD_GLOBAL_REF_VALUE		{ "loadglb_v" },
 	STORE_GLOBAL				{ "stor__glb" },
@@ -55,6 +57,7 @@ enum BCOpCode : char (String asStr)
 	AND							{ "and_____b" },
 	OR							{ "or______b" },
 	MOV_BYTES	    			{ "mov_bytes" },
+	ZERO_BYTES	    			{ "zerobytes" },
 	CONSTI	        			{ "const___i" },
 	CONSTF	        			{ "const___f" },
 	CONSTD	        			{ "const___d" },
@@ -148,7 +151,7 @@ enum BCOperandKind : char (String asStr)
 	IMM_NULL 	{ "null" },
 	BLOCK 		{ "block" },
 	FUNCTION 	{ "fn" },
-	MOVE_SIZE	{ "mov_size" },
+	SIZE		{ "size" },
 	CAST_TYPE	{ "cast_type" },
 	TYPE_INFO	{ "type_info" },
 }
@@ -363,7 +366,7 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
 		case BCOperandKind.IMM_NULL:	log::log("null");
 		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);
-		case BCOperandKind.MOVE_SIZE:	log::log("move %s bytes", inst.byteCount);
+		case BCOperandKind.SIZE:	log::log("move %s bytes", inst.byteCount);
 		case BCOperandKind.CAST_TYPE:	log::log("| cast: %s", inst.castKind.asStr);
 		case BCOperandKind.TYPE_INFO:
 			log::log("| type: %s", inst.typeInfo.type);

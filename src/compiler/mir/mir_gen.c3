@@ -401,13 +401,26 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 	this.bindings[stmtSymbolIdx] = operand;
 	if (stmt.varDecl.init != parser::NO_IDX) {
 		this.lower_var_init(stmtIdx, stmtSymbolIdx);
+	}else{
+		OperandIdx start = this.operands_len();
+		this.output.operands.push(operand);
+		OperandIdx end = this.operands_len();
+		TypeInfo storeType = symbol.type;
+		MirInstruction storeInst = {
+			.opCode = MirOpCode.ZERO_BYTES,
+			.type = storeType,
+			.result = NO_REG,
+			.operandsStart = start,
+			.operandsEnd = end,
+			.sourceStmtIdx = stmtIdx,
+		};
+		this.output.instructions.push(storeInst);
 	}
 }
 
 
 fn void MirGenerator.lower_var_init(MirGenerator* this, StmtIdx stmtIdx, SymbolIdx stmtSymbolIdx)
 {
-
 	Stmt* stmt = &this.inputAst.statements[stmtIdx];
 	debug::@log_mir("lowering var init: '%s'", this.inputAst.names[stmt.varDecl.nameIdx].text());
 
@@ -528,8 +541,8 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
 			TypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
 			MirRegisterID resultReg = this.currentReg++;
-			OperandIdx start = this.operands_len();
 			MirOperand val = this.lower_expr(expr.new.init);
+			OperandIdx start = this.operands_len();
 			this.output.operands.push(val);
 			OperandIdx end = this.operands_len();
 

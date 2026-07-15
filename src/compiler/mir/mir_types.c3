@@ -54,6 +54,7 @@ enum MirOpCode : char (String asStr)
 	LOAD 		{ "load" },
 	ECHO 		{ "echo" },
 	ALLOC_GC	{ "alloc_gc"},
+	ZERO_BYTES  { "zero_bytes" }
 }
 
 enum MirTerminatorOp : char (String asStr)

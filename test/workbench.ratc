@@ -1,10 +1,21 @@
+struct Point{
+	int x;
+	int y;
+	int z;
+}
+
+fn null prinaaat(Point& p){
+	echo(p.x);
+	echo(p.y);
+	echo(p.z);
+}
 
 // Entry-point. Should return true if errors occurred
 fn bool program(){
-	int& a = new int& { 15 };
-	int b = a.value;
-	a.value = 12;
-	echo (b);
+	Point t;
+	Point& a = new Point& { t };
+	a.x = 12;
+	prinaaat(a);
 
 	return false;
 }

@@ -15,6 +15,18 @@ fn bool program() {
     a.z = 33.0f;
     echo(b.z);
     echo(a.z);
+
+    int iteration = 0;
+    while (iteration < 2) {
+        Vec3 clearedEachIteration;
+        echo(clearedEachIteration.x);
+        echo(clearedEachIteration.y);
+        echo(clearedEachIteration.z);
+        clearedEachIteration.x = 101.0f;
+        clearedEachIteration.y = 102.0f;
+        clearedEachIteration.z = 103.0f;
+        iteration = iteration + 1;
+    }
     return false;
 }
 

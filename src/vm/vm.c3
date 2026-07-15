@@ -119,6 +119,11 @@ fn RunResult Vm.execute_program(Vm* vm)
 				int* v = (int*)&vm.stack[vm.frame.base + inst.destOffset];
 				*v  = (*v) + 1;
 
+			// Initialize to 0
+			case BCOpCode.ZERO_BYTES:				
+				Byte* dst = (Byte*)&vm.stack[vm.frame.base + inst.destOffset];
+				mem::set(dst, 0, inst.byteCount, 1);
+
 			// Cast
 			case BCOpCode.CAST:						vm.cast_op(inst);
 		    // Const				
@@ -162,10 +167,12 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.MOVB:						vm.mov_op(inst, bool);
 			case BCOpCode.MOV_BYTES:				vm.mov_bytes(inst);
 			case BCOpCode.MOV_REF:					vm.mov_op(inst, uptr);	// TODO: Managed-reference loads/stores need GC bookkeeping once GC exists
-			case BCOpCode.LOAD_BORROW: 				vm.load_borrow(inst);
+			case BCOpCode.LOAD_BORROW: 				vm.load_indirect(inst);
 			case BCOpCode.LOAD_REF_VALUE:			vm.load_ref_value(inst);
-			case BCOpCode.STORE_BORROW:				vm.store_borrow(inst);
+			case BCOpCode.LOAD_REF_FIELD:			vm.load_indirect(inst);
+			case BCOpCode.STORE_BORROW:				vm.store_indirect(inst);
 			case BCOpCode.STORE_REF_VALUE:			vm.store_ref_value(inst);
+			case BCOpCode.STORE_REF_FIELD:			vm.store_indirect(inst);
 
 			// Globals. We could have typed opcodes, but for now, they're type-agnostic. Copy byte-by-byte
 			case BCOpCode.LOAD_GLOBAL:				vm.load_global(inst);
@@ -243,20 +250,20 @@ fn void Vm.echo_string(Vm* vm, BCInstruction* inst) @inline
 	io::fprintfn(vm.output, "%s", vm.program.strings[*stringIdx]);
 }
 
-fn void Vm.load_borrow(Vm* vm, BCInstruction* inst) @inline
+fn void Vm.load_indirect(Vm* vm, BCInstruction* inst) @inline
 {
-	Byte* src = (Byte*)vm.load_indirect(inst.leftOffset) + inst.rightOffset;
+	Byte* src = (Byte*)vm.deref_indirect(inst.leftOffset) + inst.rightOffset;
 	Byte* dst = &vm.stack[vm.frame.base + inst.destOffset];
 	mem::copy(dst, src, inst.byteCount, 1, 1);
 }
 
 macro Vm.print_value_from_heap(Vm* vm, short offset, $Type)
 {
-	$Type* heapValuePtr = vm.load_indirect(offset);
+	$Type* heapValuePtr = vm.deref_indirect(offset);
 	io::fprintfn(vm.output, "%s", *heapValuePtr);
 }
 
-macro void* Vm.load_indirect(Vm* vm, short offset)
+macro void* Vm.deref_indirect(Vm* vm, short offset)
 {
 	// Get the stack slot that contains the address of the indirect value
 	uptr* refAddress = (uptr*)&vm.stack[vm.frame.base + offset];
@@ -280,7 +287,7 @@ fn void Vm.load_ref_value(Vm* vm, BCInstruction* inst) @inline
 	if (inst.rightOffset == runtime::NO_OFFSET) {
 		refSlot = &vm.stack[vm.frame.base + inst.leftOffset];
 	} else {
-		refSlot = (Byte*)vm.load_indirect(inst.leftOffset) + inst.rightOffset;
+		refSlot = (Byte*)vm.deref_indirect(inst.leftOffset) + inst.rightOffset;
 	}
 	Byte* refValueSrc = (Byte*)*(uptr*)refSlot;
 	Byte* refValueDst = &vm.stack[vm.frame.base + inst.destOffset];
@@ -317,7 +324,7 @@ fn void Vm.store_ref_value(Vm* vm, BCInstruction* inst) @inline
 	if (inst.rightOffset == runtime::NO_OFFSET) {
 		refSlot = &vm.stack[vm.frame.base + inst.destOffset];
 	} else {
-		refSlot = (Byte*)vm.load_indirect(inst.destOffset) + inst.rightOffset;
+		refSlot = (Byte*)vm.deref_indirect(inst.destOffset) + inst.rightOffset;
 	}
 	Byte* refValueDst = (Byte*)*(uptr*)refSlot;
 	Byte* refValueSrc = &vm.stack[vm.frame.base + inst.leftOffset];
@@ -463,9 +470,9 @@ fn void Vm.mov_bytes(Vm* vm, BCInstruction* inst) @inline
 	mem::move(dst, src, inst.byteCount);
 }
 
-fn void Vm.store_borrow(Vm* vm, BCInstruction* inst) @inline
+fn void Vm.store_indirect(Vm* vm, BCInstruction* inst) @inline
 {
-	Byte* dst = (Byte*)vm.load_indirect(inst.destOffset) + inst.rightOffset;
+	Byte* dst = (Byte*)vm.deref_indirect(inst.destOffset) + inst.rightOffset;
 	Byte* src = &vm.stack[vm.frame.base + inst.leftOffset];
 	mem::copy(dst, src, inst.byteCount, 1, 1);
 }

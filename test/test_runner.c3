@@ -31,7 +31,7 @@ fn void t_04() @test
 
 fn void t_05() @test
 {
-    compile_and_run_file("./test/05_struct_simple.ratc","14.000000\n0.000000\n0.000000\n14.000000\n0.000000\n33.000000\n")!!;
+    compile_and_run_file("./test/05_struct_simple.ratc","14.000000\n0.000000\n0.000000\n14.000000\n0.000000\n33.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n")!!;
 }
 
 fn void t_06() @test

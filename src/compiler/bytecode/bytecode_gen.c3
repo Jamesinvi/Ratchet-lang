@@ -179,6 +179,7 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.STORE:		this.lower_store(mirInstruction);
 			case MirOpCode.CALL:		this.lower_call(mirInstruction);
 			case MirOpCode.AS:			this.lower_cast(mirInstruction);
+			case MirOpCode.ZERO_BYTES:  this.lower_zero_bytes(mirInstruction);
 			default:					unreachable("Instruction \"%s\" is unsupported by compiler", mirInstruction.opCode);
 		}
 	}
@@ -204,7 +205,7 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 			instruction.rightOffset = runtime::NO_OFFSET;
 			instruction.opCode = opCode;
 			instruction.byteCount = bytesToMove;
-			instruction.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.MOVE_SIZE: BCOperandKind.INVALID;
+			instruction.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.SIZE: BCOperandKind.INVALID;
 		}
 		case MirOperandKind.IMM_INT:
 		{
@@ -261,6 +262,26 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 
 }
 
+fn void BCGenerator.lower_zero_bytes(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirRegisterID dest = mirInstruction.result;
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	MirPlace* place = &this.mirInput.places[source.placeIdx];
+	SymbolIdx symbolIdx = place.baseSymbolIdx;
+	TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+	short destOffset = this.bind_symbol_get_offset(symbolIdx);
+	BCInstruction instruction = {
+		.destOffset = destOffset,
+		.leftOffset = runtime::NO_OFFSET,
+		.rightOffset = runtime::NO_OFFSET,
+		.immInt = runtime::NO_OFFSET,
+		.opCode = BCOpCode.ZERO_BYTES,
+		.byteCount = symbolType.size(),
+		.immKind = BCOperandKind.SIZE,
+	};
+	this.push_instruction_get_idx(&instruction);
+}
+
 fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction)
 {
 	MirRegisterID dest = mirInstruction.result;
@@ -274,6 +295,7 @@ fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction
 	SymbolIdx symbolIdx = place.baseSymbolIdx;
 	Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 	TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+	bool baseIsRefLike = symbolType.is_ref_like();
 	short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 	short destOffset = this.bind_mir_register_get_offset(dest, mirInstruction.type);
 	if (place.isGlobal) {
@@ -284,7 +306,18 @@ fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction
 			.leftOffset = globalOffset + projectionOffset,
 			.rightOffset = runtime::NO_OFFSET,
 			.byteCount = mirInstruction.type.size(),
-			.immKind = BCOperandKind.MOVE_SIZE,
+			.immKind = BCOperandKind.SIZE,
+		};
+		this.push_instruction_get_idx(&instruction);
+	} else if (baseIsRefLike && place.projectionIdx != mir::NO_PROJECTION) {
+		short srcOffset = this.bind_symbol_get_offset(symbolIdx);
+		BCInstruction instruction = {
+			.opCode = BCOpCode.LOAD_REF_FIELD,
+			.destOffset = destOffset,
+			.leftOffset = srcOffset,
+			.rightOffset = projectionOffset,
+			.byteCount = mirInstruction.type.size(),
+			.immKind = BCOperandKind.SIZE,
 		};
 		this.push_instruction_get_idx(&instruction);
 	} else if (symbol.passMode != ParamPassMode.VALUE) {
@@ -295,7 +328,7 @@ fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction
 			.leftOffset = srcOffset,
 			.rightOffset = projectionOffset,
 			.byteCount = mirInstruction.type.size(),
-			.immKind = BCOperandKind.MOVE_SIZE,
+			.immKind = BCOperandKind.SIZE,
 		};
 		this.push_instruction_get_idx(&instruction);
 	} else {
@@ -317,7 +350,7 @@ fn void BCGenerator.lower_load_ref_value(BCGenerator* this, MirInstruction* mirI
 	BCInstruction instruction = {
 		.destOffset = destOffset,
 		.byteCount = mirInstruction.type.size(),
-		.immKind = BCOperandKind.MOVE_SIZE,
+		.immKind = BCOperandKind.SIZE,
 	};
 	if (place.isGlobal) {
 		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
@@ -351,7 +384,7 @@ fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOf
 		.immInt = runtime::NO_OFFSET,
 		.opCode = opCode,
 		.byteCount = bytesToMove,
-		.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.MOVE_SIZE: BCOperandKind.INVALID,
+		.immKind = opCode == BCOpCode.MOV_BYTES ? BCOperandKind.SIZE: BCOperandKind.INVALID,
 	};
 	this.bcOutput.instructions.push(instruction);
 }
@@ -368,6 +401,7 @@ fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstructio
 		SymbolIdx symbolIdx = place.baseSymbolIdx;
 		Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 		TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
+		bool baseIsRefLike = symbolType.is_ref_like();
 		short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
 		if (place.isGlobal) {
 			short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
@@ -379,7 +413,19 @@ fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstructio
 				.leftOffset = sourceOffset,
 				.rightOffset = runtime::NO_OFFSET,
 				.byteCount = mirInstruction.type.size(),
-				.immKind = BCOperandKind.MOVE_SIZE,
+				.immKind = BCOperandKind.SIZE,
+			};
+			this.push_instruction_get_idx(&instruction);
+		} else if (baseIsRefLike && place.projectionIdx != mir::NO_PROJECTION) {
+			short baseOffset = this.bind_symbol_get_offset(symbolIdx);
+			short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
+			BCInstruction instruction = {
+				.opCode = BCOpCode.STORE_REF_FIELD,
+				.destOffset = baseOffset,
+				.leftOffset = sourceOffset,
+				.rightOffset = projectionOffset,
+				.byteCount = mirInstruction.type.size(),
+				.immKind = BCOperandKind.SIZE,
 			};
 			this.push_instruction_get_idx(&instruction);
 		} else if (symbol.passMode != ParamPassMode.VALUE) {
@@ -392,7 +438,7 @@ fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstructio
 				.leftOffset = sourceOffset,
 				.rightOffset = projectionOffset,
 				.byteCount = mirInstruction.type.size(),
-				.immKind = BCOperandKind.MOVE_SIZE,
+				.immKind = BCOperandKind.SIZE,
 			};
 			this.push_instruction_get_idx(&instruction);
 		} else {
@@ -415,7 +461,7 @@ fn void BCGenerator.lower_store_ref_value(BCGenerator* this, MirInstruction* mir
 	BCInstruction instruction = {
 		.leftOffset = sourceOffset,
 		.byteCount = mirInstruction.type.size(),
-		.immKind = BCOperandKind.MOVE_SIZE,
+		.immKind = BCOperandKind.SIZE,
 	};
 	if (place.isGlobal) {
 		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);

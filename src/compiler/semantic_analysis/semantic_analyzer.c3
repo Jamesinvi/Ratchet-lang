@@ -547,7 +547,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		case ExprKind.STRING_LITERAL:	result = type_ok(make_type(ValueType.STRING_LITERAL));
 		case ExprKind.UNARY:			result = this.analyze_expr_unary(exprIdx);
 		case ExprKind.BINARY:			result = this.analyze_expr_binary(exprIdx);
-		case ExprKind.NEW:				result = this.create_type_from_ast(&expr.new.type, expr.span);
+		case ExprKind.NEW:				result = this.analyze_expr_new(exprIdx);
 		case ExprKind.THIS:				result = this.analyze_expr_this(exprIdx);
 		case ExprKind.CALL:				result = this.analyze_expr_call(exprIdx);
 		case ExprKind.MEMBER:			result = this.analyze_expr_member(exprIdx);
@@ -558,6 +558,28 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		this.symbolTable.exprTypes[exprIdx] = result.value;
 	}
 	return result;
+}
+
+fn TypeResult SemanticAnalyzer.analyze_expr_new(SemanticAnalyzer* this, ExprIdx exprIdx)
+{
+	Expr* expr = &this.ast.expressions[exprIdx];
+	TypeResult targetType = this.create_type_from_ast(&expr.new.type, expr.span);
+	// if we had an error return it. If instead we're allocating a non-ref lke value with new,
+	// it's a mistake: 
+	// int& a = new int { 5 } <- invalid
+	// int& a = new int& { 5 } <- valid
+	if (targetType.hadError || !targetType.value.is_ref_like()) {
+		return targetType.hadError ? targetType : this.type_error(ErrorKind.INVALID_TYPE, targetType.value, targetType.value, expr.span);
+	}
+	TypeResult initType = this.analyze_expr(expr.new.init);
+	if (initType.hadError) {
+		return initType;
+	}
+	TypeInfo pointeeType = targetType.value.pointee_type();
+	if (!common::type_info_matches(initType.value, pointeeType)) {
+		return this.type_error(ErrorKind.TYPE_MISMATCH, initType.value, pointeeType, expr.span);
+	}
+	return targetType;
 }
 
 fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, InternedString name, SymbolIdx* outSymbolIdx)
