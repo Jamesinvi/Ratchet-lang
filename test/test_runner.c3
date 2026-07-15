@@ -91,6 +91,11 @@ fn void t_16() @test
     compile_and_run_file("./test/16_borrow_params.ratc", "6\n11\n31\n17\n26\n")!!;
 }
 
+fn void t_17() @test
+{
+    compile_and_run_file("./test/17_struct_refs.ratc", "15\n22\n")!!;
+}
+
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;

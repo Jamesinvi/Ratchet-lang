@@ -1,0 +1,22 @@
+struct CounterRef {
+    int value;
+}
+
+fn null addToCounter(CounterRef& counter, int amount) {
+    counter.value = counter.value + amount;
+}
+
+fn bool program() {
+    CounterRef initial;
+    initial.value = 10;
+
+    CounterRef& first = new CounterRef& { initial };
+    CounterRef& second = first;
+
+    addToCounter(second, 5);
+    echo first.value;
+
+    second.value = 22;
+    echo first.value;
+    return false;
+}
