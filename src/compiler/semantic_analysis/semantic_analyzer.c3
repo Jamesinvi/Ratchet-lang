@@ -31,6 +31,7 @@ struct SemanticAnalyzer
 	DeclIdx currentStructDeclIdx;
 	SymbolIdx currentReceiverSymbolIdx;
 	int currentScopeIdx;
+	int currentLoopDepth;				// how many nested loops are we in?
 	bool returnFound;
 }
 
@@ -503,7 +504,10 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 			if (condType.value.type != ValueType.BOOL) {
 				return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
 			}
-			return this.analyze_stmt(stmt.whileStmt.body);
+			this.currentLoopDepth++;
+			TypeResult bodyTypeResult = this.analyze_stmt(stmt.whileStmt.body);
+			this.currentLoopDepth--;
+			return bodyTypeResult;
 		}
 		case StmtKind.RETURN:
 		{
@@ -523,6 +527,16 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 			}
 			return type_ok(valueType.value);
 		}
+		case StmtKind.BREAK:				
+			if(this.currentLoopDepth == 0) {
+				return this.type_error(ErrorKind.BREAK_WITHOUT_LOOP, nullType, nullType, stmt.span);
+			}
+			return type_ok(nullType);
+		case StmtKind.CONTINUE:				
+			if(this.currentLoopDepth == 0) {
+				return this.type_error(ErrorKind.CONTINUE_WITHOUT_LOOP, nullType, nullType, stmt.span);
+			}
+			return type_ok(nullType);
 		default:
 			return type_ok(make_type(ValueType.NULL));
 	}
@@ -670,7 +684,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_unary(SemanticAnalyzer* this, ExprId
 	}
 }
 
-fn TypeResult SemanticAnalyzer.analyze_expr_cast( SemanticAnalyzer* this,ExprIdx exprIdx)
+fn TypeResult SemanticAnalyzer.analyze_expr_cast(SemanticAnalyzer* this,ExprIdx exprIdx)
  {
     Expr* expr = &this.ast.expressions[exprIdx];
 

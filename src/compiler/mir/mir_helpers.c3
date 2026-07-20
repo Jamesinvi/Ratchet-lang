@@ -4,11 +4,11 @@ import compiler;
 
 MirOperand placeHolderOperand =  {.kind = MirOperandKind.INVALID, .regId= NO_REG};
 
-
-fn void MirGenerator.terminate_current_block_with_jump(MirGenerator* this, MirBlockIdx targetBlockIdx)
+fn MirTerminatorIdx MirGenerator.terminate_current_block_with_jump(MirGenerator* this, MirBlockIdx targetBlockIdx)
 {
     this.seal_current_block();
-    this.add_jump_to_current_block(targetBlockIdx);
+    MirTerminatorIdx retValue = this.add_jump_to_current_block(targetBlockIdx);
+	return retValue;
 }
 
 <* 
@@ -20,10 +20,10 @@ fn void MirGenerator.seal_current_block(MirGenerator* this)
     block.instructionsEnd = this.instructions_len();
 }
 
-fn void MirGenerator.add_jump_to_current_block(MirGenerator* this, MirBlockIdx targetBlockIdx)
+fn MirTerminatorIdx MirGenerator.add_jump_to_current_block(MirGenerator* this, MirBlockIdx targetBlockIdx)
 {
     MirBlock* block = &this.output.blocks[this.currentBlock];
-    if (block.terminator != NO_TERMINATOR) return;
+    if (block.terminator != NO_TERMINATOR) return NO_TERMINATOR;
 
     OperandIdx jumpStart = this.operands_len();
     this.output.operands.push({ .kind = MirOperandKind.BLOCK, .blockIdx = targetBlockIdx });
@@ -36,6 +36,12 @@ fn void MirGenerator.add_jump_to_current_block(MirGenerator* this, MirBlockIdx t
     };
 
     block.terminator = this.push_terminator_get_idx(&jumpTerm);
+	return block.terminator;
+}
+
+fn bool MirGenerator.is_current_block_terminated(MirGenerator* this) @inline
+{
+	return this.output.blocks[this.currentBlock].terminator != NO_TERMINATOR;
 }
 
 fn MirBlockIdx MirGenerator.push_empty_block_get_idx(MirGenerator* this)

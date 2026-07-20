@@ -104,10 +104,40 @@ fn StmtIdx Parser.statement(Parser* this)
 	{
 		return this.return_statement();
 	}
+	else if (this.match(TokenType.BREAK))
+	{
+		return this.break_statement();
+	}
+	else if (this.match(TokenType.CONTINUE))
+	{
+		return this.continue_statement();
+	}
 	else
 	{
 		return this.expression_statement();
 	}
+}
+
+fn StmtIdx Parser.break_statement(Parser* this)
+{
+	debug::@log_parse("break statement at %s", (this.previous - 1).value());
+	int line        = this.current.line;
+	this.consume(TokenType.SEMICOLON, "Expected ';' after break");
+
+	Stmt stmt = { .kind = StmtKind.BREAK };
+	stmt.span = { .line = line };
+	return this.push_stmt_get_idx(&stmt);
+}
+
+fn StmtIdx Parser.continue_statement(Parser* this)
+{
+	debug::@log_parse("continue statement at %s", (this.previous - 1).value());
+	int line        = this.current.line;
+	this.consume(TokenType.SEMICOLON, "Expected ';' after continue");
+
+	Stmt stmt = { .kind = StmtKind.CONTINUE };
+	stmt.span = { .line = line };
+	return this.push_stmt_get_idx(&stmt);
 }
 
 fn StmtIdx Parser.expression_statement(Parser* this)

@@ -3,7 +3,7 @@ import globals;
 import log;
 import std::collections::list;
 
-enum TokenType : uint {
+enum TokenType : ushort {
     // Single-character tokens.
     LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE,
     COMMA, DOT, MINUS, PLUS, SEMICOLON, SLASH, STAR,
@@ -18,7 +18,7 @@ enum TokenType : uint {
     // Keywords.
     AND, CLASS, ELSE, FALSE, FN, FOR, IF, NULL, OR,
     PRINT, RETURN, SUPER, THIS, TRUE, WHILE, ECHO,
-    METHOD, AS, NEW, IN, INOUT,
+    METHOD, AS, NEW, IN, INOUT, BREAK, CONTINUE,
 
     // Types
     INTEGER_T, FLOAT_T, DOUBLE_T, STRUCT_T, BOOL_T,
@@ -75,6 +75,8 @@ Keyword[*] keywords = {
     {.tokenType = METHOD, .string = "method"},
     {.tokenType = IN, .string = "in"},
     {.tokenType = INOUT, .string = "inout"},
+    {.tokenType = BREAK, .string = "break"},
+    {.tokenType = CONTINUE, .string = "continue"},
 };
 
 // -------------Token based matches--------------
@@ -87,12 +89,12 @@ fn bool Token.matches_type(Token* t, TokenType toCheck) @inline
 
 fn bool Token.is_any_type(Token* t)
 {
-    return  t.is_builtin_type() 		||
-            t.is_struct_type()          ||
-            t.is_builtin_ref_like()   		||
-            t.is_builtin_ptr()   		||
-            t.is_struct_ref()			||
-            t.is_struct_ptr();
+    return  t.is_builtin_type()
+        	|| t.is_struct_type()
+            || t.is_builtin_ref_like()
+            || t.is_builtin_ptr()
+			|| t.is_struct_ref()
+            || t.is_struct_ptr();
 }
 
 fn bool Token.is_struct_type(Token* t)

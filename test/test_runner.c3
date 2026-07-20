@@ -96,6 +96,11 @@ fn void t_17() @test
     compile_and_run_file("./test/17_struct_refs.ratc", "15\n22\n")!!;
 }
 
+fn void t_18() @test
+{
+    compile_and_run_file("./test/18_break_continue.ratc", "1\n3\n4\n")!!;
+}
+
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;

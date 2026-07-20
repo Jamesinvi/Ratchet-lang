@@ -90,14 +90,16 @@ struct MethodAnalysisInfo
 
 enum ErrorKind : char (String asStr)
 {
-	TYPE_MISMATCH   	{ "Type mismatch" },
-	UNRESOLVED_STRUCT	{ "Struct type was unresolved. Circular reference?"},
-	INVALID_TYPE    	{ "Invalid type" },
-	INVALID_LVALUE  	{ "Invalid lvalue" },
-	INVALID_ARITY   	{ "Invalid argument count" },
-	UNDECLARED_NAME 	{ "Undeclared name" },
-	NO_RETURN       	{ "No return" },
-	INVALID_GLOBAL_INITIALIZER { "Global initializer must be a constant value" },
+	TYPE_MISMATCH   			{ "Type mismatch" },
+	UNRESOLVED_STRUCT			{ "Struct type was unresolved. Circular reference?"},
+	INVALID_TYPE    			{ "Invalid type" },
+	INVALID_LVALUE  			{ "Invalid lvalue" },
+	INVALID_ARITY   			{ "Invalid argument count" },
+	UNDECLARED_NAME 			{ "Undeclared name" },
+	NO_RETURN       			{ "No return" },
+	INVALID_GLOBAL_INITIALIZER 	{ "Global initializer must be a constant value" },
+	CONTINUE_WITHOUT_LOOP		{ "continue statement is only allowed inside a loop" },
+	BREAK_WITHOUT_LOOP			{ "break statement is only allowed inside a loop" },
 }
 
 struct TypeResult

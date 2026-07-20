@@ -17,10 +17,11 @@ enum MirGenResult
 
 struct MirGenerator
 {
-	ProgramAst* inputAst;		// input
-	SymbolTable* symbolTable;	// input
-	MirProgram output;			// output	
-	List{MirOperand} bindings; 	// temp, Indexed by SymbolIdx
+	ProgramAst* inputAst;					// input
+	SymbolTable* symbolTable;				// input
+	MirProgram output;						// output	
+	List{MirOperand} bindings; 				// temp, Indexed by SymbolIdx
+	Stack{MirLoopContext} loopContexts;		// temp, Indexed by loop depth
 	DynamicArenaAllocator localAllocator;
 	Allocator outputAllocator;
 	MirRegisterID currentReg;
@@ -64,6 +65,7 @@ fn void MirGenerator.init(MirGenerator* this, ProgramAst* inputAst, SymbolTable*
 fn void MirGenerator.deinit(MirGenerator* this)
 {
 	this.localAllocator.free();
+	this.loopContexts.free();
 }
 
 fn MirGenResult MirGenerator.run(MirGenerator* this)
@@ -197,6 +199,10 @@ fn void MirGenerator.lower_function_body(MirGenerator* this, MirFunctionIdx func
 	this.currentBlock = blockIdx;
 
 	foreach(stmtIdx : bodyBlock.stmts){
+		// exit block if already terminated by break/continue/return etc
+		if(this.is_current_block_terminated()){
+			break;
+		}
 		this.lower_stmt(stmtIdx);
 	}
 
@@ -225,6 +231,8 @@ fn void MirGenerator.lower_stmt(MirGenerator* this, StmtIdx stmtIdx)
 		case StmtKind.IF:		this.lower_if(stmtIdx);
 		case StmtKind.WHILE:    this.lower_while(stmtIdx);
 		case StmtKind.RETURN:	this.lower_return(stmtIdx);
+		case StmtKind.BREAK:	this.lower_break(stmtIdx);
+		case StmtKind.CONTINUE:	this.lower_continue(stmtIdx);
 		case StmtKind.EXPR:		this.lower_expr(stmt.exprStmt);
 		default: 
 		{
@@ -288,7 +296,14 @@ fn void MirGenerator.lower_while(MirGenerator* this, StmtIdx stmtIdx)
 
     // 4. Lower body.
     this.currentBlock = bodyBlockIdx;
+	this.loopContexts.push({});
+	this.loopContexts.peek_ref().breakTargets.init(&this.localAllocator);
+	this.loopContexts.peek_ref().continueTarget = condBlockIdx;
     foreach (bodyStmtIdx : body.stmts) {
+		// exit block if already terminated by break/continue/return etc
+		if(this.is_current_block_terminated()){
+			break;
+		}
         this.lower_stmt(bodyStmtIdx);
     }
 
@@ -299,7 +314,18 @@ fn void MirGenerator.lower_while(MirGenerator* this, StmtIdx stmtIdx)
     MirBlockIdx joinBlockIdx = this.push_empty_block_get_idx();
     this.output.operands[(sz)branchStart + 2].blockIdx = joinBlockIdx;
 
-    // 7. Continue after loop.
+	// 7. Patch every "break" jump produced while lowering this loop body.
+    MirLoopContext loopContext = this.loopContexts.pop();
+    foreach (breakTerminatorIdx : loopContext.breakTargets) {
+        MirTerminator* breakTerminator = &this.output.terminators[breakTerminatorIdx];
+        assert(breakTerminator.opCode == MirTerminatorOp.JUMP);
+
+        OperandIdx targetOperandIdx = breakTerminator.operandsStart;
+        this.output.operands[targetOperandIdx].blockIdx = joinBlockIdx;
+    }
+
+
+    // 8. Continue after loop.
     this.currentBlock = joinBlockIdx;
 }
 
@@ -337,6 +363,10 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
     this.currentBlock = thenBlockIdx;
     
     foreach (thenStmtIdx : thenStmt.stmts) {
+		// exit block if already terminated by break/continue/return etc
+		if(this.is_current_block_terminated()){
+			break;
+		}
         this.lower_stmt(thenStmtIdx);
     }
     
@@ -351,6 +381,10 @@ fn void MirGenerator.lower_if(MirGenerator* this, StmtIdx stmtIdx)
         this.currentBlock = elseBlockIdx;
     
         foreach (elseStmtIdx : elseStmt.stmts) {
+			// exit block if already terminated by break/continue/return etc
+			if(this.is_current_block_terminated()){
+				break;
+			}
             this.lower_stmt(elseStmtIdx);
         }
     
@@ -471,6 +505,21 @@ fn void MirGenerator.lower_return(MirGenerator* this, StmtIdx stmtIdx)
 
 	MirTerminatorIdx termIdx = this.push_terminator_get_idx(&term);
 	this.output.blocks[this.currentBlock].terminator = termIdx;
+}
+
+fn void MirGenerator.lower_break(MirGenerator* this, StmtIdx stmtIdx)
+{
+	Stmt* stmt = &this.inputAst.statements[stmtIdx];
+	debug::@log_mir("lowering break");
+	MirTerminatorIdx breakTerminatorIdx = this.terminate_current_block_with_jump(NO_BLOCK);
+	this.loopContexts.peek_ref().breakTargets.push(breakTerminatorIdx);
+}
+
+fn void MirGenerator.lower_continue(MirGenerator* this, StmtIdx stmtIdx)
+{
+	Stmt* stmt = &this.inputAst.statements[stmtIdx];
+	debug::@log_mir("lowering continue");
+	MirTerminatorIdx continueTerminatorIdx = this.terminate_current_block_with_jump(this.loopContexts.peek().continueTarget);
 }
 
 fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)

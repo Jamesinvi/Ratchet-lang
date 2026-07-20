@@ -24,7 +24,13 @@ bitstruct MirRegisterFlags : char
 {
 	bool isConst;
 	bool isParam;
+}
 
+// Used to track the loop depth, so it's possible to break/continue correctly
+struct MirLoopContext
+{
+	MirBlockIdx continueTarget;
+	List{MirTerminatorIdx} breakTargets;
 }
 
 struct MirRegister

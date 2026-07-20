@@ -174,6 +174,8 @@ enum StmtKind : char
     BLOCK,
     RETURN,
     FOR,    // for(DECL,expr,expr)
+	BREAK,
+	CONTINUE,
 }
 
 struct VarDeclStmt  { TypeAst type; NameIdx nameIdx;    ExprIdx init;}
@@ -317,20 +319,21 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
     switch (stmt.kind)
     {
         case StmtKind.ECHO:
-        {
             this.print_indent(indent);
             log::log("echo ");
             this.print_expression(&this.expressions[stmt.echoStmt]);
             log::logn(";");
-        }
+		case StmtKind.BREAK:
+            this.print_indent(indent);
+            log::logn("break;");	
+		case StmtKind.CONTINUE:
+            this.print_indent(indent);
+            log::logn("continue;");
         case StmtKind.EXPR:
-        {
             this.print_indent(indent);
             this.print_expression(&this.expressions[stmt.exprStmt]);
             log::logn(";");
-        }
         case StmtKind.RETURN:
-        {
             this.print_indent(indent);
             log::log("return");
             if (stmt.retStmt.value != NO_IDX) {
@@ -338,9 +341,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
                 this.print_expression(&this.expressions[stmt.retStmt.value]);
             }
             log::logn(";");
-        }
         case StmtKind.DECL:
-        {
             this.print_indent(indent);
             InternedString typeName = this.names[stmt.varDecl.type.nameIdx];
             InternedString name = this.names[stmt.varDecl.nameIdx];
@@ -350,9 +351,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
                 this.print_expression(&this.expressions[stmt.varDecl.init]);
             }
             log::logn(";");
-        }
         case StmtKind.IF:
-        {
             this.print_indent(indent);
             log::log("if (");
             this.print_expression(&this.expressions[stmt.ifStmt.cond]);
@@ -367,9 +366,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
                 this.print_indent(indent);
                 log::logn("}");
             }
-        }
         case StmtKind.WHILE:
-        {
             this.print_indent(indent);
             log::log("while (");
             this.print_expression(&this.expressions[stmt.whileStmt.cond]);
@@ -377,9 +374,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
             this.print_statement(&this.statements[stmt.whileStmt.body], indent + 2);
             this.print_indent(indent);
             log::logn("}");
-        }
         case StmtKind.BLOCK:
-        {
             this.print_indent(indent);
             log::logn("{");
             foreach(childIdx : stmt.blockStmt.stmts){
@@ -387,12 +382,9 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
             }
             this.print_indent(indent);
             log::logn("}");
-        }
         default:
-        {
             this.print_indent(indent);
             log::logn("// stmt not implemented");
-        }
     }
 }
 
@@ -409,26 +401,19 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 		case ExprKind.THIS:             log::log("@this");
         case ExprKind.VAR:              log::log("%s", this.names[expr.varExpr].text());
         case ExprKind.CAST:             
-		{
 			log::log("(");
             this.print_expression(&this.expressions[expr.cast.value]);
 			log::log(" as %s)", this.names[expr.cast.targetType.nameIdx].text());
-		}
         case ExprKind.UNARY:
-        {
             log::log("%s", expr.unary.op.asStr);
             this.print_expression(&this.expressions[expr.unary.rhs]);
-        }
         case ExprKind.BINARY:
-        {
             log::log("(");
             this.print_expression(&this.expressions[expr.binary.lhs]);
             log::log(" %s ", (expr.binary.op.asStr));
             this.print_expression(&this.expressions[expr.binary.rhs]);
             log::log(")");
-        }
         case ExprKind.CALL:
-        {
 			log::log("call ");
             this.print_expression(&this.expressions[expr.call.callee]);
             log::log("(");
@@ -440,20 +425,15 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 				counter++;
             }
             log::log(")");
-        }
         case ExprKind.MEMBER:
-        {
             this.print_expression(&this.expressions[expr.member.base]);
             InternedString member = this.names[expr.member.memberIdx];
             log::log(".%s", member.text());
-        }
         case ExprKind.NEW:
-        {
 			InternedString typeName = this.names[expr.new.type.nameIdx];
 		    log::log("new <%s> { ", typeName.text());
 			this.print_expression(&this.expressions[expr.new.init]);
 			log::log("}");
-        }
         case ExprKind.GROUP:            log::log("(<group>)");
         default:                        log::log("<?expr?>");
     }

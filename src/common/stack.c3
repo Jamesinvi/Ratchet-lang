@@ -44,6 +44,11 @@ fn Type Stack.peek(Stack* this) @inline
     return this.items[this.size-1];
 }
 
+fn Type* Stack.peek_ref(Stack* this) @inline
+{
+	return &this.items[this.size-1];
+}
+
 fn Type Stack.peek_at(Stack* this, int distance) @inline
 {
     return this.items[this.size-1-distance];
