@@ -1,21 +1,18 @@
-struct Point{
-	int x;
-	int y;
-	int z;
-}
-
-fn null prinaaat(Point& p){
-	echo(p.x);
-	echo(p.y);
-	echo(p.z);
-}
-
 // Entry-point. Should return true if errors occurred
 fn bool program(){
-	Point t;
-	Point& a = new Point& { t };
-	a.x = 12;
-	prinaaat(a);
-
+	int i = 0;
+	while (i < 100){
+		if( i / 2 == 4){
+			echo ("ahahaha");
+			i = i +1;
+			continue;
+		}
+		if( i > 10){
+			break;
+		}
+		i = i +1;
+	}
+	echo i;
+	
 	return false;
 }

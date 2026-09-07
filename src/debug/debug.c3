@@ -6,38 +6,38 @@ import common;
 import log;
 
 macro @print_tokens(lexer::Lexer* sc){
-    $if ($feature(SHOW_TOKENS)):
+    $if ($feat(SHOW_TOKENS)):
         sc.print_tokens();
     $endif
 }
 
 macro @log_parse(String msg, args ...){
-    $if ($feature(TRACE_PARSER)):
+    $if ($feat(TRACE_PARSER)):
         log::logn(msg,...args);
     $endif
 }
 
 macro @log_analysis(String msg, args ...){
-    $if ($feature(TRACE_ANALYSIS)):
+    $if ($feat(TRACE_ANALYSIS)):
         log::logn(msg,...args);
     $endif
 }
 
 macro @log_mir(String msg, args ...){
-    $if ($feature(TRACE_MIR)):
+    $if ($feat(TRACE_MIR)):
         log::logn(msg,...args);
     $endif
 }
 
 macro @log_bytecode(String msg, args ...){
-    $if ($feature(TRACE_BYTECODE)):
+    $if ($feat(TRACE_BYTECODE)):
         log::logn(msg,...args);
     $endif
 }
 
 macro @print_type_stack(Stack{TypeInfo}* typeStack)
 {
-    $if ($feature(TRACE_COMPILATION)):
+    $if ($feat(TRACE_COMPILATION)):
         log::logn("------Compilation type stack-----");
         if(typeStack.size == 0){
             log::logn("empty!\n---------------------");
