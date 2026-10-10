@@ -8,6 +8,7 @@ struct StackFrame
 	BCInstruction* returnPtr;
 	BCCallInfoIdx callInfoIdx;
 	short returnDestOffset;
- 	short returnSize;
+	short returnSize;
 	short size;
 }
+

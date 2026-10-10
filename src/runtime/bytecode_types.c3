@@ -21,193 +21,194 @@ const BCInstruction NO_OP = {
 	.leftOffset = NO_OFFSET,
 	.rightOffset = NO_OFFSET,
 };
-	
+
 enum BCOpCode : char (String asStr)
 {
-	NOP							{ "_________" },
-	ADDI	        			{ "add_____i" },
-	ADDF	        			{ "add_____f" },
-	ADDD	        			{ "add_____d" },
-	ADDI_IM						{ "add___i_k" },
-	INCREMENT					{ "inc_____1" },
-	SUBI	        			{ "sub_____i" },
-	SUBF	        			{ "sub_____f" },
-	SUBD	        			{ "sub_____d" },
-	MULI	        			{ "mul_____i" },
-	MULF	        			{ "mul_____f" },
-	MULD	        			{ "mul_____d" },
-	DIVI	        			{ "div_____i" },
-	DIVF	        			{ "div_____f" },
-	DIVD	        			{ "div_____d" },
-	MOVI	        			{ "mov_____i" },
-	MOVF	        			{ "mov_____f" },
-	MOVD	        			{ "mov_____d" },
-	MOVB	        			{ "mov_____b" },
-	MOV_REF	        			{ "mov___ref" },
-	LOAD_BORROW					{ "load_borw" },
-	LOAD_REF_VALUE				{ "loadref_v" },
-	LOAD_REF_FIELD				{ "loadref_f" },
-	STORE_BORROW				{ "stor_borw" },
-	STORE_REF_VALUE				{ "storref_v" },
-	STORE_REF_FIELD				{ "storref_f" },
-	LOAD_GLOBAL					{ "load__glb" },
-	LOAD_GLOBAL_REF_VALUE		{ "loadglb_v" },
-	STORE_GLOBAL				{ "stor__glb" },
-	STORE_GLOBAL_REF_VALUE		{ "storglb_v" },
-	AND							{ "and_____b" },
-	OR							{ "or______b" },
-	MOV_BYTES	    			{ "mov_bytes" },
-	ZERO_BYTES	    			{ "zerobytes" },
-	CONSTI	        			{ "const___i" },
-	CONSTF	        			{ "const___f" },
-	CONSTD	        			{ "const___d" },
-	CONSTB	        			{ "const___b" },
-	CONSTS	        			{ "const___s" },
-	STORI	        			{ "store___i" },
-	STORF	        			{ "store___f" },
-	STORD	        			{ "store___d" },
-	EQI		        			{ "equal___i" },
-	EQF		        			{ "equal___f" },
-	EQD		        			{ "equal___d" },
-	EQB		        			{ "equal___b" },
-	NEQI	        			{ "not_eq__i" },
-	NEQF	        			{ "not_eq__f" },
-	NEQD	        			{ "not_eq__d" },
-	NEQB	        			{ "not_eq__b" },
-	LESSI	        			{ "less____i" },
-	LESSI_IM	    			{ "less__i_k" },
-	LESSF	        			{ "less____f" },
-	LESSD	        			{ "less____d" },
-	LESS_EQI	    			{ "less_eq_i" },
-	LESS_EQF	    			{ "less_eq_f" },
-	LESS_EQD	    			{ "less_eq_d" },
-	GREATERI        			{ "greater_i" },
-	GREATERF        			{ "greater_f" },
-	GREATERD        			{ "greater_d" },
-	GREATER_EQI     			{ "great_eqi" },
-	GREATER_EQF     			{ "great_eqf" },
-	GREATER_EQD     			{ "great_eqd" },
-	JUMP	        			{ "jump_____" },
-	BRANCH_IF_FALSE				{ "br_false_" },
-	CALL  	        			{ "call_____" },
-	RETURN 	        			{ "return___" },
-	ECHOI           			{ "echo____i" },
-	ECHOF           			{ "echo____f" },
-	ECHOD           			{ "echo____d" },
-	ECHOB           			{ "echo____b" },
-	ECHOS           			{ "echo____s" },
-	ECHO_REF        			{ "echo__ref" },
-	CAST						{ "cast_____" },
-	ALLOC_GC					{ "alloc__gc" },
+	NOP                    { "_________" },
+	ADDI                   { "add_____i" },
+	ADDF                   { "add_____f" },
+	ADDD                   { "add_____d" },
+	ADDI_IM                { "add___i_k" },
+	INCREMENT              { "inc_____1" },
+	SUBI                   { "sub_____i" },
+	SUBF                   { "sub_____f" },
+	SUBD                   { "sub_____d" },
+	MULI                   { "mul_____i" },
+	MULF                   { "mul_____f" },
+	MULD                   { "mul_____d" },
+	DIVI                   { "div_____i" },
+	DIVF                   { "div_____f" },
+	DIVD                   { "div_____d" },
+	MOVI                   { "mov_____i" },
+	MOVF                   { "mov_____f" },
+	MOVD                   { "mov_____d" },
+	MOVB                   { "mov_____b" },
+	MOV_REF                { "mov___ref" },
+	LOAD_BORROW            { "load_borw" },
+	LOAD_REF_VALUE         { "loadref_v" },
+	LOAD_REF_FIELD         { "loadref_f" },
+	STORE_BORROW           { "stor_borw" },
+	STORE_REF_VALUE        { "storref_v" },
+	STORE_REF_FIELD        { "storref_f" },
+	LOAD_GLOBAL            { "load__glb" },
+	LOAD_GLOBAL_REF_VALUE  { "loadglb_v" },
+	STORE_GLOBAL           { "stor__glb" },
+	STORE_GLOBAL_REF_VALUE { "storglb_v" },
+	AND                    { "and_____b" },
+	OR                     { "or______b" },
+	MOV_BYTES              { "mov_bytes" },
+	ZERO_BYTES             { "zerobytes" },
+	CONSTI                 { "const___i" },
+	CONSTF                 { "const___f" },
+	CONSTD                 { "const___d" },
+	CONSTB                 { "const___b" },
+	CONSTS                 { "const___s" },
+	STORI                  { "store___i" },
+	STORF                  { "store___f" },
+	STORD                  { "store___d" },
+	EQI                    { "equal___i" },
+	EQF                    { "equal___f" },
+	EQD                    { "equal___d" },
+	EQB                    { "equal___b" },
+	NEQI                   { "not_eq__i" },
+	NEQF                   { "not_eq__f" },
+	NEQD                   { "not_eq__d" },
+	NEQB                   { "not_eq__b" },
+	LESSI                  { "less____i" },
+	LESSI_IM               { "less__i_k" },
+	LESSF                  { "less____f" },
+	LESSD                  { "less____d" },
+	LESS_EQI               { "less_eq_i" },
+	LESS_EQF               { "less_eq_f" },
+	LESS_EQD               { "less_eq_d" },
+	GREATERI               { "greater_i" },
+	GREATERF               { "greater_f" },
+	GREATERD               { "greater_d" },
+	GREATER_EQI            { "great_eqi" },
+	GREATER_EQF            { "great_eqf" },
+	GREATER_EQD            { "great_eqd" },
+	JUMP                   { "jump_____" },
+	BRANCH_IF_FALSE        { "br_false_" },
+	CALL                   { "call_____" },
+	RETURN                 { "return___" },
+	ECHOI                  { "echo____i" },
+	ECHOF                  { "echo____f" },
+	ECHOD                  { "echo____d" },
+	ECHOB                  { "echo____b" },
+	ECHOS                  { "echo____s" },
+	ECHO_REF               { "echo__ref" },
+	CAST                   { "cast_____" },
+	ALLOC_GC               { "alloc__gc" },
 }
 
 
 enum BCCastKind : char (String asStr)
 {
-	IDENTITY			{ "nocast"},
-    INT_TO_FLOAT		{ "i->f"},	
-	INT_TO_DOUBLE		{ "i->d"},
-	FLOAT_TO_INT		{ "f->i"},
-	FLOAT_TO_DOUBLE		{ "f->d"},
-	DOUBLE_TO_INT		{ "d->i"},
-	DOUBLE_TO_FLOAT		{ "d->f"},
+	IDENTITY        { "nocast" },
+	INT_TO_FLOAT    { "i->f" },
+	INT_TO_DOUBLE   { "i->d" },
+	FLOAT_TO_INT    { "f->i" },
+	FLOAT_TO_DOUBLE { "f->d" },
+	DOUBLE_TO_INT   { "d->i" },
+	DOUBLE_TO_FLOAT { "d->f" },
 }
 
 
 enum BCOpCodeCategory : char (String asStr)
 {
-	ADD			{ "add" },
-	SUB			{ "sub" },
-	MUL			{ "mul" },
-	DIV			{ "mul" },
-	MOV			{ "mov" },
-	CONST		{ "const" },
-	STOR		{ "store" },
-	EQ			{ "equal" },
-	NEQ			{ "not equal" },
-	LESS		{ "less" },
-	LESS_EQ		{ "less equal" },
-	GREATER		{ "greater" },
-	GREATER_EQ 	{ "greater equal" },
-	AND			{ "and" },
-	OR			{ "or" },
-	JUMP		{ "jump" },
-	BRANCH		{ "branch" },
-	CALL  		{ "call" },
-	RETURN 		{ "return" },
+	ADD        { "add" },
+	SUB        { "sub" },
+	MUL        { "mul" },
+	DIV        { "mul" },
+	MOV        { "mov" },
+	CONST      { "const" },
+	STOR       { "store" },
+	EQ         { "equal" },
+	NEQ        { "not equal" },
+	LESS       { "less" },
+	LESS_EQ    { "less equal" },
+	GREATER    { "greater" },
+	GREATER_EQ { "greater equal" },
+	AND        { "and" },
+	OR         { "or" },
+	JUMP       { "jump" },
+	BRANCH     { "branch" },
+	CALL       { "call" },
+	RETURN     { "return" },
 }
 
 
 enum BCOperandKind : char (String asStr)
 {
-	INVALID		{ "invalid!" },
-	REGISTER 	{ "reg" },
-	PLACE 		{ "place" },
-	IMM_INT 	{ "imm_i" },
-	IMM_FLOAT 	{ "imm_f" },
-	IMM_DOUBLE  { "imm_d" },
-	IMM_BOOL 	{ "imm_b" },
-	IMM_STRING 	{ "imm_s" },
-	IMM_NULL 	{ "null" },
-	BLOCK 		{ "block" },
-	FUNCTION 	{ "fn" },
-	SIZE		{ "size" },
-	CAST_TYPE	{ "cast_type" },
-	TYPE_INFO	{ "type_info" },
+	INVALID    { "invalid!" },
+	REGISTER   { "reg" },
+	PLACE      { "place" },
+	IMM_INT    { "imm_i" },
+	IMM_FLOAT  { "imm_f" },
+	IMM_DOUBLE { "imm_d" },
+	IMM_BOOL   { "imm_b" },
+	IMM_STRING { "imm_s" },
+	IMM_NULL   { "null" },
+	BLOCK      { "block" },
+	FUNCTION   { "fn" },
+	SIZE       { "size" },
+	CAST_TYPE  { "cast_type" },
+	TYPE_INFO  { "type_info" },
 }
 
 struct BCInstruction
 {
-    union {
-        int immInt;
-        float immFloat;
-        double immDouble;
+	union
+	{
+		int immInt;
+		float immFloat;
+		double immDouble;
 		bool immBool;
 		StringIdx immStringIdx;
 		TypeInfo typeInfo;
 		ushort byteCount;
-	    BCCastKind castKind;
+		BCCastKind castKind;
 		BCCallInfoIdx callInfoIdx;
-		BCBlockIdx  blockToJumpTo;
-    }
-	short 		destOffset;
-	short 		leftOffset;
-	short 		rightOffset;
-    BCOpCode 	opCode;
-    BCOperandKind immKind;
+		BCBlockIdx blockToJumpTo;
+	}
+	short destOffset;
+	short leftOffset;
+	short rightOffset;
+	BCOpCode opCode;
+	BCOperandKind immKind;
 }
 
 struct BCFunction
 {
-	BCFunctionIdx 		idx;
-	SymbolIdx 			symbolIdx;
-	BCFrameSlotIdx 		layoutStart;
-	BCFrameSlotIdx 		layoutEnd;
-	BCBlockIdx          blocksStart;
-	BCBlockIdx	        blocksEnd;
-	short 				frameSize;
+	BCFunctionIdx idx;
+	SymbolIdx symbolIdx;
+	BCFrameSlotIdx layoutStart;
+	BCFrameSlotIdx layoutEnd;
+	BCBlockIdx blocksStart;
+	BCBlockIdx blocksEnd;
+	short frameSize;
 }
 
 struct BCFrameSlot
 {
-	SymbolIdx 		symbolIdx;
-	short 			offset;
-	short 			size;
-	ValueType 		type;
+	SymbolIdx symbolIdx;
+	short offset;
+	short size;
+	ValueType type;
 }
 
 struct BCGlobalSlot
 {
-	SymbolIdx 		symbolIdx;
-	short 			offset;
-	short 			size;
-	ValueType 		type;
+	SymbolIdx symbolIdx;
+	short offset;
+	short size;
+	ValueType type;
 }
 
 struct BCCallInfo
 {
 	BCFunctionIdx calleeIdx;
-    BCArgIdx argsStart;
+	BCArgIdx argsStart;
 	BCArgIdx argsEnd;
 	short returnDestOffset; // caller-frame offset, or NO_OFFSET if discarded
 	short returnSize;
@@ -219,17 +220,17 @@ struct BCCallArg
 	short calleeOffset; // aligned parameter offset in callee frame
 	short size;
 	short projectionOffset;
-    ValueType type;
+	ValueType type;
 	bool isBorrow;
 	bool callerIsBorrow;
 }
 
 struct BCBlock
 {
-    BCInstructionIdx instructionsStart;
-    BCInstructionIdx instructionsEnd;
-    BCInstructionIdx terminatorsStart;
-    BCInstructionIdx terminatorsEnd;
+	BCInstructionIdx instructionsStart;
+	BCInstructionIdx instructionsEnd;
+	BCInstructionIdx terminatorsStart;
+	BCInstructionIdx terminatorsEnd;
 }
 
 struct BCProjection
@@ -239,17 +240,17 @@ struct BCProjection
 
 struct BCProgram
 {
-	BCFunctionIdx 			entryFunctionIdx;
-	List{BCFunction}		functions;
-	List{BCFrameSlot} 		functionFrameSlots;
-	List{BCBlock}       	blocks;
-	List{BCInstruction} 	instructions;
-	List{BCCallArg} 		callArgs;
-	List{BCCallInfo}		callInfos;
-	List{String}			strings;	// Indexed by StringIdx
-	List{BCGlobalSlot} 		globalSlots;
-	List{char}				globalInitialData;
-	short					globalMemorySize;
+	BCFunctionIdx entryFunctionIdx;
+	List{BCFunction} functions;
+	List{BCFrameSlot} functionFrameSlots;
+	List{BCBlock} blocks;
+	List{BCInstruction} instructions;
+	List{BCCallArg} callArgs;
+	List{BCCallInfo} callInfos;
+	List{String} strings; // Indexed by StringIdx
+	List{BCGlobalSlot} globalSlots;
+	List{char} globalInitialData;
+	short globalMemorySize;
 }
 
 fn void BCProgram.init(BCProgram* this, Allocator allocator)
@@ -269,7 +270,8 @@ fn void BCProgram.print(BCProgram* this)
 {
 	log::logn("---------- BYTECODE ----------");
 	log::logn("global slots:");
-	foreach (&slot : this.globalSlots) {
+	foreach (&slot : this.globalSlots)
+	{
 		log::logn("  symbolIdx:%s | offset:%s | size:%s | type:%s", slot.symbolIdx, slot.offset, slot.size, slot.type);
 	}
 	log::logn("");
@@ -277,17 +279,20 @@ fn void BCProgram.print(BCProgram* this)
 	{
 		log::logn("function_%s symbolIdx=%s", fun.idx, fun.symbolIdx);
 		log::logn("  frame_slots:");
-		for (int slotIdx = fun.layoutStart; slotIdx < fun.layoutEnd; slotIdx++) {
-			if (slotIdx >= this.functionFrameSlots.len()) {
+		for (int slotIdx = fun.layoutStart; slotIdx < fun.layoutEnd; slotIdx++)
+		{
+			if (slotIdx >= this.functionFrameSlots.len())
+			{
 				log::logn("    <bad-slot-idx:%s>", slotIdx);
 				continue;
 			}
 			this.print_frame_slot(slotIdx, this.functionFrameSlots[slotIdx]);
 		}
 		log::logn("  instructions:");
-		for (int blockIdx = fun.blocksStart; blockIdx < fun.blocksEnd; blockIdx++){
-		    log::logn("  block_%s", blockIdx);
-		    this.print_block(blockIdx);
+		for (int blockIdx = fun.blocksStart; blockIdx < fun.blocksEnd; blockIdx++)
+		{
+			log::logn("  block_%s", blockIdx);
+			this.print_block(blockIdx);
 		}
 		log::logn("");
 	}
@@ -296,23 +301,27 @@ fn void BCProgram.print(BCProgram* this)
 
 fn void BCProgram.print_block(BCProgram* this, BCBlockIdx idx)
 {
-    BCBlock* block = &this.blocks[idx];
-    for (int instIdx = block.instructionsStart; instIdx < block.instructionsEnd; instIdx++) {
-        if (instIdx >= this.instructions.len()) {
-            log::logn("    <bad-inst-idx:%s>", instIdx);
-            continue;
-        }
-        log::log("    %03d: ", instIdx);
-        this.print_instruction(this.instructions[instIdx]);
-    }
-    for (int termIdx = block.terminatorsStart; termIdx < block.terminatorsEnd; termIdx++) {
-        if (termIdx >= this.instructions.len()) {
-            log::logn("    <bad-inst-idx:%s>", termIdx);
-            continue;
-        }
-        log::log("    %03d: ", termIdx);
-        this.print_instruction(this.instructions[termIdx]);
-    }
+	BCBlock* block = &this.blocks[idx];
+	for (int instIdx = block.instructionsStart; instIdx < block.instructionsEnd; instIdx++)
+	{
+		if (instIdx >= this.instructions.len())
+		{
+			log::logn("    <bad-inst-idx:%s>", instIdx);
+			continue;
+		}
+		log::log("    %03d: ", instIdx);
+		this.print_instruction(this.instructions[instIdx]);
+	}
+	for (int termIdx = block.terminatorsStart; termIdx < block.terminatorsEnd; termIdx++)
+	{
+		if (termIdx >= this.instructions.len())
+		{
+			log::logn("    <bad-inst-idx:%s>", termIdx);
+			continue;
+		}
+		log::log("    %03d: ", termIdx);
+		this.print_instruction(this.instructions[termIdx]);
+	}
 }
 
 
@@ -326,22 +335,27 @@ fn void BCProgram.print_frame_slot(BCProgram* this, BCFrameSlotIdx idx, BCFrameS
 fn void BCProgram.print_instruction(BCProgram* this, BCInstruction inst)
 {
 	log::log("%s", inst.opCode.asStr);
-	if (inst.destOffset != NO_OFFSET) {
+	if (inst.destOffset != NO_OFFSET)
+	{
 		log::log(", ");
 		this.print_offset(inst.destOffset);
 	}
-	if (inst.leftOffset != NO_OFFSET) {
+	if (inst.leftOffset != NO_OFFSET)
+	{
 		log::log(", ");
 		this.print_offset(inst.leftOffset);
 	}
-	if (inst.rightOffset != NO_OFFSET) {
+	if (inst.rightOffset != NO_OFFSET)
+	{
 		log::log(", ");
 		this.print_offset(inst.rightOffset);
 	}
-	if (inst.immKind != BCOperandKind.INVALID) {
+	if (inst.immKind != BCOperandKind.INVALID)
+	{
 		log::log(", ");
 		this.print_immediate(inst);
-		if(inst.immKind == BCOperandKind.FUNCTION){
+		if (inst.immKind == BCOperandKind.FUNCTION)
+		{
 			BCCallInfo callInfo = this.callInfos[inst.callInfoIdx];
 			log::log("| args: ->[");
 			this.print_call_info(callInfo);
@@ -357,31 +371,35 @@ fn void BCProgram.print_offset(BCProgram* this, short offset)
 
 fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 {
-	switch (inst.immKind) {
-		case BCOperandKind.IMM_INT:		log::log("%s", inst.immInt);
-		case BCOperandKind.IMM_FLOAT:	log::log("%s", inst.immFloat);
-		case BCOperandKind.IMM_DOUBLE:	log::log("%s", inst.immDouble);
-		case BCOperandKind.IMM_BOOL:	log::log("%s", inst.immBool);
-		case BCOperandKind.IMM_STRING:	log::log("%s", this.strings[inst.immStringIdx]);
-		case BCOperandKind.FUNCTION:	log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
-		case BCOperandKind.IMM_NULL:	log::log("null");
-		case BCOperandKind.BLOCK:	    log::log("block_%s", inst.blockToJumpTo);
-		case BCOperandKind.SIZE:	log::log("move %s bytes", inst.byteCount);
-		case BCOperandKind.CAST_TYPE:	log::log("| cast: %s", inst.castKind.asStr);
+	switch (inst.immKind)
+	{
+		case BCOperandKind.IMM_INT: log::log("%s", inst.immInt);
+		case BCOperandKind.IMM_FLOAT: log::log("%s", inst.immFloat);
+		case BCOperandKind.IMM_DOUBLE: log::log("%s", inst.immDouble);
+		case BCOperandKind.IMM_BOOL: log::log("%s", inst.immBool);
+		case BCOperandKind.IMM_STRING: log::log("%s", this.strings[inst.immStringIdx]);
+		case BCOperandKind.FUNCTION: log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
+		case BCOperandKind.IMM_NULL: log::log("null");
+		case BCOperandKind.BLOCK: log::log("block_%s", inst.blockToJumpTo);
+		case BCOperandKind.SIZE: log::log("move %s bytes", inst.byteCount);
+		case BCOperandKind.CAST_TYPE: log::log("| cast: %s", inst.castKind.asStr);
 		case BCOperandKind.TYPE_INFO:
 			log::log("| type: %s", inst.typeInfo.type);
-			if(inst.typeInfo.type == ValueType.REF || inst.typeInfo.type == ValueType.PTR){
+			if (inst.typeInfo.type == ValueType.REF || inst.typeInfo.type == ValueType.PTR)
+			{
 				log::log(" to %s", inst.typeInfo.refToType);
 			}
-		default:						log::log("<?>");
+		default: log::log("<?>");
 	}
 }
 
 fn void BCProgram.print_call_info(BCProgram* this, BCCallInfo callInfo)
 {
-	for(short i = callInfo.argsStart; i < callInfo.argsEnd; i++){
+	for (short i = callInfo.argsStart; i < callInfo.argsEnd; i++)
+	{
 		log::log("(", this.callArgs[i].type);
 		this.print_offset(this.callArgs[i].callerOffset);
 		log::log(" | type: %s)", this.callArgs[i].type);
 	}
 }
+

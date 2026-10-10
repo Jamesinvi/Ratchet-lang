@@ -50,10 +50,12 @@ fn void Parser.init(Parser* this, List{Token} tokens, Allocator outputAllocator)
 
 fn ProgramAst? Parser.run(Parser* parser)
 {
-	while (!parser.match(TokenType.EOF)){
+	while (!parser.match(TokenType.EOF))
+	{
 		parser.declaration();
 	}
-	if (parser.hadError){
+	if (parser.hadError)
+	{
 		return PARSE_ERROR~;
 	}
 	return parser.outputAst;
@@ -76,7 +78,7 @@ fn void Parser.declaration(Parser* this)
 		this.outputAst.globalBlock.globalStatements.push(this.var_declaration());
 	}
 	else
-	{		
+	{
 		this.error("Only declarations are allowed at top level.");
 		this.advance();
 	}
@@ -121,7 +123,7 @@ fn StmtIdx Parser.statement(Parser* this)
 fn StmtIdx Parser.break_statement(Parser* this)
 {
 	debug::@log_parse("break statement at %s", (this.previous - 1).value());
-	int line        = this.current.line;
+	int line = this.current.line;
 	this.consume(TokenType.SEMICOLON, "Expected ';' after break");
 
 	Stmt stmt = { .kind = StmtKind.BREAK };
@@ -132,7 +134,7 @@ fn StmtIdx Parser.break_statement(Parser* this)
 fn StmtIdx Parser.continue_statement(Parser* this)
 {
 	debug::@log_parse("continue statement at %s", (this.previous - 1).value());
-	int line        = this.current.line;
+	int line = this.current.line;
 	this.consume(TokenType.SEMICOLON, "Expected ';' after continue");
 
 	Stmt stmt = { .kind = StmtKind.CONTINUE };
@@ -318,8 +320,8 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 			TypeAst fieldType = this.parse_type_ast();
 			this.consume(TokenType.IDENTIFIER, "Expected field name.");
 			NameIdx fieldNameIdx = this.push_name_get_idx(this.previous.value());
-			FieldAst field = { .type = fieldType, .nameIdx = fieldNameIdx };
-			int fieldsCount = (int)decl.structDecl.fields.len();
+			FieldAst field       = { .type = fieldType, .nameIdx = fieldNameIdx };
+			int fieldsCount      = (int)decl.structDecl.fields.len();
 			field.idxInFields = fieldsCount;
 			decl.structDecl.fields.push(field);
 			this.consume(TokenType.SEMICOLON, "Expected ';' after field");
@@ -442,16 +444,18 @@ fn DeclIdx Parser.fun_declaration(Parser* this)
 
 	// must exist from predeclaration
 	DeclIdx? declIdxOpt = globals::declaredFunctions.get(fnName);
-	if (catch notFound = declIdxOpt) {
+	if (catch notFound = declIdxOpt)
+	{
 		this.error("No function pre-declared with name at %s", fnName);
 		return NO_IDX;
 	}
 
 	DeclIdx declIdx = declIdxOpt;
-	Decl* decl = &this.outputAst.declarations[declIdx];
+	Decl* decl      = &this.outputAst.declarations[declIdx];
 
 	// sanity
-	if (decl.kind != DeclKind.FUNCTION)	{
+	if (decl.kind != DeclKind.FUNCTION)
+	{
 		this.error("Internal error: predecl for at %s isn't a function decl", fnName);
 		return NO_IDX;
 	}
@@ -499,12 +503,15 @@ fn ParamAst Parser.fun_param(Parser* this)
 {
 	ParamAst param = { };
 	param.passMode = ParamPassMode.VALUE;
-	if (this.match(TokenType.IN)) {
+	if (this.match(TokenType.IN))
+	{
 		param.passMode = ParamPassMode.IN;
-	} else if (this.match(TokenType.INOUT)) {
+	}
+	else if (this.match(TokenType.INOUT))
+	{
 		param.passMode = ParamPassMode.INOUT;
 	}
-	TypeAst type   = this.parse_type_ast();
+	TypeAst type = this.parse_type_ast();
 
 	this.consume(TokenType.IDENTIFIER, "Expected parameter name");
 
@@ -526,31 +533,35 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
 	}
 	// match_any_type_token advanced, so `previous` is the type token
-	NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
+	NameIdx typeNameIdx     = this.push_name_get_idx(this.previous.value());
 	TokenType typeTokenType = this.previous.tokenType;
 
 	// All of the following block handles arrays
 	// array types have a secondary suffix ("[]")
-	StorageKind arrayStorage = StorageKind.NONE;
-	short arraySize = -1;
+	StorageKind arrayStorage =  StorageKind.NONE;
+	short arraySize          = -1;
 	if (this.match(TokenType.OPEN_BRACKET))
 	{
 		// T[]& or. T[]*
 		if (!this.match(TokenType.INTEGER))
 		{
 			this.consume(TokenType.CLOSE_BRACKET, "Expected closing bracket");
-			if(this.match(TokenType.AMPERSAND))
+			if (this.match(TokenType.AMPERSAND))
 			{
 				arrayStorage = StorageKind.REF_GC;
-			} else if (this.match(TokenType.STAR)) 
+			}
+			else if (this.match(TokenType.STAR))
 			{
 				arrayStorage = StorageKind.REF_NOGC;
-			} else
+			}
+			else
 			{
 				this.error("Must either be an []& or []*");
 				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
 			}
-		} else {
+		}
+		else
+		{
 			// Inline arrays have their size in the declaration T[25]
 			int? parsedInt = this.previous.value().to_int();
 			if (catch err = parsedInt)
@@ -568,7 +579,7 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 			arraySize = (short)parsedInt;
 			this.consume(TokenType.CLOSE_BRACKET, "']' is required after size");
 		}
-	} 
+	}
 	return { .tokenType = typeTokenType, .nameIdx = typeNameIdx, .arrayStorage = arrayStorage, .arraySize = arraySize };
 }
 
@@ -582,7 +593,7 @@ fn TypeAst Parser.parse_base_type_ast(Parser* this)
 		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
 	}
 	// match_any_type_token advanced, so `previous` is the type token
-	NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
+	NameIdx typeNameIdx     = this.push_name_get_idx(this.previous.value());
 	TokenType typeTokenType = this.previous.tokenType;
 	return { .tokenType = typeTokenType, .nameIdx = typeNameIdx, .arrayStorage = StorageKind.NONE, .arraySize = -1 };
 }
@@ -640,7 +651,7 @@ fn ExprIdx Parser.expression(Parser* this)
 fn ExprIdx Parser.new_expr(Parser* this)
 {
 	debug::@log_parse("new_expr at %s", this.previous.value());
-	int line = this.previous.line;
+	int line           = this.previous.line;
 	TypeAst targetType = this.parse_base_type_ast();
 	// Handling for heap arrays (int[LEN]& or int[LEN]*)
 	if (this.match(TokenType.OPEN_BRACKET))
@@ -667,7 +678,11 @@ fn ExprIdx Parser.new_expr(Parser* this)
 
 		Expr expr = { .kind = ExprKind.NEW };
 		expr.span = { .line = line };
-		expr.new = { .type = targetType, .init = NO_IDX, .arraySize = length,};
+		expr.new = {
+			.type = targetType,
+			.init = NO_IDX,
+			.arraySize = length,
+		};
 		return this.push_expr_get_idx(&expr);
 	}
 	// Standard new expression for structs or heap built-ins
@@ -688,9 +703,9 @@ fn ExprIdx Parser.as(Parser* this, ExprIdx lhs)
 	// Parse a type on the RHS of `as` (e.g., "k as float")
 	TypeAst targetType = this.parse_type_ast();
 
-    Expr expr = { .kind = ExprKind.CAST };
+	Expr expr = { .kind = ExprKind.CAST };
 	expr.cast = { .value = lhs, .targetType = targetType };
-    expr.span = { .line = this.previous.line };
+	expr.span = { .line = this.previous.line };
 	return this.push_expr_get_idx(&expr);
 }
 
@@ -793,8 +808,8 @@ fn ExprIdx Parser.unary(Parser* this)
 fn ExprIdx Parser.binary(Parser* this, ExprIdx lhs)
 {
 	TokenType operatorType = this.previous.tokenType;
-	ParseRule* rule = get_rule(operatorType);
-	ExprIdx rhs = this.parse_precedence((Precedence)(rule.precedence.ordinal + 1));
+	ParseRule* rule        = get_rule(operatorType);
+	ExprIdx rhs            = this.parse_precedence((Precedence)(rule.precedence.ordinal + 1));
 	BinOp op;
 
 	switch (operatorType)
@@ -863,3 +878,4 @@ fn ExprIdx Parser.parse_precedence(Parser* this, Precedence precedence)
 
 	return lastIdx;
 }
+

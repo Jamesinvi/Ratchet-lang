@@ -6,30 +6,34 @@ import globals;
 
 fn int ratchet_compile_file(ZString path) @export("ratchet_compile_file")
 {
-    main::CompilationResult result = main::compile_file(path.str_view());
-    return (int)result.outcome;
+	main::CompilationResult result = main::compile_file(path.str_view());
+	return (int)result.outcome;
 }
 
 fn ZString ratchet_get_last_err() @export("ratchet_get_last_error")
 {
-    main::CompilationContext* ctx = &globals::compilationCtx;
+	main::CompilationContext* ctx = &globals::compilationCtx;
 
-    if(ctx.hadParseError){
-        return "parse error (specific query not available yet)\0";
-    }
+	if (ctx.hadParseError)
+	{
+		return "parse error (specific query not available yet)\0";
+	}
 
-    if(ctx.analysisErrors.len() > 0){
-        TypeResult err = ctx.analysisErrors[ctx.analysisErrors.len()-1];
-        return (ZString)string::format(&globals::compAllocator, "Anaylsis Error: %s at line %s, expected %s, got %s\0", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type); 
-    }
+	if (ctx.analysisErrors.len() > 0)
+	{
+		TypeResult err = ctx.analysisErrors[ctx.analysisErrors.len() - 1];
+		return (ZString)string::format(&globals::compAllocator, "Anaylsis Error: %s at line %s, expected %s, got %s\0", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
+	}
 
-	if(ctx.hadMirError){
-        return "lowering to mir error (specific query not available yet)\0";
-    }
-    return "\0";
+	if (ctx.hadMirError)
+	{
+		return "lowering to mir error (specific query not available yet)\0";
+	}
+	return "\0";
 }
 
-fn void ratchet_cleanup() @export ("ratchet_cleanup")
-{   
-    main::cleanup();
+fn void ratchet_cleanup() @export("ratchet_cleanup")
+{
+	main::cleanup();
 }
+

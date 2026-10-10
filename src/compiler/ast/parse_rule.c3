@@ -4,34 +4,36 @@ import common;
 alias PrefixFn = fn ExprIdx(Parser* parser);
 alias InfixFn = fn ExprIdx(Parser* parser, ExprIdx lhs);
 
-enum Precedence 
+enum Precedence
 {
-    NONE,
-    ASSIGNMENT, // =
-    AS,
-    OR,         // ||
-    AND,        // &&
-    EQUALITY,   
-    COMPARISON, // ==
-    TERM,       
-    FACTOR,
-    UNARY,
-    CALL,
-    PRIMARY
+	NONE,
+	ASSIGNMENT, // =
+	AS,
+	OR,         // ||
+	AND,        // &&
+	EQUALITY,
+	COMPARISON, // ==
+	TERM,
+	FACTOR,
+	UNARY,
+	CALL,
+	PRIMARY
 }
 
 
 struct ParseRule
 {
-    PrefixFn prefix;
-    InfixFn infix;
-    Precedence precedence;
+	PrefixFn prefix;
+	InfixFn infix;
+	Precedence precedence;
 }
 
 
-fn ParseRule* get_rule(TokenType operator){
-    return &rules[(usz)operator];
+fn ParseRule* get_rule(TokenType operator)
+{
+	return &rules[(usz)operator];
 }
+// c3fmt off
 ParseRule[]rules = {
   [TokenType.LEFT_PAREN.ordinal]    = {&Parser.grouping,        &Parser.call,       Precedence.CALL},
   [TokenType.RIGHT_PAREN.ordinal]   = {null,                    null,               Precedence.NONE},
@@ -77,3 +79,5 @@ ParseRule[]rules = {
   [TokenType.AS.ordinal]            = {null,                    &Parser.as,         Precedence.AS},
   [TokenType.BREAK.ordinal]         = {null,                    null,               Precedence.NONE},
 };
+// c3fmt on
+

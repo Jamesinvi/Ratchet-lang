@@ -35,24 +35,26 @@ struct DeclParamRange
 
 struct SymbolTable
 {
-	List{Symbol} symbols;					// index by SymbolIdx
-	List{SymbolIdx} exprSymbols; 			// index by ExprIdx
-	List{TypeInfo} exprTypes; 				// index by ExprIdx
-	List{SymbolIdx} stmtSymbols; 			// index by StmtIdx
-	List{SymbolIdx} declSymbols; 			// index by DeclIdx
-	List{DeclParamRange} declParamRanges; 	// index by DeclIdx
-	List{MemberIdx} memberFieldIndices; 	// indexed by ExprIdx, -1 if not a member expr
-	List{SymbolIdx} declParamSymbols; 		// flat storage for function param symbols
-	List{CallTarget} callTargets; 			// index by ExprIdx
-	List{ExprIdx} callReceiverExpr; 		// index by ExprIdx (NO_IDX when absent)
-	List{Scope} scopes; 					// name -> SymbolIdx
-	List{MethodAnalysisInfo} methods;		// semantic data for source methods
+	List{Symbol} symbols; // index by SymbolIdx
+	List{SymbolIdx} exprSymbols; // index by ExprIdx
+	List{TypeInfo} exprTypes; // index by ExprIdx
+	List{SymbolIdx} stmtSymbols; // index by StmtIdx
+	List{SymbolIdx} declSymbols; // index by DeclIdx
+	List{DeclParamRange} declParamRanges; // index by DeclIdx
+	List{MemberIdx} memberFieldIndices; // indexed by ExprIdx, -1 if not a member expr
+	List{SymbolIdx} declParamSymbols; // flat storage for function param symbols
+	List{CallTarget} callTargets; // index by ExprIdx
+	List{ExprIdx} callReceiverExpr; // index by ExprIdx (NO_IDX when absent)
+	List{Scope} scopes; // name -> SymbolIdx
+	List{MethodAnalysisInfo} methods; // semantic data for source methods
 }
 
 fn MethodAnalysisInfo* SymbolTable.find_method(SymbolTable* this, MethodId id)
 {
-	foreach (&method : this.methods) {
-		if (method.id.structDeclIdx == id.structDeclIdx && method.id.methodIdx == id.methodIdx) {
+	foreach (&method : this.methods)
+	{
+		if (method.id.structDeclIdx == id.structDeclIdx && method.id.methodIdx == id.methodIdx)
+		{
 			return method;
 		}
 	}
@@ -82,7 +84,7 @@ struct MethodId
 struct MethodAnalysisInfo
 {
 	MethodId id;
-	DeclParamRange paramRange;	// receiver is always parameter 0
+	DeclParamRange paramRange; // receiver is always parameter 0
 	SymbolIdx receiverSymbolIdx;
 	TypeInfo returnType;
 }
@@ -90,16 +92,16 @@ struct MethodAnalysisInfo
 
 enum ErrorKind : char (String asStr)
 {
-	TYPE_MISMATCH   			{ "Type mismatch" },
-	UNRESOLVED_STRUCT			{ "Struct type was unresolved. Circular reference?"},
-	INVALID_TYPE    			{ "Invalid type" },
-	INVALID_LVALUE  			{ "Invalid lvalue" },
-	INVALID_ARITY   			{ "Invalid argument count" },
-	UNDECLARED_NAME 			{ "Undeclared name" },
-	NO_RETURN       			{ "No return" },
-	INVALID_GLOBAL_INITIALIZER 	{ "Global initializer must be a constant value" },
-	CONTINUE_WITHOUT_LOOP		{ "continue statement is only allowed inside a loop" },
-	BREAK_WITHOUT_LOOP			{ "break statement is only allowed inside a loop" },
+	TYPE_MISMATCH              { "Type mismatch" },
+	UNRESOLVED_STRUCT          { "Struct type was unresolved. Circular reference?" },
+	INVALID_TYPE               { "Invalid type" },
+	INVALID_LVALUE             { "Invalid lvalue" },
+	INVALID_ARITY              { "Invalid argument count" },
+	UNDECLARED_NAME            { "Undeclared name" },
+	NO_RETURN                  { "No return" },
+	INVALID_GLOBAL_INITIALIZER { "Global initializer must be a constant value" },
+	CONTINUE_WITHOUT_LOOP      { "continue statement is only allowed inside a loop" },
+	BREAK_WITHOUT_LOOP         { "break statement is only allowed inside a loop" },
 }
 
 struct TypeResult
@@ -120,13 +122,7 @@ fn TypeResult type_ok(TypeInfo expected)
 	return result;
 }
 
-fn TypeResult SemanticAnalyzer.type_error(
-	SemanticAnalyzer* this,
-	ErrorKind kind,
-	TypeInfo value,
-	TypeInfo expected,
-	Span span
-)
+fn TypeResult SemanticAnalyzer.type_error(SemanticAnalyzer* this, ErrorKind kind, TypeInfo value, TypeInfo expected, Span span)
 {
 	TypeResult result = { };
 	result.hadError = true;
@@ -158,3 +154,4 @@ fn void Scope.deinit(Scope* this)
 {
 	this.visibleSymbols.free();
 }
+

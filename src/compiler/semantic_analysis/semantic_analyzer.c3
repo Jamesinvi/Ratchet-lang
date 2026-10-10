@@ -11,7 +11,7 @@ faultdef ANALYSIS_ERR;
 
 fn List{TypeResult} analyze(ProgramAst* ast, SymbolTable* symbolTable, Allocator outputAllocator)
 {
-	SemanticAnalyzer analyzer = {};
+	SemanticAnalyzer analyzer = { };
 	analyzer.init(ast, symbolTable, outputAllocator);
 	analyzer.run();
 	defer analyzer.deinit();
@@ -20,18 +20,18 @@ fn List{TypeResult} analyze(ProgramAst* ast, SymbolTable* symbolTable, Allocator
 
 struct SemanticAnalyzer
 {
-	ProgramAst* ast;					// input
-	SymbolTable* symbolTable;			// output (inout)
-	List{TypeResult} errors;			// ouput
-	Stack{Scope} scopes;				// temp
+	ProgramAst* ast; // input
+	SymbolTable* symbolTable; // output (inout)
+	List{TypeResult} errors; // ouput
+	Stack{Scope} scopes; // temp
 	DynamicArenaAllocator localAllocator;
 	Allocator outputAllocator;
-	Expr* currentExpr;		
-	TypeInfo currentReturnType;		
+	Expr* currentExpr;
+	TypeInfo currentReturnType;
 	DeclIdx currentStructDeclIdx;
 	SymbolIdx currentReceiverSymbolIdx;
 	int currentScopeIdx;
-	int currentLoopDepth;				// how many nested loops are we in?
+	int currentLoopDepth; // how many nested loops are we in?
 	bool returnFound;
 }
 
@@ -41,9 +41,9 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTab
 	this.ast = ast;
 	this.symbolTable = symbolTable;
 	this.outputAllocator = outputAllocator;
-	this.scopes = {};
+	this.scopes = { };
 	this.errors.init(outputAllocator);
-	this.localAllocator = {};
+	this.localAllocator = { };
 	this.localAllocator.init(mem, 64 * 1024);
 
 	sz exprLen = this.ast.expressions.len();
@@ -64,12 +64,13 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTab
 	// Fill lists with defaults
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
-	common::list_append_fill{DeclParamRange}(&this.symbolTable.declParamRanges, {}, declLen);
+	common::list_append_fill{DeclParamRange}(&this.symbolTable.declParamRanges, { }, declLen);
 	common::list_append_fill{MemberIdx}(&this.symbolTable.memberFieldIndices, -1, exprLen);
-	for (sz i = 0; i < exprLen; i++) {
+	for (sz i = 0; i < exprLen; i++)
+	{
 		this.symbolTable.exprSymbols.push(NO_SYMBOL);
 		this.symbolTable.exprTypes.push(nullType);
-		this.symbolTable.callTargets.push({});
+		this.symbolTable.callTargets.push({ });
 		this.symbolTable.callReceiverExpr.push(parser::NO_IDX);
 	}
 
@@ -83,7 +84,8 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTab
 
 fn void SemanticAnalyzer.deinit(SemanticAnalyzer* this)
 {
-	for(sz i = 0; i < this.scopes.size; i++){
+	for (sz i = 0; i < this.scopes.size; i++)
+	{
 		this.scopes.items[i].deinit();
 	}
 	this.scopes.free();
@@ -97,65 +99,78 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	this.begin_scope(globalReturnType, false);
 
 	// Create a temporary list in which we will store all decl indices for structs
-    assert(this.ast.declarations.len() < int::max);
-	List{DeclIdx} structDeclIndices = {};
+	assert(this.ast.declarations.len() < int::max);
+	List{DeclIdx} structDeclIndices = { };
 	structDeclIndices.init(&this.localAllocator, this.ast.declarations.len() / 2);
 	// Predeclare function symbols with return types.
-	for (int i = 0; i < (int)this.ast.globalBlock.globalDeclarations.len(); i++){
+	for (int i = 0; i < (int)this.ast.globalBlock.globalDeclarations.len(); i++)
+	{
 		DeclIdx declIdx = (DeclIdx)this.ast.globalBlock.globalDeclarations[i];
-		Decl* decl = &this.ast.declarations[declIdx];
-		if (decl.kind == DeclKind.FUNCTION) {
-			Span declSpan = this.ast.statements[decl.fnDecl.body].span;
+		Decl* decl      = &this.ast.declarations[declIdx];
+		if (decl.kind == DeclKind.FUNCTION)
+		{
+			Span declSpan         = this.ast.statements[decl.fnDecl.body].span;
 			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
-			if (returnType.hadError) {
+			if (returnType.hadError)
+			{
 				return returnType;
 			}
 			SymbolIdx symbolIdx = this.symbols_len();
-			Symbol symbol = { .kind = SymbolKind.FUNCTION, .idx = declIdx, .type = returnType.value };
+			Symbol symbol       = { .kind = SymbolKind.FUNCTION, .idx = declIdx, .type = returnType.value };
 			this.symbolTable.symbols.push(symbol);
 			this.symbolTable.declSymbols[declIdx] = symbolIdx;
 			this.current_scope().visibleSymbols.push(symbolIdx);
-		} else if (decl.kind == DeclKind.STRUCT) {
+		}
+		else if (decl.kind == DeclKind.STRUCT)
+		{
 			get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
 			structDeclIndices.push(declIdx);
 		}
 	}
 
-	
+
 	// Structs info (metadata). This uses the temp structDeclIndices
 	TypeResult metaDataResult = this.fill_structs_metadata(structDeclIndices);
-	if(metaDataResult.hadError){
+	if (metaDataResult.hadError)
+	{
 		return metaDataResult;
 	}
 
 	// Global symbols
 	TypeResult globalsResult = this.fill_globals();
-	if(globalsResult.hadError){
+	if (globalsResult.hadError)
+	{
 		return globalsResult;
 	}
 
-	for (int i = 0; i < (int)this.ast.declarations.len(); i++){
+	for (int i = 0; i < (int)this.ast.declarations.len(); i++)
+	{
 		Decl* decl = &this.ast.declarations[i];
 		switch (decl.kind)
 		{
 			case DeclKind.FUNCTION:
-			{
-				TypeResult declType = this.analyze_fn(&decl.fnDecl, i);
-				if (declType.hadError) {
-					return declType;
-				}
-			}
-			case DeclKind.STRUCT:
-			{
-				foreach (methodIdx, &method : decl.structDecl.methods){
-					assert(methodIdx < int::max);
-					TypeResult declType = this.analyze_method(method, (int)methodIdx);
-					if (declType.hadError) {
+
+				{
+					TypeResult declType = this.analyze_fn(&decl.fnDecl, i);
+					if (declType.hadError)
+					{
 						return declType;
 					}
 				}
-			}
-			default: return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, {});
+			case DeclKind.STRUCT:
+
+				{
+					foreach (methodIdx, &method : decl.structDecl.methods)
+					{
+						assert(methodIdx < int::max);
+						TypeResult declType = this.analyze_method(method, (int)methodIdx);
+						if (declType.hadError)
+						{
+							return declType;
+						}
+					}
+				}
+			default: return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, { });
 		}
 	}
 	return type_ok(make_type(ValueType.NULL));
@@ -163,9 +178,11 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 
 fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params)
 {
-	foreach (&param : *params){
+	foreach (&param : *params)
+	{
 		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
-		if (paramType.hadError) {
+		if (paramType.hadError)
+		{
 			return paramType;
 		}
 		SymbolIdx symbolIdx = this.symbols_len();
@@ -185,11 +202,12 @@ fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{Param
 fn void SemanticAnalyzer.begin_scope(SemanticAnalyzer* this, TypeResult returnType, bool insideMethod)
 {
 	int enclosingIdx = 0;
-	if (this.scopes.size > 0) {
+	if (this.scopes.size > 0)
+	{
 		enclosingIdx = this.currentScopeIdx;
 	}
 	assert(this.scopes.size < int::max);
-	Scope scope = {.depth = (int)this.scopes.size, .enclosingIdx = enclosingIdx };
+	Scope scope = { .depth = (int)this.scopes.size, .enclosingIdx = enclosingIdx };
 	scope.init(returnType, insideMethod);
 	this.scopes.push(scope);
 	this.currentScopeIdx = (int)this.scopes.size - 1;
@@ -201,54 +219,57 @@ fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
 	popped.visibleSymbols.free();
 	debug::@log_analysis("exiting scope");
 	assert(this.scopes.size < int::max);
-	if (this.scopes.size > 0) {
+	if (this.scopes.size > 0)
+	{
 		this.currentScopeIdx = (int)this.scopes.size - 1;
 	}
 }
 
-fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
- DeclIdx structDeclIdx, 
- InternedString methodName,
- ExprCall* call,
- ExprIdx callExprIdx,
- Span span,
- TypeResult* out)
+fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx structDeclIdx, InternedString methodName, ExprCall* call, ExprIdx callExprIdx, Span span, TypeResult* out)
 {
-	if (structDeclIdx == parser::NO_IDX) {
+	if (structDeclIdx == parser::NO_IDX)
+	{
 		return false;
 	}
 
 	Decl* structDecl = &this.ast.declarations[structDeclIdx];
-	if (structDecl.kind != DeclKind.STRUCT) {
+	if (structDecl.kind != DeclKind.STRUCT)
+	{
 		return false;
 	}
-	
+
 	int methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
-	if (methodIdx == parser::NO_IDX) {
+	if (methodIdx == parser::NO_IDX)
+	{
 		return false;
 	}
 
 	MethodDeclAst* method = &structDecl.structDecl.methods[methodIdx];
-	int argCount = call.argsEnd - call.argsStart;
-	if (argCount != (int)method.params.len()) {
+	int argCount          = call.argsEnd - call.argsStart;
+	if (argCount != (int)method.params.len())
+	{
 		*out = this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, span);
 		return true;
 	}
 
-	for(int i = 0; i < argCount; i++) {
+	for (int i = 0; i < argCount; i++)
+	{
 		ExprIdx argListIdx = call.argsStart + i;
 		ExprIdx argExprIdx = this.ast.args[argListIdx];
 		TypeResult argType = this.analyze_expr(argExprIdx);
-		if (argType.hadError) {
+		if (argType.hadError)
+		{
 			*out = argType;
 			return true;
 		}
 		TypeResult expectedType = this.create_type_from_ast(&method.params[i].type, span);
-		if (expectedType.hadError) {
+		if (expectedType.hadError)
+		{
 			*out = expectedType;
 			return true;
 		}
-		if (!common::type_info_matches(argType.value, expectedType.value)) {
+		if (!common::type_info_matches(argType.value, expectedType.value))
+		{
 			*out = this.type_error(ErrorKind.TYPE_MISMATCH, argType.value, expectedType.value, span);
 			return true;
 		}
@@ -266,22 +287,24 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this,
 
 fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnDecl, DeclIdx ownerDeclIdx)
 {
-	Span fnSpan = this.ast.statements[fnDecl.body].span;
+	Span fnSpan                = this.ast.statements[fnDecl.body].span;
 	TypeResult expectedRetType = this.create_type_from_ast(&fnDecl.returnType, fnSpan);
-	if (expectedRetType.hadError) {
+	if (expectedRetType.hadError)
+	{
 		return expectedRetType;
 	}
 	debug::@log_analysis("fn '%s', expects '%s' return type", this.ast.names[fnDecl.nameIdx].text(), expectedRetType.value.type);
 	List{StmtIdx}* stmtsIndices = &this.ast.statements[fnDecl.body].blockStmt.stmts;
 
 	this.begin_scope(expectedRetType, false);
-	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
+	DeclIdx prevStructDeclIdx       = this.currentStructDeclIdx;
 	SymbolIdx prevReceiverSymbolIdx = this.currentReceiverSymbolIdx;
 	this.currentStructDeclIdx = parser::NO_IDX;
 	this.currentReceiverSymbolIdx = NO_SYMBOL;
-	int paramsStart = (int)this.symbolTable.declParamSymbols.len();
+	int paramsStart       = (int)this.symbolTable.declParamSymbols.len();
 	TypeResult paramsType = this.declare_params(&fnDecl.params);
-	if (paramsType.hadError) {
+	if (paramsType.hadError)
+	{
 		return paramsType;
 	}
 	this.symbolTable.declParamRanges[ownerDeclIdx] = {
@@ -291,15 +314,18 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 	// Scan and analyze all statments in the function
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
-	foreach (stmtIdx : stmtsIndices){
+	foreach (stmtIdx : stmtsIndices)
+	{
 		TypeResult resultType = this.analyze_stmt(stmtIdx);
 
-		if (resultType.hadError) {
+		if (resultType.hadError)
+		{
 			return resultType;
 		}
 	}
 
-	if (expectedRetType.value.type != ValueType.NULL && !this.returnFound) {
+	if (expectedRetType.value.type != ValueType.NULL && !this.returnFound)
+	{
 		return this.type_error(ErrorKind.NO_RETURN, nullType, expectedRetType.value, fnSpan);
 	}
 	this.end_scope();
@@ -310,17 +336,17 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 
 fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDeclAst* methodDecl, int methodIdx)
 {
-	
-	Span methodSpan = this.ast.statements[methodDecl.body].span;
+	Span methodSpan            = this.ast.statements[methodDecl.body].span;
 	TypeResult expectedRetType = this.create_type_from_ast(&methodDecl.returnType, methodSpan);
-	if (expectedRetType.hadError) {
+	if (expectedRetType.hadError)
+	{
 		return expectedRetType;
 	}
 	debug::@log_analysis("method '%s', expects '%s' return type", this.ast.names[methodDecl.nameIdx].text(), expectedRetType.value.type);
 	List{StmtIdx}* stmtsIndices = &this.ast.statements[methodDecl.body].blockStmt.stmts;
 
 	this.begin_scope(expectedRetType, true);
-	DeclIdx prevStructDeclIdx = this.currentStructDeclIdx;
+	DeclIdx prevStructDeclIdx       = this.currentStructDeclIdx;
 	SymbolIdx prevReceiverSymbolIdx = this.currentReceiverSymbolIdx;
 	this.currentStructDeclIdx = methodDecl.structIdx;
 
@@ -330,11 +356,12 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 		.nameIdx = structDecl.structDecl.nameIdx,
 	};
 	TypeResult receiverType = this.create_type_from_ast(&receiverTypeAst, methodSpan);
-	if (receiverType.hadError) {
+	if (receiverType.hadError)
+	{
 		return receiverType;
 	}
 
-	int paramsStart = (int)this.symbolTable.declParamSymbols.len();
+	int paramsStart             = (int)this.symbolTable.declParamSymbols.len();
 	SymbolIdx receiverSymbolIdx = this.symbols_len();
 	Symbol receiverSymbol = {
 		.kind = SymbolKind.RECEIVER,
@@ -348,7 +375,8 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 
 	TypeResult paramsType = this.declare_params(&methodDecl.params);
 
-	if (paramsType.hadError) {
+	if (paramsType.hadError)
+	{
 		return paramsType;
 	}
 	MethodAnalysisInfo methodInfo = {
@@ -367,14 +395,17 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
 
-	foreach (stmtIdx : stmtsIndices){
+	foreach (stmtIdx : stmtsIndices)
+	{
 		TypeResult resultType = this.analyze_stmt(stmtIdx);
-		if (resultType.hadError) {
+		if (resultType.hadError)
+		{
 			return resultType;
 		}
 	}
 
-	if (expectedRetType.value.type != ValueType.NULL && !this.returnFound) {
+	if (expectedRetType.value.type != ValueType.NULL && !this.returnFound)
+	{
 		return this.type_error(ErrorKind.NO_RETURN, nullType, expectedRetType.value, methodSpan);
 	}
 	this.end_scope();
@@ -385,34 +416,29 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 
 fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, int structTypeIndex)
 {
-	// Search for a struct that has the same structTypeIndex 
+	// Search for a struct that has the same structTypeIndex
 	assert(this.ast.declarations.len() < int::max);
-	foreach(idx, &decl : this.ast.declarations){
-	    int index = (int)idx;
-		if (decl.kind != DeclKind.STRUCT) {
-			continue;
-		}
+	foreach (idx, &decl : this.ast.declarations)
+	{
+		int index = (int)idx;
+		if (decl.kind != DeclKind.STRUCT) continue;
 		String structName = this.ast.names[decl.structDecl.nameIdx].text();
-		if (!globals::structNamesToIdx.has_key(structName)) {
-			continue;
-		}
+		if (!globals::structNamesToIdx.has_key(structName)) continue;
 		int? indexInStructNames = globals::structNamesToIdx.get(structName);
-		if (catch err = indexInStructNames) {
-			continue;
-		}
-		if (indexInStructNames == structTypeIndex) {
-			return index;
-		}
+		if (catch err = indexInStructNames) continue;
+		if (indexInStructNames == structTypeIndex) return index;
 	}
 	return parser::NO_IDX;
 }
 
 fn int SemanticAnalyzer.find_method_idx(SemanticAnalyzer* this, StructDeclAst* structDecl, InternedString name)
 {
-	for (sz i = 0; i < structDecl.methods.len(); i++){
-		MethodDeclAst* method = &structDecl.methods[i];
+	for (sz i = 0; i < structDecl.methods.len(); i++)
+	{
+		MethodDeclAst* method     = &structDecl.methods[i];
 		InternedString methodName = this.ast.names[method.nameIdx];
-		if (methodName.id == name.id) {
+		if (methodName.id == name.id)
+		{
 			assert(i < int::max);
 			return (int)i;
 		}
@@ -426,114 +452,123 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 	debug::@log_analysis("starting analysis on statement %s", stmt.kind);
 	switch (stmt.kind)
 	{
-		case StmtKind.EXPR:					return this.analyze_expr(stmt.exprStmt);
-		case StmtKind.ECHO:					return this.analyze_expr(stmt.echoStmt);
+		case StmtKind.EXPR: return this.analyze_expr(stmt.exprStmt);
+		case StmtKind.ECHO: return this.analyze_expr(stmt.echoStmt);
 		case StmtKind.DECL:
-		{
-			TypeResult lhsType = this.create_type_from_ast(&stmt.varDecl.type, stmt.span);
-			if (lhsType.hadError) {
-				return lhsType;
-			}
-			SymbolIdx symbolIdx = this.symbols_len();
-			Symbol symbol = { .kind = SymbolKind.LOCAL, .idx = stmtIdx, .type = lhsType.value };
-			this.symbolTable.symbols.push(symbol);
-			this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
-			this.current_scope().visibleSymbols.push(symbolIdx);
-			debug::@log_analysis("statement %s: %s is of type %s", stmt.kind, this.ast.names[stmt.varDecl.nameIdx].text(), lhsType.value.type);
-			if (stmt.varDecl.init != parser::NO_IDX) {
-				Expr* initExpr = &this.ast.expressions[stmt.varDecl.init];
-				TypeResult rhsType = this.analyze_expr(stmt.varDecl.init);
-				if (rhsType.hadError) {
-					return rhsType;
-				}
-				if (common::type_info_matches(lhsType.value, rhsType.value)){
-					return type_ok(lhsType.value);
-				}
 
-				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
+			{
+				TypeResult lhsType = this.create_type_from_ast(&stmt.varDecl.type, stmt.span);
+				if (lhsType.hadError) return lhsType;
+				SymbolIdx symbolIdx = this.symbols_len();
+				Symbol symbol       = { .kind = SymbolKind.LOCAL, .idx = stmtIdx, .type = lhsType.value };
+				this.symbolTable.symbols.push(symbol);
+				this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
+				this.current_scope().visibleSymbols.push(symbolIdx);
+				debug::@log_analysis("statement %s: %s is of type %s", stmt.kind, this.ast.names[stmt.varDecl.nameIdx].text(), lhsType.value.type);
+				if (stmt.varDecl.init != parser::NO_IDX)
+				{
+					Expr* initExpr     = &this.ast.expressions[stmt.varDecl.init];
+					TypeResult rhsType = this.analyze_expr(stmt.varDecl.init);
+					if (rhsType.hadError)
+					{
+						return rhsType;
+					}
+					if (common::type_info_matches(lhsType.value, rhsType.value))
+					{
+						return type_ok(lhsType.value);
+					}
+
+					return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
+				}
+				return type_ok(lhsType.value);
 			}
-			return type_ok(lhsType.value);
-		}
 		case StmtKind.BLOCK:
-		{
-			// Same as function, scan and analyze all statements
-			bool insideMethod = this.is_in_method();
-			TypeResult scopeReturnType = type_ok(this.currentReturnType);
-			this.begin_scope(scopeReturnType, insideMethod);
-			foreach (childIdx : stmt.blockStmt.stmts){
-				TypeResult result = this.analyze_stmt(childIdx);
 
-				if (result.hadError) {
-					return result;
+			{
+				// Same as function, scan and analyze all statements
+				bool insideMethod          = this.is_in_method();
+				TypeResult scopeReturnType = type_ok(this.currentReturnType);
+				this.begin_scope(scopeReturnType, insideMethod);
+				foreach (childIdx : stmt.blockStmt.stmts)
+				{
+					TypeResult result = this.analyze_stmt(childIdx);
+
+					if (result.hadError)
+					{
+						return result;
+					}
 				}
+				this.end_scope();
+				return type_ok(make_type(ValueType.NULL));
 			}
-			this.end_scope();
-			return type_ok(make_type(ValueType.NULL));
-		}
 		case StmtKind.IF:
-		{
-			TypeInfo boolType = make_type(ValueType.BOOL);
-			Expr* condExpr = &this.ast.expressions[stmt.ifStmt.cond];
-			TypeResult condType = this.analyze_expr(stmt.ifStmt.cond);
-			if (condType.hadError) {
-				return condType;
-			}
-			if (condType.value.type != ValueType.BOOL) {
-				return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
-			}
-			TypeResult thenType = this.analyze_stmt(stmt.ifStmt.thenBlock);
-			if (thenType.hadError) {
-				return thenType;
-			}
-			if (stmt.ifStmt.elseBlock != parser::NO_IDX) {
-				TypeResult elseType = this.analyze_stmt(stmt.ifStmt.elseBlock);
-				if (elseType.hadError) {
-					return elseType;
+
+			{
+				TypeInfo boolType   = make_type(ValueType.BOOL);
+				Expr* condExpr      = &this.ast.expressions[stmt.ifStmt.cond];
+				TypeResult condType = this.analyze_expr(stmt.ifStmt.cond);
+				if (condType.hadError) return condType;
+				if (condType.value.type != ValueType.BOOL)
+				{
+					return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
 				}
+				TypeResult thenType = this.analyze_stmt(stmt.ifStmt.thenBlock);
+				if (thenType.hadError) return thenType;
+				if (stmt.ifStmt.elseBlock != parser::NO_IDX)
+				{
+					TypeResult elseType = this.analyze_stmt(stmt.ifStmt.elseBlock);
+					if (elseType.hadError) return elseType;
+				}
+				return type_ok(make_type(ValueType.NULL));
 			}
-			return type_ok(make_type(ValueType.NULL));
-		}
 		case StmtKind.WHILE:
-		{
-			TypeInfo boolType = make_type(ValueType.BOOL);
-			Expr* condExpr = &this.ast.expressions[stmt.whileStmt.cond];
-			TypeResult condType = this.analyze_expr(stmt.whileStmt.cond);
-			if (condType.hadError) {
-				return condType;
-			}
-			if (condType.value.type != ValueType.BOOL) {
-				return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
-			}
-			this.currentLoopDepth++;
-			TypeResult bodyTypeResult = this.analyze_stmt(stmt.whileStmt.body);
-			this.currentLoopDepth--;
-			return bodyTypeResult;
-		}
-		case StmtKind.RETURN:
-		{
-			this.returnFound = true;
-			if (stmt.retStmt.value == parser::NO_IDX) {
-				if (this.currentReturnType.type != ValueType.NULL) {
-					return this.type_error(ErrorKind.TYPE_MISMATCH, nullType, this.currentReturnType, stmt.span);
+
+			{
+				TypeInfo boolType   = make_type(ValueType.BOOL);
+				Expr* condExpr      = &this.ast.expressions[stmt.whileStmt.cond];
+				TypeResult condType = this.analyze_expr(stmt.whileStmt.cond);
+				if (condType.hadError) return condType;
+				if (condType.value.type != ValueType.BOOL)
+				{
+					return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
 				}
-				return type_ok(nullType);
+				this.currentLoopDepth++;
+				TypeResult bodyTypeResult = this.analyze_stmt(stmt.whileStmt.body);
+				this.currentLoopDepth--;
+				return bodyTypeResult;
 			}
-			TypeResult valueType = this.analyze_expr(stmt.retStmt.value);
-			if (valueType.hadError) {
-				return valueType;
+		case StmtKind.RETURN:
+
+			{
+				this.returnFound = true;
+				if (stmt.retStmt.value == parser::NO_IDX)
+				{
+					if (this.currentReturnType.type != ValueType.NULL)
+					{
+						return this.type_error(ErrorKind.TYPE_MISMATCH, nullType, this.currentReturnType, stmt.span);
+					}
+					return type_ok(nullType);
+				}
+				TypeResult valueType = this.analyze_expr(stmt.retStmt.value);
+				if (valueType.hadError)
+				{
+					return valueType;
+				}
+				if (!common::type_info_matches(this.currentReturnType, valueType.value))
+				{
+					return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
+				}
+				return type_ok(valueType.value);
 			}
-			if (!common::type_info_matches(this.currentReturnType, valueType.value)){
-				return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
-			}
-			return type_ok(valueType.value);
-		}
-		case StmtKind.BREAK:				
-			if(this.currentLoopDepth == 0) {
+		case StmtKind.BREAK:
+			if (this.currentLoopDepth == 0)
+			{
 				return this.type_error(ErrorKind.BREAK_WITHOUT_LOOP, nullType, nullType, stmt.span);
 			}
 			return type_ok(nullType);
-		case StmtKind.CONTINUE:				
-			if(this.currentLoopDepth == 0) {
+		case StmtKind.CONTINUE:
+			if (this.currentLoopDepth == 0)
+			{
 				return this.type_error(ErrorKind.CONTINUE_WITHOUT_LOOP, nullType, nullType, stmt.span);
 			}
 			return type_ok(nullType);
@@ -544,31 +579,36 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 
 fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	if (exprIdx == parser::NO_IDX) {
+	if (exprIdx == parser::NO_IDX)
+	{
 		return type_ok(make_type(ValueType.NULL));
 	}
 	Expr* expr = &this.ast.expressions[exprIdx];
-	debug::@log_analysis("starting analysis on expressions %s", expr.kind,);
-	TypeResult result = {};
-	switch(expr.kind)
+	debug::@log_analysis(
+		"starting analysis on expressions %s",
+		expr.kind,
+	);
+	TypeResult result = { };
+	switch (expr.kind)
 	{
-		case ExprKind.VAR:				result = this.analyze_expr_var(exprIdx);
-		case ExprKind.INT:				result = type_ok(make_type(ValueType.INT));
-		case ExprKind.FLOAT:			result = type_ok(make_type(ValueType.FLOAT));
-		case ExprKind.DOUBLE:			result = type_ok(make_type(ValueType.DOUBLE));
-		case ExprKind.BOOL:				result = type_ok(make_type(ValueType.BOOL));
-		case ExprKind.NULL:				result = type_ok(make_type(ValueType.NULL));
-		case ExprKind.STRING_LITERAL:	result = type_ok(make_type(ValueType.STRING_LITERAL));
-		case ExprKind.UNARY:			result = this.analyze_expr_unary(exprIdx);
-		case ExprKind.BINARY:			result = this.analyze_expr_binary(exprIdx);
-		case ExprKind.NEW:				result = this.analyze_expr_new(exprIdx);
-		case ExprKind.THIS:				result = this.analyze_expr_this(exprIdx);
-		case ExprKind.CALL:				result = this.analyze_expr_call(exprIdx);
-		case ExprKind.MEMBER:			result = this.analyze_expr_member(exprIdx);
-		case ExprKind.CAST:				result = this.analyze_expr_cast(exprIdx);
-		default:						result = type_ok(make_type(ValueType.NULL));
+		case ExprKind.VAR: result = this.analyze_expr_var(exprIdx);
+		case ExprKind.INT: result = type_ok(make_type(ValueType.INT));
+		case ExprKind.FLOAT: result = type_ok(make_type(ValueType.FLOAT));
+		case ExprKind.DOUBLE: result = type_ok(make_type(ValueType.DOUBLE));
+		case ExprKind.BOOL: result = type_ok(make_type(ValueType.BOOL));
+		case ExprKind.NULL: result = type_ok(make_type(ValueType.NULL));
+		case ExprKind.STRING_LITERAL: result = type_ok(make_type(ValueType.STRING_LITERAL));
+		case ExprKind.UNARY: result = this.analyze_expr_unary(exprIdx);
+		case ExprKind.BINARY: result = this.analyze_expr_binary(exprIdx);
+		case ExprKind.NEW: result = this.analyze_expr_new(exprIdx);
+		case ExprKind.THIS: result = this.analyze_expr_this(exprIdx);
+		case ExprKind.CALL: result = this.analyze_expr_call(exprIdx);
+		case ExprKind.MEMBER: result = this.analyze_expr_member(exprIdx);
+		case ExprKind.CAST: result = this.analyze_expr_cast(exprIdx);
+		default: result = type_ok(make_type(ValueType.NULL));
 	}
-	if (!result.hadError) {
+	if (!result.hadError)
+	{
 		this.symbolTable.exprTypes[exprIdx] = result.value;
 	}
 	return result;
@@ -576,22 +616,34 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 
 fn TypeResult SemanticAnalyzer.analyze_expr_new(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	Expr* expr = &this.ast.expressions[exprIdx];
+	Expr* expr            = &this.ast.expressions[exprIdx];
 	TypeResult targetType = this.create_type_from_ast(&expr.new.type, expr.span);
 	// if we had an error return it. If instead we're allocating a non-ref lke value with new,
-	// it's a mistake: 
+	// it's a mistake:
 	// int& a = new int { 5 } <- invalid
 	// int& a = new int& { 5 } <- valid
-	if (targetType.hadError || !targetType.value.is_ref_like()) {
+	if (targetType.hadError || !targetType.value.is_ref_like())
+	{
 		return targetType.hadError ? targetType : this.type_error(ErrorKind.INVALID_TYPE, targetType.value, targetType.value, expr.span);
 	}
-	TypeResult initType = this.analyze_expr(expr.new.init);
-	if (initType.hadError) {
-		return initType;
+	if (targetType.value.type == ValueType.ARR_REF_GC || targetType.value.type == ValueType.ARR_REF_NOGC)
+	{
+		TypeResult initArrSize = this.analyze_expr(expr.new.arraySize);
+		if (initArrSize.hadError) return initArrSize;
+		if (initArrSize.value.type != ValueType.INT)
+		{
+			return this.type_error(ErrorKind.TYPE_MISMATCH, initArrSize.value, make_type(ValueType.INT), expr.span);
+		}
 	}
-	TypeInfo pointeeType = targetType.value.pointee_type();
-	if (!common::type_info_matches(initType.value, pointeeType)) {
-		return this.type_error(ErrorKind.TYPE_MISMATCH, initType.value, pointeeType, expr.span);
+	else
+	{
+		TypeResult initType = this.analyze_expr(expr.new.init);
+		if (initType.hadError) return initType;
+		TypeInfo pointeeType = targetType.value.pointee_type();
+		if (!common::type_info_matches(initType.value, pointeeType))
+		{
+			return this.type_error(ErrorKind.TYPE_MISMATCH, initType.value, pointeeType, expr.span);
+		}
 	}
 	return targetType;
 }
@@ -600,24 +652,29 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Inte
 {
 	sz scopeIdx = this.currentScopeIdx;
 	// Start from the current scope's visible symbols and traverse upwards, looking for a match
-	while (scopeIdx!=0){
+	while (scopeIdx != 0)
+	{
 		Stack{SymbolIdx}* visibleSymbols = &this.scopes.items[scopeIdx].visibleSymbols;
-		for (sz i = (sz)visibleSymbols.size - 1; i >= 0; i--){
+		for (sz i = (sz)visibleSymbols.size - 1; i >= 0; i--)
+		{
 			SymbolIdx symbolIdx = visibleSymbols.items[i];
-			Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
-			if (symbol.kind == SymbolKind.LOCAL) {
+			Symbol* symbol      = &this.symbolTable.symbols[symbolIdx];
+			if (symbol.kind == SymbolKind.LOCAL)
+			{
 				Stmt* declStmt = &this.ast.statements[(StmtIdx)symbol.idx];
-				if (declStmt.kind != StmtKind.DECL) {
-					continue;
-				}
+				if (declStmt.kind != StmtKind.DECL) continue;
 				InternedString declName = this.ast.names[declStmt.varDecl.nameIdx];
-				if (declName.id == name.id){
+				if (declName.id == name.id)
+				{
 					*outSymbolIdx = symbolIdx;
 					return true;
 				}
-			} else if (symbol.kind == SymbolKind.PARAM){
+			}
+			else if (symbol.kind == SymbolKind.PARAM)
+			{
 				InternedString declName = this.ast.names[symbol.idx];
-				if (declName.id == name.id){
+				if (declName.id == name.id)
+				{
 					*outSymbolIdx = symbolIdx;
 					return true;
 				}
@@ -626,20 +683,26 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Inte
 		scopeIdx = this.scopes.items[scopeIdx].enclosingIdx;
 	}
 	Stack{SymbolIdx}* globalScopeSymbols = &this.scopes.items[0].visibleSymbols;
-	for (sz i = (sz)globalScopeSymbols.size - 1; i >= 0; i--){
+	for (sz i = (sz)globalScopeSymbols.size - 1; i >= 0; i--)
+	{
 		SymbolIdx symbolIdx = globalScopeSymbols.items[i];
-		Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
-		if (symbol.kind == SymbolKind.FUNCTION) {
-			Decl* decl = &this.ast.declarations[(DeclIdx)symbol.idx];
+		Symbol* symbol      = &this.symbolTable.symbols[symbolIdx];
+		if (symbol.kind == SymbolKind.FUNCTION)
+		{
+			Decl* decl              = &this.ast.declarations[(DeclIdx)symbol.idx];
 			InternedString declName = this.ast.names[decl.fnDecl.nameIdx];
-			if (declName.id == name.id){
+			if (declName.id == name.id)
+			{
 				*outSymbolIdx = symbolIdx;
 				return true;
 			}
-		}else if (symbol.kind == SymbolKind.GLOBAL_VAR) {
-			Stmt* stmt = &this.ast.statements[(StmtIdx)symbol.idx];
+		}
+		else if (symbol.kind == SymbolKind.GLOBAL_VAR)
+		{
+			Stmt* stmt              = &this.ast.statements[(StmtIdx)symbol.idx];
 			InternedString declName = this.ast.names[stmt.varDecl.nameIdx];
-			if (declName.id == name.id){
+			if (declName.id == name.id)
+			{
 				*outSymbolIdx = symbolIdx;
 				return true;
 			}
@@ -650,11 +713,12 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Inte
 
 fn TypeResult SemanticAnalyzer.analyze_expr_var(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	Expr* expr = &this.ast.expressions[exprIdx];
+	Expr* expr          = &this.ast.expressions[exprIdx];
 	InternedString name = this.ast.names[expr.varExpr];
 	SymbolIdx symbolIdx = NO_SYMBOL;
 	debug::@log_analysis("analyzing expr_var '%s'", name.text());
-	if (this.try_resolve_visible_symbol(name, &symbolIdx)){
+	if (this.try_resolve_visible_symbol(name, &symbolIdx))
+	{
 		this.symbolTable.exprSymbols[exprIdx] = symbolIdx;
 		return type_ok(this.symbolTable.symbols[symbolIdx].type);
 	}
@@ -663,59 +727,50 @@ fn TypeResult SemanticAnalyzer.analyze_expr_var(SemanticAnalyzer* this, ExprIdx 
 
 fn TypeResult SemanticAnalyzer.analyze_expr_unary(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	Expr* expr = &this.ast.expressions[exprIdx];
+	Expr* expr         = &this.ast.expressions[exprIdx];
 	TypeResult rhsType = this.analyze_expr(expr.unary.rhs);
-	if (rhsType.hadError) {
-		return rhsType;
-	}
-	switch (expr.unary.op){
+	if (rhsType.hadError) return rhsType;
+	switch (expr.unary.op)
+	{
 		case UnOp.NEG:
-			if (!is_numeric_type(rhsType.value)) {
-				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, rhsType.value, expr.span);
-			}
+			if (!is_numeric_type(rhsType.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, rhsType.value, expr.span);
 			return type_ok(rhsType.value);
 		case UnOp.NOT:
-			if (rhsType.value.type != ValueType.BOOL) {
-				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, make_type(ValueType.BOOL), expr.span);
-			}
+			if (rhsType.value.type != ValueType.BOOL) return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, make_type(ValueType.BOOL), expr.span);
 			return type_ok(make_type(ValueType.BOOL));
 		default:
 			return type_ok(rhsType.value);
 	}
 }
 
-fn TypeResult SemanticAnalyzer.analyze_expr_cast(SemanticAnalyzer* this,ExprIdx exprIdx)
- {
-    Expr* expr = &this.ast.expressions[exprIdx];
+fn TypeResult SemanticAnalyzer.analyze_expr_cast(SemanticAnalyzer* this, ExprIdx exprIdx)
+{
+	Expr* expr = &this.ast.expressions[exprIdx];
 
-    TypeResult source = this.analyze_expr(expr.cast.value);
-    if (source.hadError) {
-		return source;
-	}
+	TypeResult source = this.analyze_expr(expr.cast.value);
+	if (source.hadError) return source;
 
-    TypeResult target = this.create_type_from_ast(&expr.cast.targetType, expr.span);
-    if (target.hadError){
-		return target;
-	} 
+	TypeResult target = this.create_type_from_ast(&expr.cast.targetType, expr.span);
+	if (target.hadError) return target;
 
-    if (!is_numeric_type(source.value) || !is_numeric_type(target.value)) {
-        return this.type_error( ErrorKind.TYPE_MISMATCH, source.value, target.value, expr.span);
-    }
+	if (!is_numeric_type(source.value) || !is_numeric_type(target.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, source.value, target.value, expr.span);
 
-    return type_ok(target.value);
+	return type_ok(target.value);
 }
 
 fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	Expr* expr = &this.ast.expressions[exprIdx];
+	Expr* expr         = &this.ast.expressions[exprIdx];
 	TypeResult lhsType = this.analyze_expr(expr.binary.lhs);
 
-	if (lhsType.hadError) {
+	if (lhsType.hadError)
+	{
 		return lhsType;
 	}
 
 	TypeResult rhsType = this.analyze_expr(expr.binary.rhs);
-	if (rhsType.hadError) {
+	if (rhsType.hadError)
+	{
 		return rhsType;
 	}
 
@@ -723,44 +778,52 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 
 	switch (expr.binary.op)
 	{
-		case BinOp.ADD:			nextcase;
-		case BinOp.SUB:			nextcase;
-		case BinOp.MUL:			nextcase;
+		case BinOp.ADD: nextcase;
+		case BinOp.SUB: nextcase;
+		case BinOp.MUL: nextcase;
 		case BinOp.DIV:
-		{
-			if (!is_numeric_type(lhsType.value) || !common::type_info_matches(lhsType.value, rhsType.value)) {
-				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+
+			{
+				if (!is_numeric_type(lhsType.value) || !common::type_info_matches(lhsType.value, rhsType.value))
+				{
+					return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+				}
+				return type_ok(lhsType.value);
 			}
-			return type_ok(lhsType.value);
-		}
-		case BinOp.EQ:			nextcase;
+		case BinOp.EQ: nextcase;
 		case BinOp.NEQ:
-			if (!common::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!common::type_info_matches(lhsType.value, rhsType.value))
+			{
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
-		case BinOp.LESS:		nextcase;
-		case BinOp.LESS_EQ:		nextcase;
-		case BinOp.GREATER:		nextcase;
+		case BinOp.LESS: nextcase;
+		case BinOp.LESS_EQ: nextcase;
+		case BinOp.GREATER: nextcase;
 		case BinOp.GREATER_EQ:
-			if (!is_numeric_type(lhsType.value) || !common::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!is_numeric_type(lhsType.value) || !common::type_info_matches(lhsType.value, rhsType.value))
+			{
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
-		case BinOp.AND:			nextcase;
+		case BinOp.AND: nextcase;
 		case BinOp.OR:
-			if (lhsType.value.type != ValueType.BOOL) {
+			if (lhsType.value.type != ValueType.BOOL)
+			{
 				return this.type_error(ErrorKind.TYPE_MISMATCH, lhsType.value, make_type(ValueType.BOOL), expr.span);
 			}
-			if (rhsType.value.type != ValueType.BOOL) {
+			if (rhsType.value.type != ValueType.BOOL)
+			{
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, make_type(ValueType.BOOL), expr.span);
 			}
 			return type_ok(make_type(ValueType.BOOL));
 		case BinOp.STORE:
-			if (this.ast.expressions[expr.binary.lhs].kind == ExprKind.THIS) {
+			if (this.ast.expressions[expr.binary.lhs].kind == ExprKind.THIS)
+			{
 				return this.type_error(ErrorKind.INVALID_LVALUE, lhsType.value, lhsType.value, expr.span);
 			}
-			if (!common::type_info_matches(lhsType.value, rhsType.value)) {
+			if (!common::type_info_matches(lhsType.value, rhsType.value))
+			{
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(lhsType.value);
@@ -772,10 +835,12 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 fn TypeResult SemanticAnalyzer.analyze_expr_this(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.ast.expressions[exprIdx];
-	if (!this.is_in_method()){
+	if (!this.is_in_method())
+	{
 		return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, nullType, expr.span);
 	}
-	if (this.currentStructDeclIdx == parser::NO_IDX || this.currentReceiverSymbolIdx == NO_SYMBOL) {
+	if (this.currentStructDeclIdx == parser::NO_IDX || this.currentReceiverSymbolIdx == NO_SYMBOL)
+	{
 		return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, expr.span);
 	}
 	this.symbolTable.exprSymbols[exprIdx] = this.currentReceiverSymbolIdx;
@@ -785,7 +850,8 @@ fn TypeResult SemanticAnalyzer.analyze_expr_this(SemanticAnalyzer* this, ExprIdx
 fn bool SemanticAnalyzer.is_place_expr(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.ast.expressions[exprIdx];
-	switch (expr.kind) {
+	switch (expr.kind)
+	{
 		case ExprKind.VAR: return true;
 		case ExprKind.THIS: return true;
 		case ExprKind.MEMBER: return this.is_place_expr(expr.member.base);
@@ -799,19 +865,24 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 	this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 	// Method calls: resolve against struct methods before treating as free function calls.
 	Expr* calleeExpr = &this.ast.expressions[expr.call.callee];
-	if (calleeExpr.kind == ExprKind.MEMBER) {
+	if (calleeExpr.kind == ExprKind.MEMBER)
+	{
 		TypeResult baseType = this.analyze_expr(calleeExpr.member.base);
-		if (baseType.hadError) {
+		if (baseType.hadError)
+		{
 			return baseType;
 		}
 		TypeInfo baseInfo = baseType.value;
-		bool isStruct = baseInfo.type == ValueType.STRUCT;
-		if (isStruct) {
-			DeclIdx structDeclIdx = this.find_struct_decl_idx(baseInfo.structTypeIndex);
+		bool isStruct     = baseInfo.type == ValueType.STRUCT;
+		if (isStruct)
+		{
+			DeclIdx structDeclIdx     = this.find_struct_decl_idx(baseInfo.structTypeIndex);
 			InternedString methodName = this.ast.names[calleeExpr.member.memberIdx];
-			TypeResult resolved = {};
-			if (this.try_resolve_method_call(structDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved)) {
-				if (!resolved.hadError && !this.is_place_expr(calleeExpr.member.base)) {
+			TypeResult resolved       = { };
+			if (this.try_resolve_method_call(structDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved))
+			{
+				if (!resolved.hadError && !this.is_place_expr(calleeExpr.member.base))
+				{
 					return this.type_error(ErrorKind.INVALID_LVALUE, baseInfo, baseInfo, expr.span);
 				}
 				this.symbolTable.callReceiverExpr[exprIdx] = calleeExpr.member.base;
@@ -819,30 +890,36 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 			}
 		}
 	}
-	if (calleeExpr.kind == ExprKind.VAR && this.currentStructDeclIdx != parser::NO_IDX) {
+	if (calleeExpr.kind == ExprKind.VAR && this.currentStructDeclIdx != parser::NO_IDX)
+	{
 		InternedString methodName = this.ast.names[calleeExpr.varExpr];
-		TypeResult resolved = {};
-		if (this.try_resolve_method_call(this.currentStructDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved)) {
+		TypeResult resolved       = { };
+		if (this.try_resolve_method_call(this.currentStructDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved))
+		{
 			this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 			return resolved;
 		}
 	}
 
 	TypeResult calleeType = this.analyze_expr(expr.call.callee);
-	if (calleeType.hadError) {
+	if (calleeType.hadError)
+	{
 		return calleeType;
 	}
 
-	for(sz i = expr.call.argsStart; i < expr.call.argsEnd; i++) {
+	for (sz i = expr.call.argsStart; i < expr.call.argsEnd; i++)
+	{
 		ExprIdx argExprIdx = this.ast.args[i];
 		TypeResult argType = this.analyze_expr(argExprIdx);
-		if (argType.hadError) {
+		if (argType.hadError)
+		{
 			return argType;
 		}
 	}
 
 	SymbolIdx symbolIdx = this.symbolTable.exprSymbols[expr.call.callee];
-	if (symbolIdx != NO_SYMBOL && this.symbolTable.symbols[symbolIdx].kind == SymbolKind.FUNCTION) {
+	if (symbolIdx != NO_SYMBOL && this.symbolTable.symbols[symbolIdx].kind == SymbolKind.FUNCTION)
+	{
 		// Add extra info to the symbol table, useful in later passes
 		this.symbolTable.callTargets[exprIdx].kind = CallTargetKind.FREE_FUN;
 		this.symbolTable.callTargets[exprIdx].fnDeclIdx = this.symbolTable.symbols[symbolIdx].idx;
@@ -855,43 +932,53 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 
 fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	Expr* expr = &this.ast.expressions[exprIdx];
+	Expr* expr          = &this.ast.expressions[exprIdx];
 	TypeResult baseType = this.analyze_expr(expr.member.base);
-	if (baseType.hadError) {
+	if (baseType.hadError)
+	{
 		return baseType;
 	}
 	TypeInfo baseInfo = baseType.value;
 
 	// If we're analyzing a member of a (for example) int&
 	// We only accept the built-int .value property, reject anything else
-	if(baseInfo.is_builtin_ref_like()){
+	if (baseInfo.is_builtin_ref_like())
+	{
 		InternedString fieldName = this.ast.names[expr.member.memberIdx];
-		TypeInfo builtinPointee = baseInfo.pointee_type();
-		if(fieldName.text() == "value"){
+		TypeInfo builtinPointee  = baseInfo.pointee_type();
+		if (fieldName.text() == "value")
+		{
 			return type_ok(builtinPointee);
-		}else{
+		}
+		else
+		{
 			return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, builtinPointee, expr.span);
 		}
 	}
 	bool isStruct = baseInfo.type == ValueType.STRUCT;
-	if (!isStruct && !baseInfo.is_struct_ref_like()) {
+	if (!isStruct && !baseInfo.is_struct_ref_like())
+	{
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
-	if (baseInfo.structTypeIndex == common::NOT_STRUCT) {
+	if (baseInfo.structTypeIndex == common::NOT_STRUCT)
+	{
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
 
 	DeclIdx structDeclIdx = this.find_struct_decl_idx(baseInfo.structTypeIndex);
-	if (structDeclIdx == parser::NO_IDX) {
+	if (structDeclIdx == parser::NO_IDX)
+	{
 		return this.type_error(ErrorKind.INVALID_TYPE, baseInfo, baseInfo, expr.span);
 	}
 
-	Decl* structDecl = &this.ast.declarations[structDeclIdx];
+	Decl* structDecl         = &this.ast.declarations[structDeclIdx];
 	InternedString fieldName = this.ast.names[expr.member.memberIdx];
-	MemberIdx fieldIdx = 0;
-	foreach (&field : structDecl.structDecl.fields){
+	MemberIdx fieldIdx       = 0;
+	foreach (&field : structDecl.structDecl.fields)
+	{
 		InternedString declName = this.ast.names[field.nameIdx];
-		if (declName.id == fieldName.id){
+		if (declName.id == fieldName.id)
+		{
 			this.symbolTable.memberFieldIndices[exprIdx] = fieldIdx;
 			return this.create_type_from_ast(&field.type, expr.span);
 		}
@@ -905,3 +992,4 @@ fn Scope* SemanticAnalyzer.current_scope(SemanticAnalyzer* this)
 {
 	return &this.scopes.items[this.currentScopeIdx];
 }
+

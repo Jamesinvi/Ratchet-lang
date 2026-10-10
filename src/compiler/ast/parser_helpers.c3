@@ -11,99 +11,105 @@ import log;
 
 fn void Parser.advance(Parser* this)
 {
-    this.previous = this.current;
-    this.current++;
+	this.previous = this.current;
+	this.current++;
 }
 
 fn void Parser.consume(Parser* this, TokenType type, String msg)
 {
-    if (this.current.tokenType == type) {
-        this.advance();
-        return;
-    }
-    this.error(msg);
+	if (this.current.tokenType == type)
+	{
+		this.advance();
+		return;
+	}
+	this.error(msg);
 }
 
-fn bool Parser.match(Parser* this, TokenType... tokenTypes)
+fn bool Parser.match(Parser* this, TokenType ...tokenTypes)
 {
-    foreach (type : tokenTypes) {
-        if (this.current.tokenType == type) {
-            this.advance();
-            return true;
-        }
-    }
-    return false;
+	foreach (type : tokenTypes)
+	{
+		if (this.current.tokenType == type)
+		{
+			this.advance();
+			return true;
+		}
+	}
+	return false;
 }
 
 fn bool Parser.check(Parser* this, TokenType tokenType)
 {
-    return this.current.matches_type(tokenType);
+	return this.current.matches_type(tokenType);
 }
 
 fn bool Parser.match_any_type_token(Parser* this)
 {
-    if(this.check_any_type_token()){
-        this.advance();
-        return true;
-    }
-    return false;
+	if (this.check_any_type_token())
+	{
+		this.advance();
+		return true;
+	}
+	return false;
 }
 
 fn bool Parser.check_any_type_token(Parser* this) @inline
 {
-    return  this.current.is_any_type();
+	return this.current.is_any_type();
 }
 
 // ---------- Errors / Debug ----------
 
 fn void Parser.warning(Parser* this, String msg)
 {
-    this.warning_at(this.previous, msg);
+	this.warning_at(this.previous, msg);
 }
 
 fn void Parser.warning_at(Parser* this, Token* token, String msg)
 {
-    if (this.panicMode) return;
+	if (this.panicMode) return;
 
-    log::errlog("[line %d] Warning", token.line);
-    log::errlog(" at '%s'", token.value());
-    log::errlog(", %s \n", msg);
+	log::errlog("[line %d] Warning", token.line);
+	log::errlog(" at '%s'", token.value());
+	log::errlog(", %s \n", msg);
 }
 
-fn void Parser.error(Parser* this, String msg, args ...)
+fn void Parser.error(Parser* this, String msg, args...)
 {
-    this.error_at(this.previous, msg, ...args);
+	this.error_at(this.previous, msg, ...args);
 }
 
-fn void Parser.error_at(Parser* this, Token* token, String msg, args ...)
+fn void Parser.error_at(Parser* this, Token* token, String msg, args...)
 {
-    if (this.panicMode) return;
+	if (this.panicMode) return;
 
-    log::errlog("[line %d] Error", token.line);
-    this.hadError  = true;
-    this.panicMode = true;
+	log::errlog("[line %d] Error", token.line);
+	this.hadError = true;
+	this.panicMode = true;
 
-    if (token.tokenType == TokenType.EOF) {
-        log::errlog(" at end, ");
-    } else {
-        log::errlog(" at '%s', ", token.value());
-    }
+	if (token.tokenType == TokenType.EOF)
+	{
+		log::errlog(" at end, ");
+	}
+	else
+	{
+		log::errlog(" at '%s', ", token.value());
+	}
 
-    log::errlogn(msg, ...args);
-
+	log::errlogn(msg, ...args);
 }
 
 // ---------- Identifier helpers ----------
 
 fn bool identifiers_equal(Token* a, Token* b) @inline
 {
-    return strings_equal(a.value(), b.value());
+	return strings_equal(a.value(), b.value());
 }
 
 fn bool strings_equal(String a, String b)
 {
-    if (a.len != b.len) return false;
-    return libc::memcmp(a, b, a.len) == 0;
+	if (a.len != b.len) return false;
+	return libc::memcmp(a, b, a.len) == 0;
 }
 
 
@@ -117,11 +123,12 @@ fn void Parser.emit_program_call(Parser* this)
 
 fn ushort Parser.ensure_constant(Parser* this, int constantIndex)
 {
-    if (constantIndex > ushort::max) {
-        this.error("Too many constants in one chunk");
-        return 0;
-    }
-    return (ushort)constantIndex;
+	if (constantIndex > ushort::max)
+	{
+		this.error("Too many constants in one chunk");
+		return 0;
+	}
+	return (ushort)constantIndex;
 }
 
 // ---------- Predeclaration for functions / structs / natives ----------
@@ -131,46 +138,50 @@ fn void Parser.predeclare_structs(Parser* this)
 	assert(globals::declaredStructs.is_initialized());
 	assert(globals::declaredStructs.table.len > 0);
 
-    // Look for patterns: struct <name>
-    for (sz i = 0; i < this.input.len() - 2; i++) {
-        Token* t = &this.input[i];
-        if (t.tokenType == TokenType.STRUCT_T) {
+	// Look for patterns: struct <name>
+	for (sz i = 0; i < this.input.len() - 2; i++)
+	{
+		Token* t = &this.input[i];
+		if (t.tokenType == TokenType.STRUCT_T)
+		{
 			int scopeCloseExpected = 1;
-            Token* nameTok = &this.input[i + 1];
-            // We push a temporary declaration that will have to be filled in later
-            Decl decl = {.kind = DeclKind.STRUCT};
-            decl.structDecl = {};
-            NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
-            decl.structDecl.nameIdx = nameIdx;
-            DeclIdx declIdx = this.push_decl_get_idx(&decl);
+			Token* nameTok         = &this.input[i + 1];
+			// We push a temporary declaration that will have to be filled in later
+			Decl decl              = { .kind = DeclKind.STRUCT };
+			decl.structDecl = { };
+			NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
+			decl.structDecl.nameIdx = nameIdx;
+			DeclIdx declIdx = this.push_decl_get_idx(&decl);
 
-            // Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
-            String starName = nameTok.value().concat(this.outputAllocator, "*");
-            String ampName = nameTok.value().concat(this.outputAllocator, "&");
+			// Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
+			String starName = nameTok.value().concat(this.outputAllocator, "*");
+			String ampName  = nameTok.value().concat(this.outputAllocator, "&");
 
-            debug::@log_parse("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
-            globals::declaredStructs.set(nameTok.value(), declIdx);
-            globals::declaredStructs.set(starName, declIdx);
-            globals::declaredStructs.set(ampName, declIdx);
+			debug::@log_parse("pre-declaring struct with names '%s' %s, and %s", nameTok.value(), starName, ampName);
+			globals::declaredStructs.set(nameTok.value(), declIdx);
+			globals::declaredStructs.set(starName, declIdx);
+			globals::declaredStructs.set(ampName, declIdx);
 		}
-    }
+	}
 }
 
 fn void Parser.predeclare_functions(Parser* this)
 {
-    // Look for patterns: fn <type> <identifier>. <type> can include arrays.
-    for (sz i = 0; i < this.input.len() - 2; i++) {
-        Token* t = &this.input[i];
-        if (t.tokenType == TokenType.FN) {
+	// Look for patterns: fn <type> <identifier>. <type> can include arrays.
+	for (sz i = 0; i < this.input.len() - 2; i++)
+	{
+		Token* t = &this.input[i];
+		if (t.tokenType == TokenType.FN)
+		{
 			// Store the current and previous pointers
-			Token* savedCurrent = this.current;
+			Token* savedCurrent  = this.current;
 			Token* savedPrevious = this.previous;
 			// Advance
 			this.current = &this.input[i + 1];
 			this.previous = t;
 			// Parse the type
 			TypeAst returnTypeAst = this.parse_type_ast();
-			Token* nameTok = this.current;
+			Token* nameTok        = this.current;
 			// Restore
 			this.current = savedCurrent;
 			this.previous = savedPrevious;
@@ -181,47 +192,51 @@ fn void Parser.predeclare_functions(Parser* this)
 				this.error_at(nameTok, "Expected function name after return type");
 				return;
 			}
-            // We push a temporary declaration that will have to be filled in later
-            Decl decl = {.kind = DeclKind.FUNCTION};
-            decl.fnDecl = {};
-            NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
-            decl.fnDecl.returnType = returnTypeAst;
-            decl.fnDecl.nameIdx = nameIdx;
-            debug::@log_parse("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), this.outputAst.names[returnTypeAst.nameIdx].text(), nameIdx);
-            DeclIdx declIdx = this.push_decl_get_idx(&decl);
-            globals::declaredFunctions.set(nameTok.value(), declIdx);
-        }
-    }
+			// We push a temporary declaration that will have to be filled in later
+			Decl decl = { .kind = DeclKind.FUNCTION };
+			decl.fnDecl = { };
+			NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
+			decl.fnDecl.returnType = returnTypeAst;
+			decl.fnDecl.nameIdx = nameIdx;
+			debug::@log_parse("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), this.outputAst.names[returnTypeAst.nameIdx].text(), nameIdx);
+			DeclIdx declIdx = this.push_decl_get_idx(&decl);
+			globals::declaredFunctions.set(nameTok.value(), declIdx);
+		}
+	}
 }
 
- 
+
 fn void Parser.predeclare_natives(Parser* this)
 {
 }
 
-fn ExprIdx Parser.push_expr_get_idx(Parser* this, Expr* expr){
-    ExprIdx index = (ExprIdx)this.outputAst.expressions.len();
-    this.outputAst.expressions.push(*expr);
-    return index;
+fn ExprIdx Parser.push_expr_get_idx(Parser* this, Expr* expr)
+{
+	ExprIdx index = (ExprIdx)this.outputAst.expressions.len();
+	this.outputAst.expressions.push(*expr);
+	return index;
 }
 
-fn DeclIdx Parser.push_decl_get_idx(Parser* this, Decl* decl){
-    DeclIdx index = (DeclIdx)this.outputAst.declarations.len();
-    this.outputAst.declarations.push(*decl);
-    return index;
+fn DeclIdx Parser.push_decl_get_idx(Parser* this, Decl* decl)
+{
+	DeclIdx index = (DeclIdx)this.outputAst.declarations.len();
+	this.outputAst.declarations.push(*decl);
+	return index;
 }
 
-fn NameIdx Parser.push_name_get_idx(Parser* this, String toCopy){
-    NameIdx index = (NameIdx)this.outputAst.names.len();
-    InternedString stringId = globals::internedSourceStrings.get_or_intern(toCopy);
-    this.outputAst.names.push(stringId);
+fn NameIdx Parser.push_name_get_idx(Parser* this, String toCopy)
+{
+	NameIdx index           = (NameIdx)this.outputAst.names.len();
+	InternedString stringId = globals::internedSourceStrings.get_or_intern(toCopy);
+	this.outputAst.names.push(stringId);
 	assert(this.outputAst.names.len() == (sz)index + 1);
-    return index;
+	return index;
 }
 
 fn StmtIdx Parser.push_stmt_get_idx(Parser* this, Stmt* stmt)
 {
-    StmtIdx idx = (StmtIdx)this.outputAst.statements.len();
-    this.outputAst.statements.push(*stmt);
-    return idx;
+	StmtIdx idx = (StmtIdx)this.outputAst.statements.len();
+	this.outputAst.statements.push(*stmt);
+	return idx;
 }
+

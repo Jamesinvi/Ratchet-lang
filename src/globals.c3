@@ -8,9 +8,9 @@ import std::collections::map;
 alias CompilationContext = main::CompilationContext;
 
 bool globalsInitialized = false;
-DynamicArenaAllocator compAllocator;		// Freed after compilation finishes unless in debug mode
-DynamicArenaAllocator typeInfoAllocator;	// Kept at runtime until type registry is disposed before shutdown
-DynamicArenaAllocator runtimeAllocator;		// Kept at runtime until program finishes
+DynamicArenaAllocator compAllocator;     // Freed after compilation finishes unless in debug mode
+DynamicArenaAllocator typeInfoAllocator; // Kept at runtime until type registry is disposed before shutdown
+DynamicArenaAllocator runtimeAllocator;  // Kept at runtime until program finishes
 
 CompilationContext compilationCtx;
 List{Token} tokens;
@@ -70,7 +70,9 @@ fn void cleanup_globals()
 
 fn void print_struct_types()
 {
-	foreach(&structInfo : structTypes){
+	foreach (&structInfo : structTypes)
+	{
 		structInfo.print();
 	}
 }
+

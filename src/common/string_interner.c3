@@ -13,14 +13,14 @@ struct InternedString
 
 macro String InternedString.text(InternedString* this)
 {
-    return this.owner.strings[this.id];
+	return this.owner.strings[this.id];
 }
 
 struct StringInterner
 {
 	List{String} strings;
 	HashMap{String, InternedString} ids;
-	Allocator allocator; 
+	Allocator allocator;
 }
 
 fn void StringInterner.init(StringInterner* this, Allocator allocator, sz size)
@@ -32,14 +32,16 @@ fn void StringInterner.init(StringInterner* this, Allocator allocator, sz size)
 
 fn InternedString StringInterner.get_or_intern(StringInterner* this, String input)
 {
-    InternedString? found = this.ids.get(input);
-    if (catch err = found) {
-        StringID nextIdx = this.strings.len();
-        String stringCopy = String.copy(input, this.allocator);
-        this.strings.push(stringCopy);
-        InternedString internedString = { .owner = this, .id = nextIdx };
-        this.ids[stringCopy] = internedString;
-        return internedString;
-    }
-    return found;
+	InternedString? found = this.ids.get(input);
+	if (catch err = found)
+	{
+		StringID nextIdx  = this.strings.len();
+		String stringCopy = String.copy(input, this.allocator);
+		this.strings.push(stringCopy);
+		InternedString internedString = { .owner = this, .id = nextIdx };
+		this.ids[stringCopy] = internedString;
+		return internedString;
+	}
+	return found;
 }
+
