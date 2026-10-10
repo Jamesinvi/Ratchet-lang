@@ -530,7 +530,7 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 	if (!this.match_any_type_token())
 	{
 		this.error("Expected type");
-		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+		return { .tokenType = TokenType.NULL, .nameIdx = 0, .arraySize = common::NO_LENGTH };
 	}
 	// match_any_type_token advanced, so `previous` is the type token
 	NameIdx typeNameIdx     = this.push_name_get_idx(this.previous.value());
@@ -539,7 +539,7 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 	// All of the following block handles arrays
 	// array types have a secondary suffix ("[]")
 	StorageKind arrayStorage =  StorageKind.NONE;
-	short arraySize          = -1;
+	short arraySize          = common::NO_LENGTH;
 	if (this.match(TokenType.OPEN_BRACKET))
 	{
 		// T[]& or. T[]*
@@ -557,7 +557,7 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 			else
 			{
 				this.error("Must either be an []& or []*");
-				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+				return { .tokenType = TokenType.NULL, .nameIdx = 0, .arraySize = common::NO_LENGTH };
 			}
 		}
 		else
@@ -567,13 +567,13 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 			if (catch err = parsedInt)
 			{
 				this.error("Expected an integer size");
-				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+				return { .tokenType = TokenType.NULL, .nameIdx = 0, .arraySize = common::NO_LENGTH };
 			}
 			// Too big?
 			if (parsedInt > short::max)
 			{
 				this.error("Max size is 32767");
-				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+				return { .tokenType = TokenType.NULL, .nameIdx = 0, .arraySize = common::NO_LENGTH };
 			}
 			arrayStorage = StorageKind.INLINE;
 			arraySize = (short)parsedInt;
@@ -590,12 +590,12 @@ fn TypeAst Parser.parse_base_type_ast(Parser* this)
 	if (!this.match_any_type_token())
 	{
 		this.error("Expected base type");
-		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+		return { .tokenType = TokenType.NULL, .nameIdx = 0, .arraySize = common::NO_LENGTH };
 	}
 	// match_any_type_token advanced, so `previous` is the type token
 	NameIdx typeNameIdx     = this.push_name_get_idx(this.previous.value());
 	TokenType typeTokenType = this.previous.tokenType;
-	return { .tokenType = typeTokenType, .nameIdx = typeNameIdx, .arrayStorage = StorageKind.NONE, .arraySize = -1 };
+	return { .tokenType = typeTokenType, .nameIdx = typeNameIdx, .arrayStorage = StorageKind.NONE, .arraySize = common::NO_LENGTH };
 }
 
 
@@ -688,7 +688,7 @@ fn ExprIdx Parser.new_expr(Parser* this)
 	// Standard new expression for structs or heap built-ins
 	Expr expr = { .kind = ExprKind.NEW };
 	expr.span = { .line = this.previous.line };
-	expr.new = { .type = targetType, .arraySize = -1 };
+	expr.new = { .type = targetType, .arraySize = NO_IDX };
 	debug::@log_parse("%s, target type: %s", this.current.value(), targetType.arrayStorage);
 	this.consume(TokenType.LEFT_BRACE, "Expecting '{' when declaring a new ref type");
 	ExprIdx initExpr = this.expression();

@@ -6,7 +6,7 @@ import std::collections::list;
 import log;
 import debug;
 
-TypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT };
+TypeInfo nullType = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH };
 
 
 fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
@@ -20,7 +20,7 @@ fn bool SemanticAnalyzer.is_in_method(SemanticAnalyzer* this)
 *>
 fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, TypeAst* input, Span span)
 {
-	TypeInfo result = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT };
+	TypeInfo result = { .type = ValueType.NULL, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH };
 	switch (input.tokenType)
 	{
 		case TokenType.INTEGER_T: result.type = ValueType.INT;
@@ -58,15 +58,15 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 					result.type = (lastChar == '&') ? ValueType.REF : ValueType.PTR;
 					result.refToType = ValueType.STRUCT;
 					result.structTypeIndex = get_struct_idx_bind_if_needed(baseName, this.outputAllocator);
-					return type_ok(result);
 				}
-
-				// Try structs
-				DeclIdx? found = globals::declaredStructs.get(typeName);
-				if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
-				result.type = ValueType.STRUCT;
-				result.structTypeIndex = get_struct_idx_bind_if_needed(typeName, this.outputAllocator);
-				return type_ok(result);
+				else
+				{
+					// Try structs
+					DeclIdx? found = globals::declaredStructs.get(typeName);
+					if (catch err = found) return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
+					result.type = ValueType.STRUCT;
+					result.structTypeIndex = get_struct_idx_bind_if_needed(typeName, this.outputAllocator);
+				}
 			}
 		case TokenType.THIS:
 
@@ -78,7 +78,6 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 				result.type = ValueType.STRUCT;
 				result.structTypeIndex = get_struct_idx_bind_if_needed(typeName, this.outputAllocator);
 				result.refToType = ValueType.NULL;
-				return type_ok(result);
 			}
 		default: return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, span);
 	}
@@ -87,6 +86,10 @@ fn TypeResult SemanticAnalyzer.create_type_from_ast(SemanticAnalyzer* this, Type
 	{
 		result.arrBaseType = result.type;
 		result.type = value_type_from_array_storage(input.arrayStorage);
+		if (input.arrayStorage == StorageKind.INLINE)
+		{
+			result.arraySize = input.arraySize;
+		}
 	}
 	return type_ok(result);
 }
@@ -158,13 +161,13 @@ fn TypeResult SemanticAnalyzer.fill_globals(SemanticAnalyzer* this)
 
 fn TypeInfo make_type(ValueType type)
 {
-	TypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT };
+	TypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH };
 	return info;
 }
 
 fn TypeInfo make_ref_type(ValueType refToType, int structIndex)
 {
-	TypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex };
+	TypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex, .arraySize = common::NO_LENGTH };
 	return info;
 }
 

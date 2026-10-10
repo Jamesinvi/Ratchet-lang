@@ -42,25 +42,26 @@ struct MirRegister
 
 enum MirOpCode : char (String asStr)
 {
-	ADD        { "add" },
-	SUB        { "sub" },
-	MUL        { "mul" },
-	DIV        { "div" },
-	EQ         { "eq" },
-	NEQ        { "noteq" },
-	LESS       { "less" },
-	LESS_EQ    { "lesseq" },
-	GREATER    { "greater" },
-	GREATER_EQ { "greatereq" },
-	AND        { "and" },
-	OR         { "or" },
-	AS         { "as" },
-	STORE      { "store" },
-	CALL       { "call" },
-	LOAD       { "load" },
-	ECHO       { "echo" },
-	ALLOC_GC   { "alloc_gc" },
-	ZERO_BYTES { "zero_bytes" }
+	ADD         { "add" },
+	SUB         { "sub" },
+	MUL         { "mul" },
+	DIV         { "div" },
+	EQ          { "eq" },
+	NEQ         { "noteq" },
+	LESS        { "less" },
+	LESS_EQ     { "lesseq" },
+	GREATER     { "greater" },
+	GREATER_EQ  { "greatereq" },
+	AND         { "and" },
+	OR          { "or" },
+	AS          { "as" },
+	STORE       { "store" },
+	CALL        { "call" },
+	LOAD        { "load" },
+	ECHO        { "echo" },
+	ALLOC_GC    { "alloc_gc" },
+	ALLOC_ARRAY { "alloc_array" },
+	ZERO_BYTES  { "zero_bytes" }
 }
 
 enum MirTerminatorOp : char (String asStr)
@@ -337,6 +338,17 @@ fn void MirProgram.print_instruction(MirProgram* this, MirInstruction inst, Prog
 		}
 		this.print_operand(this.operands[opIdx], ast);
 	}
+
+	if (inst.type.is_array())
+	{
+		log::log("<%s", inst.type.arrBaseType);
+		if (inst.type.type == ValueType.ARR_INLINE)
+		{
+			log::log(", %s", inst.type.arraySize);
+		}
+		log::log(">");
+	}
+
 	log::logn("");
 }
 

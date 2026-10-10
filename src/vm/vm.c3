@@ -212,6 +212,7 @@ fn RunResult Vm.execute_program(Vm* vm)
 
 			// Allocation
 			case BCOpCode.ALLOC_GC: vm.alloc_gc(inst);
+			case BCOpCode.ALLOC_ARRAY: vm.alloc_array(inst);
 			// Control flow
 			case BCOpCode.BRANCH_IF_FALSE: vm.branch_if_false(inst);
 			case BCOpCode.JUMP: vm.jump(inst);
@@ -234,7 +235,7 @@ macro Vm.echo(Vm* vm, BCInstruction* inst, $Type)
 	// c3fmt off
 	// use the vm output stream. stdout by default
 	$if $Type == uptr:
-    	TypeInfo pointeeType = inst.typeInfo.pointee_type();
+    	TypeInfo pointeeType = (&vm.program.typeInfoTable[inst.typeInfoIdx]).pointee_type();
 		switch (pointeeType.type)
 		{
 			case ValueType.INT:		vm.print_value_from_heap(inst.leftOffset, int);
@@ -468,7 +469,7 @@ macro Vm.cmp_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 fn void Vm.alloc_gc(Vm* vm, BCInstruction* inst)
 {
 	// Get information about the type we need to allocate
-	TypeInfo pointeeType = inst.typeInfo.pointee_type();
+	TypeInfo pointeeType = (&vm.program.typeInfoTable[inst.typeInfoIdx]).pointee_type();
 	sz size              = pointeeType.size();
 	sz alignment         = pointeeType.alignment();
 
@@ -482,6 +483,27 @@ fn void Vm.alloc_gc(Vm* vm, BCInstruction* inst)
 	// This is what is moved around when copying an int& around
 	uptr* dest = (uptr*)&vm.stack[vm.frame.base + inst.destOffset];
 	*dest = (uptr)allocated;
+}
+
+fn void Vm.alloc_array(Vm* vm, BCInstruction* inst)
+{
+	// Get information about the array we need to allocate
+	TypeInfo arrayType   = vm.program.typeInfoTable[inst.typeInfoIdx];
+	TypeInfo elementType = (&vm.program.typeInfoTable[inst.typeInfoIdx]).element_type();
+	sz size              = elementType.size();
+	sz alignment         = elementType.alignment();
+
+	HeapTracker* heapToUse = arrayType.type == ValueType.ARR_REF_GC ? &vm.trackedHeap : &vm.untrackedHeap;
+	// array length is stored in left offset
+	int* arrLenPtr         = (int*)&vm.stack[vm.frame.base + inst.leftOffset];
+	int arrLen             = *arrLenPtr;
+	if (arrLen < 0) abort("Array length cannot be negative");
+	if (arrLen > (1 << 30)) abort("Array capacity exceeds supported range");
+	ArrayHandle* arrayHandle = heapToUse.alloc_array(size, alignment, arrLen);
+	// Store the address of the newly ArrayHandle into dest.
+	// This is what is moved around when copying an T[]& around
+	uptr* dest               = (uptr*)&vm.stack[vm.frame.base + inst.destOffset];
+	*dest = (uptr)arrayHandle;
 }
 
 fn void Vm.mov_bytes(Vm* vm, BCInstruction* inst) @inline

@@ -628,21 +628,36 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
 			TypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
 			MirRegisterID resultReg = this.currentReg++;
-			MirOperand val = this.lower_expr(expr.new.init);
-			OperandIdx start = this.operands_len();
-			this.output.operands.push(val);
-			OperandIdx end = this.operands_len();
+			OperandIdx start, end;
+			MirOpCode opCode;
+			// Arrays have a separate opcode, and need to lower a different expression (arraySize instead of init)
+			if (varExprType.type == ValueType.ARR_REF_GC || varExprType.type == ValueType.ARR_REF_NOGC)
+			{
+				MirOperand arrSize = this.lower_expr(expr.new.arraySize);
+				start = this.operands_len();
+				this.output.operands.push(arrSize);
+				end = this.operands_len();
+				opCode = MirOpCode.ALLOC_ARRAY;
+			}
+			else
+			{
+				MirOperand val = this.lower_expr(expr.new.init);
+				start = this.operands_len();
+				this.output.operands.push(val);
+				end = this.operands_len();
+				opCode = MirOpCode.ALLOC_GC;
+			}
 
 			MirInstruction inst = {
-				.opCode = MirOpCode.ALLOC_GC,
+				.opCode = opCode,
 				.type = varExprType,
 				.result = resultReg,
 				.operandsStart = start,
 				.operandsEnd = end,
 				.sourceExprIdx = exprIdx,
 			};
-
 			this.output.instructions.push(inst);
+
 			return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
 		case ExprKind.MEMBER:
 			// Basically the same as VAR but we lower the place since we know it's a member

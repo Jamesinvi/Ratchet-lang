@@ -5,6 +5,7 @@ import std::collections::list;
 import std::collections::map;
 
 const NOT_STRUCT = -1;
+const NO_LENGTH  = -1;
 
 enum ParamPassMode : char (String asStr)
 {
@@ -32,12 +33,10 @@ enum ValueType : char
 struct TypeInfo
 {
 	int structTypeIndex; // -1 is reserved for non-structs
+	short arraySize; // inline element count; NO_LENGTH otherwise
 	ValueType type;
-	union
-	{
-		ValueType refToType; // Will be ValueType.NULL when it is not a reference
-		ValueType arrBaseType; // Used for arrays to specify what type it's storing
-	}
+	ValueType refToType; // pointee kind for a scalar reference or reference array element
+	ValueType arrBaseType; // element kind for arrays; ValueType.NULL otherwise
 }
 
 fn ushort TypeInfo.size(TypeInfo* this)
@@ -52,6 +51,9 @@ fn ushort TypeInfo.size(TypeInfo* this)
 		case ValueType.REF: nextcase;
 		case ValueType.PTR: return uptr::size;
 		case ValueType.STRUCT: return globals::structTypes[this.structTypeIndex].sizeInBytes;
+		case ValueType.ARR_INLINE: return this.element_type().size() * (ushort)this.arraySize;  // sizeof(element) * array length
+		case ValueType.ARR_REF_GC: nextcase;
+		case ValueType.ARR_REF_NOGC: return uptr::size;
 		default: unreachable();
 	}
 }
@@ -68,18 +70,26 @@ fn ushort TypeInfo.alignment(TypeInfo* this)
 		case ValueType.REF: nextcase;
 		case ValueType.PTR: return uptr::alignment;
 		case ValueType.STRUCT: return globals::structTypes[this.structTypeIndex].alignmentInBytes;
+		case ValueType.ARR_INLINE: return this.element_type().alignment();  // alignof(element)
+		case ValueType.ARR_REF_GC: nextcase;
+		case ValueType.ARR_REF_NOGC: return uptr::alignment;
 		default: unreachable();
 	}
 }
 
 fn bool TypeInfo.is_builtin_ref_like(TypeInfo* this) @inline
 {
-	return this.is_ref_like() && this.pointee_type().is_builtin();
+	return (this.type == ValueType.REF || this.type == ValueType.PTR) && this.pointee_type().is_builtin();
 }
 
 fn bool TypeInfo.is_ref_like(TypeInfo* this) @inline
 {
 	return this.type == ValueType.REF || this.type == ValueType.PTR || this.type == ValueType.ARR_REF_GC || this.type == ValueType.ARR_REF_NOGC;
+}
+
+fn bool TypeInfo.is_array(TypeInfo* this) @inline
+{
+	return this.type == ValueType.ARR_INLINE || this.type == ValueType.ARR_REF_GC || this.type == ValueType.ARR_REF_NOGC;
 }
 
 fn bool TypeInfo.is_builtin(TypeInfo* this) @inline
@@ -101,16 +111,27 @@ fn bool TypeInfo.is_builtin(TypeInfo* this) @inline
 
 fn TypeInfo TypeInfo.pointee_type(TypeInfo* this)
 {
-	TypeInfo out = { };
+	assert(this.type == ValueType.REF || this.type == ValueType.PTR || this.type == ValueType.ARR_REF_GC || this.type == ValueType.ARR_REF_NOGC);
+	TypeInfo out = { .arraySize = NO_LENGTH };
 	out.type = this.refToType;
 	out.refToType = ValueType.NULL;
 	out.structTypeIndex = (out.type == ValueType.STRUCT) ? this.structTypeIndex : NOT_STRUCT;
 	return out;
 }
 
+fn TypeInfo TypeInfo.element_type(TypeInfo* this)
+{
+	assert(this.is_array());
+	TypeInfo out = *this;
+	out.type = this.arrBaseType;
+	out.arrBaseType = ValueType.NULL;
+	out.arraySize = NO_LENGTH;
+	return out;
+}
+
 fn bool TypeInfo.is_struct_ref_like(TypeInfo* this) @inline
 {
-	return this.is_ref_like() && this.refToType == ValueType.STRUCT;
+	return (this.type == ValueType.REF || this.type == ValueType.PTR) && this.refToType == ValueType.STRUCT;
 }
 
 
@@ -119,6 +140,19 @@ fn bool type_info_matches(TypeInfo a, TypeInfo b)
 	if (a.type != b.type)
 	{
 		return false;
+	}
+
+	if (a.is_array())
+	{
+		if (a.arrBaseType != b.arrBaseType)
+		{
+			return false;
+		}
+		if (a.type == ValueType.ARR_INLINE && a.arraySize != b.arraySize)
+		{
+			return false;
+		}
+		return type_info_matches(a.element_type(), b.element_type());
 	}
 
 	if (a.refToType != b.refToType)

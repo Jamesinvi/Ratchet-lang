@@ -33,7 +33,7 @@ fn void BCGenerator.prepare_func_bindings(BCGenerator* this, MirFunction* mirFun
 	}
 	// Fill the lists with invalid bytecode registers, they will be bound as soon as they're needed
 	common::list_append_fill{short}(&this.mirRegToOffset, runtime::NO_OFFSET, (sz)maxMirReg + 1);
-	common::list_append_fill{TypeInfo}(&this.mirRegToType, { }, (sz)maxMirReg + 1);
+	common::list_append_fill{TypeInfo}(&this.mirRegToType, { .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH }, (sz)maxMirReg + 1);
 	common::list_append_fill{short}(&this.symbolToOffset, runtime::NO_OFFSET, (sz)this.symbolTable.symbols.len() + 1);
 }
 
@@ -275,6 +275,17 @@ fn StringIdx BCGenerator.push_string_imm_get_idx(BCGenerator* this, String strin
 	return index;
 }
 
+<*
+ Helper to push a TypeInfo into the instruction side-table for types and  get the index it was added at.
+ This function uses the BCGenerator.outputAllocator
+*>
+fn TypeInfoIdx BCGenerator.push_typeinfo_get_idx(BCGenerator* this, TypeInfo typeInfo)
+{
+	TypeInfoIdx index = (TypeInfoIdx)this.bcOutput.typeInfoTable.len();
+	this.bcOutput.typeInfoTable.push(typeInfo);
+	return index;
+}
+
 macro BCFrameSlotIdx BCGenerator.fun_frame_slots_len(BCGenerator* this)
 {
 	assert(this.bcOutput.functionFrameSlots.len() < int::max);
@@ -305,12 +316,12 @@ fn TypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand* ope
 				assert(type.type != ValueType.NULL || type.refToType != ValueType.NULL);
 				return type;
 			}
-		case MirOperandKind.IMM_INT: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.INT, .refToType = ValueType.NULL };
-		case MirOperandKind.IMM_FLOAT: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.FLOAT, .refToType = ValueType.NULL };
-		case MirOperandKind.IMM_DOUBLE: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.DOUBLE, .refToType = ValueType.NULL };
-		case MirOperandKind.IMM_BOOL: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL };
-		case MirOperandKind.IMM_NULL: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL };
-		case MirOperandKind.IMM_STRING: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL };
+		case MirOperandKind.IMM_INT: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.INT, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
+		case MirOperandKind.IMM_FLOAT: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.FLOAT, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
+		case MirOperandKind.IMM_DOUBLE: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.DOUBLE, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
+		case MirOperandKind.IMM_BOOL: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
+		case MirOperandKind.IMM_NULL: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
+		case MirOperandKind.IMM_STRING: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
 		case MirOperandKind.PLACE:
 			log::logn("Places need to be implemented");
 			unreachable();
@@ -338,6 +349,9 @@ fn BCOpCode select_mov_op_code(TypeInfo typeInfo, ushort* byteCount)
 		case ValueType.DOUBLE: return BCOpCode.MOVD;
 		case ValueType.BOOL: return BCOpCode.MOVB;
 		case ValueType.REF: return BCOpCode.MOV_REF;
+		case ValueType.ARR_REF_GC: return BCOpCode.MOV_REF;
+		case ValueType.ARR_REF_NOGC: return BCOpCode.MOV_REF;
+		case ValueType.ARR_INLINE: nextcase;  // inline arrays move the whole block like structs
 		case ValueType.STRUCT:
 
 			{

@@ -190,6 +190,7 @@ enum StmtKind : char
 	BREAK,
 	CONTINUE,
 }
+
 // c3fmt off
 struct VarDeclStmt  { TypeAst type; NameIdx nameIdx;    ExprIdx init;}
 struct IfStmt       { ExprIdx cond; StmtIdx thenBlock;  StmtIdx elseBlock; }

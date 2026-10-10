@@ -353,6 +353,7 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	Decl* structDecl = &this.ast.declarations[methodDecl.structIdx];
 	TypeAst receiverTypeAst = {
 		.tokenType = TokenType.IDENTIFIER,
+		.arraySize = common::NO_LENGTH,
 		.nameIdx = structDecl.structDecl.nameIdx,
 	};
 	TypeResult receiverType = this.create_type_from_ast(&receiverTypeAst, methodSpan);

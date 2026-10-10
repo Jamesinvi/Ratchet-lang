@@ -11,6 +11,7 @@ alias BCCallInfoIdx = int;
 alias BCProjectionIdx = int;
 alias BCFrameSlotIdx = int;
 alias BCArgIdx = short;
+alias TypeInfoIdx = int;
 
 const NO_OFFSET = -1;
 
@@ -99,6 +100,7 @@ enum BCOpCode : char (String asStr)
 	ECHO_REF               { "echo__ref" },
 	CAST                   { "cast_____" },
 	ALLOC_GC               { "alloc__gc" },
+	ALLOC_ARRAY            { "alloc_arr" },
 }
 
 
@@ -165,7 +167,7 @@ struct BCInstruction
 		double immDouble;
 		bool immBool;
 		StringIdx immStringIdx;
-		TypeInfo typeInfo;
+		TypeInfoIdx typeInfoIdx;
 		ushort byteCount;
 		BCCastKind castKind;
 		BCCallInfoIdx callInfoIdx;
@@ -249,6 +251,7 @@ struct BCProgram
 	List{BCCallInfo} callInfos;
 	List{String} strings; // Indexed by StringIdx
 	List{BCGlobalSlot} globalSlots;
+	List{TypeInfo} typeInfoTable;
 	List{char} globalInitialData;
 	short globalMemorySize;
 }
@@ -263,6 +266,7 @@ fn void BCProgram.init(BCProgram* this, Allocator allocator)
 	this.instructions.init(allocator);
 	this.callArgs.init(allocator);
 	this.callInfos.init(allocator);
+	this.typeInfoTable.init(allocator);
 	this.strings.init(allocator);
 }
 
@@ -329,7 +333,7 @@ fn void BCProgram.print_frame_slot(BCProgram* this, BCFrameSlotIdx idx, BCFrameS
 {
 	log::log("    [%03d] | ", idx);
 	log::log("r%03d |", idx);
-	log::logn(" symbolIdx : %03d | type : %06s | offset:%03d | size:%03d", slot.symbolIdx, slot.type, slot.offset, slot.size);
+	log::logn(" symbolIdx : %03d | type : %012s | offset:%03d | size:%03d", slot.symbolIdx, slot.type, slot.offset, slot.size);
 }
 
 fn void BCProgram.print_instruction(BCProgram* this, BCInstruction inst)
@@ -384,10 +388,11 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.SIZE: log::log("move %s bytes", inst.byteCount);
 		case BCOperandKind.CAST_TYPE: log::log("| cast: %s", inst.castKind.asStr);
 		case BCOperandKind.TYPE_INFO:
-			log::log("| type: %s", inst.typeInfo.type);
-			if (inst.typeInfo.type == ValueType.REF || inst.typeInfo.type == ValueType.PTR)
+			TypeInfo* typeInfo = &this.typeInfoTable[inst.typeInfoIdx];
+			log::log("| type: %s", typeInfo.type);
+			if (typeInfo.type == ValueType.REF || typeInfo.type == ValueType.PTR)
 			{
-				log::log(" to %s", inst.typeInfo.refToType);
+				log::log(" to %s", typeInfo.refToType);
 			}
 		default: log::log("<?>");
 	}
