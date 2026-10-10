@@ -158,21 +158,36 @@ fn void Parser.predeclare_structs(Parser* this)
 
 fn void Parser.predeclare_functions(Parser* this)
 {
-    // Look for patterns: fn <type> <identifier>
+    // Look for patterns: fn <type> <identifier>. <type> can include arrays.
     for (sz i = 0; i < this.input.len() - 2; i++) {
         Token* t = &this.input[i];
         if (t.tokenType == TokenType.FN) {
-            Token* typeTok = &this.input[i + 1];
-            Token* nameTok = &this.input[i + 2];
+			// Store the current and previous pointers
+			Token* savedCurrent = this.current;
+			Token* savedPrevious = this.previous;
+			// Advance
+			this.current = &this.input[i + 1];
+			this.previous = t;
+			// Parse the type
+			TypeAst returnTypeAst = this.parse_type_ast();
+			Token* nameTok = this.current;
+			// Restore
+			this.current = savedCurrent;
+			this.previous = savedPrevious;
+			if (this.hadError) return;
+
+			if (nameTok.tokenType != TokenType.IDENTIFIER)
+			{
+				this.error_at(nameTok, "Expected function name after return type");
+				return;
+			}
             // We push a temporary declaration that will have to be filled in later
             Decl decl = {.kind = DeclKind.FUNCTION};
             decl.fnDecl = {};
-            NameIdx returnTypeNameIdx = this.push_name_get_idx(typeTok.value());
-            TypeAst returnTypeAst = {.tokenType = typeTok.tokenType, .nameIdx = returnTypeNameIdx};
             NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
             decl.fnDecl.returnType = returnTypeAst;
             decl.fnDecl.nameIdx = nameIdx;
-            debug::@log_parse("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), typeTok.value(), nameIdx);
+            debug::@log_parse("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), this.outputAst.names[returnTypeAst.nameIdx].text(), nameIdx);
             DeclIdx declIdx = this.push_decl_get_idx(&decl);
             globals::declaredFunctions.set(nameTok.value(), declIdx);
         }

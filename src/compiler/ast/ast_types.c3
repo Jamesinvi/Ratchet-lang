@@ -15,6 +15,16 @@ enum DeclKind : char
     FUNCTION,
     STRUCT,
 }
+<* 
+ 	Used to define where something lives. INLINE: stack, REF_GC: tracked heap, REF_NOGC: untracked heap
+*>
+enum StorageKind : char
+{
+	NONE,
+	INLINE,
+	REF_GC,
+	REF_NOGC,
+}
 
 struct ProgramAst
 {
@@ -49,8 +59,10 @@ struct FieldAst
 
 struct TypeAst
 {
-    TokenType tokenType;    // INTEGER_T, INT_REF_GC, IDENTIFIER(for struct type)...
     NameIdx nameIdx;
+    TokenType tokenType;    // INTEGER_T, INT_REF_GC, IDENTIFIER(for struct type)...
+	short arraySize;		// only used for inline arrays. -1 otherwise
+	StorageKind arrayStorage;		
 }
 
 struct FnDeclAst 
@@ -137,7 +149,7 @@ struct ExprUnary    { UnOp op;           ExprIdx rhs; }
 struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
 struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd;  ExprIdx memberCaller;}
 struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
-struct ExprNew		{ TypeAst type; 	 ExprIdx init; }
+struct ExprNew		{ TypeAst type; 	 ExprIdx init;			ExprIdx arraySize; }
 struct ExprCast 	{ ExprIdx value;	TypeAst targetType; }
 
 struct Expr
@@ -346,6 +358,7 @@ fn void ProgramAst.print_statement(ProgramAst* this, Stmt* stmt, int indent)
             InternedString typeName = this.names[stmt.varDecl.type.nameIdx];
             InternedString name = this.names[stmt.varDecl.nameIdx];
             log::log("<%s> %s", typeName.text(), name.text());
+			if (stmt.varDecl.type.arrayStorage == StorageKind.INLINE) log::log("[]");
             if (stmt.varDecl.init != NO_IDX) {
                 log::log(" = ");
                 this.print_expression(&this.expressions[stmt.varDecl.init]);
@@ -431,8 +444,10 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
             log::log(".%s", member.text());
         case ExprKind.NEW:
 			InternedString typeName = this.names[expr.new.type.nameIdx];
-		    log::log("new <%s> { ", typeName.text());
-			this.print_expression(&this.expressions[expr.new.init]);
+		    log::log("new <%s>", typeName.text());
+			if(expr.new.type.arrayStorage!=StorageKind.NONE) log::log("[]");
+			log::log(" {");
+			if (expr.new.init != NO_IDX) this.print_expression(&this.expressions[expr.new.init]);
 			log::log("}");
         case ExprKind.GROUP:            log::log("(<group>)");
         default:                        log::log("<?expr?>");

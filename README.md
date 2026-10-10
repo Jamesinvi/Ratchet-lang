@@ -243,20 +243,23 @@ This keeps coroutines powerful but predictable: they model explicit time flow wi
 <a id="arrays" name="arrays"></a>
 ## Arrays
 
-Array forms using `Vec2`:
+Array forms:
 
 ```cpp
-Vec2[4] a = Vec2[4];          // stack-allocated array, size must be known at compile time
-Vec2[]& c = new Vec2[4]&;     // GC-tracked array reference
-Vec2[]* d = new Vec2[4]*;     // non-GC-tracked array reference
+int[25] a;                   // fixed-size inline array, size known at compile time
+int[]& b = new int[25]&;      // GC-tracked array reference
+int[]* c = new int[25]*;      // non-GC-tracked array reference
 Vec2&[]& e = new Vec2&[5]&;   // GC-tracked array of GC-tracked Vec2 references
 ```
 
 Notes:
 
-1. Fixed-size value arrays require a compile-time known size.
-2. Managed array references are owned by the Ratchet runtime.
-3. Manual/native arrays are explicit lifetime objects.
+1. `T[N]` is an inline array with a compile-time known size; it cannot resize.
+2. `T[]&` and `T[]*` are runtime-sized, resizable heap arrays. Resizing may move their element storage.
+3. `T&[]&` stores references to separate `T` objects. Resizing moves the reference slots, not the referenced objects.
+4. Managed arrays are owned by the runtime; manual/native arrays have explicit lifetimes.
+
+Array types and heap allocation syntax are parsed; array analysis and execution remain unfinished.
 
 <a id="borrow-parameters" name="borrow-parameters"></a>
 ## Borrow Parameters
@@ -265,12 +268,21 @@ Notes:
 
 Intent:
 
-1. `in T p` means a **read-only borrow**.
+1. `in T p` means a **read-only borrow**: writes through this parameter are forbidden.
 2. `inout T p` means a **mutable borrow**.
-3. `inout` arguments cannot alias in the same call.
+3. Borrowed arguments may alias; no uniqueness is required.
 4. Borrow parameters cannot escape function scope.
 5. Borrow parameters cannot remain live across a coroutine `wait` point.
 6. This model allows mutation without requiring value copies for large value types.
+
+Borrowable storage must stay alive and address-stable throughout the call:
+
+- Local values and inline arrays can be borrowed when their containing storage is stable.
+- Borrows into resizable array storage are compile errors, including reference slots, nested inline fields, and nested inline arrays.
+- The separate `T` object reached through an element of `T&[]&`, and its inline fields, can be borrowed. Copying the element's `T&` by value is also allowed.
+- Managed-object borrows assume a nonmoving GC. The compiler keeps the original owner rooted from borrow formation, including later argument evaluation, until the call returns; removing or rebinding the array entry does not invalidate or retarget the borrow.
+
+These rules also apply to implicit method receivers. They use local storage checks, without alias analysis or runtime restrictions on resizing. Array borrow checks and managed-owner rooting are planned features.
 
 Syntax:
 

@@ -1,18 +1,7 @@
 // Entry-point. Should return true if errors occurred
 fn bool program(){
-	int i = 0;
-	while (i < 100){
-		if( i / 2 == 4){
-			echo ("ahahaha");
-			i = i +1;
-			continue;
-		}
-		if( i > 10){
-			break;
-		}
-		i = i +1;
-	}
-	echo i;
-	
+	int[25] a;
+	int[]& b = new int[25]&;
+	int[]* c = new int[25]*;
 	return false;
 }

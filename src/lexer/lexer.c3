@@ -4,6 +4,7 @@ import globals;
 import std::collections;
 import libc;
 import log;
+import debug;
 
 faultdef INVALID_TOKEN;
 
@@ -11,6 +12,7 @@ fn List{Token} run_lexer(String inputString, Allocator outputAllocator){
 	Lexer lexer = {};
 	lexer.init(inputString, outputAllocator);
 	lexer.parse_tokens();
+    debug::@print_tokens(&lexer);
 	return lexer.output;
 }
 
@@ -67,6 +69,9 @@ fn void Lexer.parse_token(Lexer* this) {
         case '}'  : this.add_token(TokenType.RIGHT_BRACE);
         case ','  : this.add_token(TokenType.COMMA);
         case '.'  : this.add_token(TokenType.DOT);
+		case '&'  : this.add_token(TokenType.AMPERSAND);
+		case '['  : this.add_token(TokenType.OPEN_BRACKET);
+		case ']'  : this.add_token(TokenType.CLOSE_BRACKET);
         case '<'  : this.add_token(this.match_c('=') ? TokenType.LESS_EQUAL    : TokenType.LESS);
         case '>'  : this.add_token(this.match_c('=') ? TokenType.GREATER_EQUAL : TokenType.GREATER);
         case '!'  : this.add_token(this.match_c('=') ? TokenType.BANG_EQUAL    : TokenType.BANG);
@@ -93,7 +98,7 @@ fn void Lexer.parse_token(Lexer* this) {
             } else if (common::is_alpha_ascii(character) || common::is_ref_char(character)) {
                 this.keyword();
             } else {
-                error_lin(this.line, this.column, "unsupported character");
+                error_lin(this.line, this.column, "unsupported character '%c'", character);
             }
     }
 
@@ -144,6 +149,10 @@ fn char Lexer.peek(Lexer* this) {
     return this.input[this.current];
 }
 
+fn char Lexer.previous(Lexer* this) {
+	return this.peek_at(-1);
+}
+
 fn char Lexer.peek_at(Lexer* this, int distance) {
     if (this.is_at_end()) return '\0';
     return this.input[this.current + distance];
@@ -158,7 +167,6 @@ fn void Lexer.add_token(Lexer* this, TokenType tokenType) {
     Token token = { tokenType, this.line, internedLexeme };
     this.output.push(token);
 }
-
 
 fn void Lexer.string(Lexer* this) {
     this.start=this.current;
@@ -230,8 +238,9 @@ fn void discard_token() {
 }
 
 
-fn void error_lin(int l, int c, String msg) {
-    log::errlogn("Error on line: %d:%d, %s", l, c, msg);
+fn void error_lin(int l, int c, String msg, args...) {
+	log::errlog("Error on line: %d:%d ", l,c);
+	log::errlogn(msg, ...args);
 }
 
 fn void error_tok(Token token,  String message) {

@@ -4,6 +4,8 @@ import log;
 import std::collections::list;
 
 enum TokenType : ushort {
+	INVALID,
+
     // Single-character tokens.
     LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE,
     COMMA, DOT, MINUS, PLUS, SEMICOLON, SLASH, STAR,
@@ -20,10 +22,13 @@ enum TokenType : ushort {
     PRINT, RETURN, SUPER, THIS, TRUE, WHILE, ECHO,
     METHOD, AS, NEW, IN, INOUT, BREAK, CONTINUE,
 
-    // Types
+    // Types.
     INTEGER_T, FLOAT_T, DOUBLE_T, STRUCT_T, BOOL_T,
     INT_REF_GC, FLOAT_REF_GC, DOUBLE_REF_GC, BOOL_REF_GC,
     INT_REF_NOGC, FLOAT_REF_NOGC, DOUBLE_REF_NOGC, BOOL_REF_NOGC,
+
+	// Arrays.
+	OPEN_BRACKET, CLOSE_BRACKET, AMPERSAND,
     EOF,
 }
 
@@ -133,10 +138,10 @@ fn bool str_is_struct_type(String str) @inline
 
 fn bool TokenType.is_builtin_type(TokenType* t)
 {
-    return (*t == TokenType.NULL)      ||
-           (*t == TokenType.INTEGER_T) ||
-           (*t == TokenType.FLOAT_T)   ||
-           (*t == TokenType.DOUBLE_T)  ||
+    return (*t == TokenType.NULL)       ||
+           (*t == TokenType.INTEGER_T)  ||
+           (*t == TokenType.FLOAT_T)    ||
+           (*t == TokenType.DOUBLE_T)   ||
            (*t == TokenType.BOOL_T);
 }
 
@@ -144,15 +149,15 @@ fn bool TokenType.is_builtin_ref_like(TokenType* t)
 {
     return (*t == TokenType.INT_REF_GC)		||
            (*t == TokenType.FLOAT_REF_GC)	||
-           (*t == TokenType.DOUBLE_REF_GC)   ||
+           (*t == TokenType.DOUBLE_REF_GC)  ||
            (*t == TokenType.BOOL_REF_GC);
 }
 
 fn bool TokenType.is_builtin_ptr(TokenType* t)
 {
     return (*t == TokenType.INT_REF_NOGC)		||
-           (*t == TokenType.FLOAT_REF_NOGC)	||
-           (*t == TokenType.DOUBLE_REF_NOGC)   ||
+           (*t == TokenType.FLOAT_REF_NOGC)		||
+           (*t == TokenType.DOUBLE_REF_NOGC)	||
            (*t == TokenType.BOOL_REF_NOGC);
 }
 

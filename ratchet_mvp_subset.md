@@ -1,5 +1,7 @@
 # Ratchet MVP Subset
 
+Historical implementation scope. See [README](README.md#borrow-parameters) and [Arrays and Errors](array_and_error_design.md) for the current array and borrow design.
+
 Two scopes exist for now:
 
 - Front end: features that parse and analyze.

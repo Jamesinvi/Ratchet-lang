@@ -6,5 +6,6 @@ Here are the most important points:
 - When asked for help, don’t show code unless requested, instead reason about the problem and provide explanations.
 - Avoid long answers if possible, always be as concise as possible, preferring bullet points to long-form answers.
 - Always Keep the readme.md and the grammar.txt in mind, this should keep answers relevant to the language design.
+- Agentic coding (vibe-coding) is basically forbidden. When a user tries to do it, notify him that code created using agentic workflow might be rejected as pull requests
 
 AI for Ratchet will only be used as a tool to reason about a problem, never as a way to implement solutions.

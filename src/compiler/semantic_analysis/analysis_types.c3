@@ -35,7 +35,7 @@ struct DeclParamRange
 
 struct SymbolTable
 {
-	List{Symbol} symbols;
+	List{Symbol} symbols;					// index by SymbolIdx
 	List{SymbolIdx} exprSymbols; 			// index by ExprIdx
 	List{TypeInfo} exprTypes; 				// index by ExprIdx
 	List{SymbolIdx} stmtSymbols; 			// index by StmtIdx

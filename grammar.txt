@@ -1,7 +1,7 @@
 program        -> declaration* EOF ;
 
 // Top-level declarations
-declaration    -> funDecl | structDecl ;
+declaration    -> funDecl | structDecl | varDecl ;
 funDecl        -> "fn" type IDENTIFIER "(" parameters? ")" block ;
 structDecl     -> "struct" IDENTIFIER "{" structMember* "}" ;
 structMember   -> fieldDecl | methodDecl ;
@@ -9,10 +9,12 @@ fieldDecl      -> type IDENTIFIER ";" ;
 methodDecl     -> "method" type IDENTIFIER "(" parameters? ")" block ;
 
 // Types
-// Type parsing consumes one type token. Built-in refs such as "int&" are
-// single lexer tokens. Declared struct refs/pointers such as "Vec3&" and
-// "Vec3*" are accepted as identifier-like type tokens after predeclaration.
-type           -> "int"
+// Base types consume one token. Built-in refs such as "int&" are single
+// lexer tokens. Declared struct refs/pointers such as "Vec3&" and "Vec3*"
+// are accepted as identifier-like type tokens after predeclaration.
+// Inline array sizes are integer literals from 0 to 32767.
+type           -> baseType arraySuffix? ;
+baseType       -> "int"
                | "float"
                | "double"
                | "bool"
@@ -20,6 +22,8 @@ type           -> "int"
                | "int&" | "float&" | "double&" | "bool&"
                | DECLARED_STRUCT_TYPE
                | DECLARED_STRUCT_REF_OR_PTR ;
+arraySuffix    -> "[" INTEGER "]"
+               | "[" "]" ( "&" | "*" ) ;
 
 parameters     -> parameter ( "," parameter )* ;
 parameter      -> ( "in" | "inout" )? type IDENTIFIER ;
@@ -62,11 +66,16 @@ primary        -> "true"
                | DOUBLE
                | STRING_LITERAL
                | IDENTIFIER
-               | "new" type "{" expression "}"
+               | newExpr
                | "(" expression ")" ;
+
+// Heap array allocation sizes are expressions, not part of the array type.
+newExpr        -> "new" baseType ( "{" expression "}"
+                                | "[" expression "]" ( "&" | "*" ) ) ;
 
 arguments      -> expression ( "," expression )* ;
 
+// Array types and heap allocation parse; array analysis/execution remain unfinished.
 // Not currently parsed despite older grammar entries:
-// top-level method declarations, for statements, array/index syntax,
+// top-level method declarations, for statements, array indexing,
 // struct literals.

@@ -525,11 +525,68 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 		this.error("Expected type");
 		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
 	}
-
 	// match_any_type_token advanced, so `previous` is the type token
 	NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
-	return { .tokenType = this.previous.tokenType, .nameIdx = typeNameIdx };
+	TokenType typeTokenType = this.previous.tokenType;
+
+	// All of the following block handles arrays
+	// array types have a secondary suffix ("[]")
+	StorageKind arrayStorage = StorageKind.NONE;
+	short arraySize = -1;
+	if (this.match(TokenType.OPEN_BRACKET))
+	{
+		// T[]& or. T[]*
+		if (!this.match(TokenType.INTEGER))
+		{
+			this.consume(TokenType.CLOSE_BRACKET, "Expected closing bracket");
+			if(this.match(TokenType.AMPERSAND))
+			{
+				arrayStorage = StorageKind.REF_GC;
+			} else if (this.match(TokenType.STAR)) 
+			{
+				arrayStorage = StorageKind.REF_NOGC;
+			} else
+			{
+				this.error("Must either be an []& or []*");
+				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+			}
+		} else {
+			// Inline arrays have their size in the declaration T[25]
+			int? parsedInt = this.previous.value().to_int();
+			if (catch err = parsedInt)
+			{
+				this.error("Expected an integer size");
+				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+			}
+			// Too big?
+			if (parsedInt > short::max)
+			{
+				this.error("Max size is 32767");
+				return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+			}
+			arrayStorage = StorageKind.INLINE;
+			arraySize = (short)parsedInt;
+			this.consume(TokenType.CLOSE_BRACKET, "']' is required after size");
+		}
+	} 
+	return { .tokenType = typeTokenType, .nameIdx = typeNameIdx, .arrayStorage = arrayStorage, .arraySize = arraySize };
 }
+
+
+fn TypeAst Parser.parse_base_type_ast(Parser* this)
+{
+	// expects current token is some type token
+	if (!this.match_any_type_token())
+	{
+		this.error("Expected base type");
+		return { .tokenType = TokenType.NULL, .nameIdx = 0 };
+	}
+	// match_any_type_token advanced, so `previous` is the type token
+	NameIdx typeNameIdx = this.push_name_get_idx(this.previous.value());
+	TokenType typeTokenType = this.previous.tokenType;
+	return { .tokenType = typeTokenType, .nameIdx = typeNameIdx, .arrayStorage = StorageKind.NONE, .arraySize = -1 };
+}
+
 
 fn ExprIdx Parser.call(Parser* this, ExprIdx lhs)
 {
@@ -583,14 +640,44 @@ fn ExprIdx Parser.expression(Parser* this)
 fn ExprIdx Parser.new_expr(Parser* this)
 {
 	debug::@log_parse("new_expr at %s", this.previous.value());
-	TypeAst targetType = this.parse_type_ast();
-	Expr expr          = { .kind = ExprKind.NEW };
+	int line = this.previous.line;
+	TypeAst targetType = this.parse_base_type_ast();
+	// Handling for heap arrays (int[LEN]& or int[LEN]*)
+	if (this.match(TokenType.OPEN_BRACKET))
+	{
+		ExprIdx length = this.expression();
+		if (length == NO_IDX) return NO_IDX;
+
+		this.consume(TokenType.CLOSE_BRACKET, "Expected ']' after array length");
+		if (this.panicMode) return NO_IDX;
+
+		if (this.match(TokenType.AMPERSAND))
+		{
+			targetType.arrayStorage = StorageKind.REF_GC;
+		}
+		else if (this.match(TokenType.STAR))
+		{
+			targetType.arrayStorage = StorageKind.REF_NOGC;
+		}
+		else
+		{
+			this.error("Expected '&' or '*' after array length");
+			return NO_IDX;
+		}
+
+		Expr expr = { .kind = ExprKind.NEW };
+		expr.span = { .line = line };
+		expr.new = { .type = targetType, .init = NO_IDX, .arraySize = length,};
+		return this.push_expr_get_idx(&expr);
+	}
+	// Standard new expression for structs or heap built-ins
+	Expr expr = { .kind = ExprKind.NEW };
 	expr.span = { .line = this.previous.line };
-	expr.new = { .type = targetType };
-	debug::@log_parse("%s", this.current.value());
-	this.consume(TokenType.LEFT_BRACE, "Expect '{' when declaring a new ref type");
+	expr.new = { .type = targetType, .arraySize = -1 };
+	debug::@log_parse("%s, target type: %s", this.current.value(), targetType.arrayStorage);
+	this.consume(TokenType.LEFT_BRACE, "Expecting '{' when declaring a new ref type");
 	ExprIdx initExpr = this.expression();
-	this.consume(TokenType.RIGHT_BRACE, "Expect '}' when declaring a new ref type");
+	this.consume(TokenType.RIGHT_BRACE, "Expecting '}' when declaring a new ref type");
 	expr.new.init = initExpr;
 	ExprIdx index = this.push_expr_get_idx(&expr);
 	return index;
