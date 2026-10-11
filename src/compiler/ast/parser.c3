@@ -602,6 +602,7 @@ fn TypeAst Parser.parse_base_type_ast(Parser* this)
 fn ExprIdx Parser.call(Parser* this, ExprIdx lhs)
 {
 	Expr expr = { .kind = ExprKind.CALL };
+	expr.span = { .line = this.previous.line };
 	expr.call = { .callee = lhs, .memberCaller = NO_IDX };
 	if (lhs < this.outputAst.expressions.len())
 	{
@@ -621,24 +622,29 @@ fn void Parser.fill_call_args(Parser* this, ExprCall* exprCall)
 	// We're CALLING a function, so we allow expressions as arguments
 	// Consume as many as we can find.
 	exprCall.argsStart = (ExprIdx)this.outputAst.args.len();
-	int arityCounter = 0;
+
+	List{ExprIdx} tempList = { };
+	tempList.init(tmem, 8);
+	defer tempList.free();
+
 	if (!this.check(TokenType.RIGHT_PAREN))
 	{
 		do
 		{
 			ExprIdx argExprIdx = this.expression();
-			if (arityCounter >= Byte::max)
+			if (tempList.len() >= Byte::max)
 			{
 				this.error("Can't have more than 255 arguments");
 			}
-			this.outputAst.args.push(argExprIdx);
-			arityCounter++;
-			// Remove all arguments from the type stack
+			// Keep this call's arguments separate from nested calls by using this temp list
+			tempList.push(argExprIdx);
 		} while (this.match(TokenType.COMMA));
 	}
-	exprCall.argsEnd = exprCall.argsStart + arityCounter;
-
 	this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+	// Nested calls are finished; append our arguments together.
+	exprCall.argsStart = (ExprIdx)this.outputAst.args.len();
+	this.outputAst.args.add_all(&tempList);
+	exprCall.argsEnd = (ExprIdx)this.outputAst.args.len();
 }
 
 // ---------- Expressions & precedence ----------

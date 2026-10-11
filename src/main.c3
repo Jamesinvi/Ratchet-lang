@@ -2,6 +2,7 @@ module main;
 import log;
 import vm;
 import std::io;
+import globals;
 
 fn int main(String[] args)
 {
@@ -17,6 +18,11 @@ fn int main(String[] args)
 	if (result.outcome != CompilationOutcome.NO_ERROR)
 	{
 		return (int)result.outcome;
+	}
+
+	if (!KEEP_DEBUG_DATA_IN_MEMORY)
+	{
+		globals::cleanup_compilation_only_data();
 	}
 	RunResult runResult = vm::run(&result.compiledProgram, io::stdout());
 	cleanup();

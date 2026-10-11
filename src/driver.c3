@@ -16,7 +16,8 @@ alias Lexer = lexer::Lexer;
 alias Parser = parser::Parser;
 alias ctx = globals::compilationCtx;
 
-const PRINT_COMP_PIPELINE = true;
+const PRINT_COMP_PIPELINE       = false;
+const KEEP_DEBUG_DATA_IN_MEMORY = false;
 
 enum CompilationOutcome : int
 {
@@ -86,6 +87,10 @@ fn CompilationResult compile_file(String path)
 		if (err.errKind == ErrorKind.NOT_INDEXABLE)
 		{
 			log::errlogn("Type error at line %s: %s %s; expected an array", err.errSpan.line, err.errKind.asStr, err.value.type);
+		}
+		else if (err.errKind == ErrorKind.INVALID_METHOD_RECEIVER)
+		{
+			log::errlogn("Type error at line %s: %s", err.errSpan.line, err.errKind.asStr);
 		}
 		else
 		{

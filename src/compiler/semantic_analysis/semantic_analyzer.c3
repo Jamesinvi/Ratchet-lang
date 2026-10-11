@@ -907,7 +907,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 			{
 				if (!resolved.hadError && !this.is_place_expr(calleeExpr.member.base))
 				{
-					return this.type_error(ErrorKind.INVALID_LVALUE, baseInfo, baseInfo, expr.span);
+					return this.type_error(ErrorKind.INVALID_METHOD_RECEIVER, baseInfo, baseInfo, expr.span);
 				}
 				this.symbolTable.callReceiverExpr[exprIdx] = calleeExpr.member.base;
 				return resolved;

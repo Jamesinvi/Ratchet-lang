@@ -63,8 +63,20 @@ fn void cleanup_globals()
 	structTypes = { };
 	internedSourceStrings = { };
 	typeInfoStrings = { };
-
 	globalsInitialized = false;
+}
+
+fn void cleanup_compilation_only_data()
+{
+	compAllocator.free();
+	compilationCtx.ast = { };
+	compilationCtx.symbolTable = { };
+	compilationCtx.analysisErrors = { };
+	tokens = { };
+	declaredStructs = { };
+	declaredFunctions = { };
+	structNamesToIdx = { };
+	internedSourceStrings = { };
 }
 
 

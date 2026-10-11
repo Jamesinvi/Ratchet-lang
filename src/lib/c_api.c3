@@ -26,6 +26,10 @@ fn ZString ratchet_get_last_err() @export("ratchet_get_last_error")
 		{
 			return (ZString)string::format(&globals::compAllocator, "Analysis Error at line %s: %s %s; expected an array\0", err.errSpan.line, err.errKind.asStr, err.value.type);
 		}
+		if (err.errKind == ErrorKind.INVALID_METHOD_RECEIVER)
+		{
+			return (ZString)string::format(&globals::compAllocator, "Analysis Error at line %s: %s\0", err.errSpan.line, err.errKind.asStr);
+		}
 		return (ZString)string::format(&globals::compAllocator, "Anaylsis Error: %s at line %s, expected %s, got %s\0", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
 	}
 

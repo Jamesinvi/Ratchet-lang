@@ -103,6 +103,7 @@ enum ErrorKind : char (String asStr)
 	CONTINUE_WITHOUT_LOOP      { "\"continue\" statement is only allowed inside a loop" },
 	BREAK_WITHOUT_LOOP         { "\"break\" statement is only allowed inside a loop" },
 	NOT_INDEXABLE              { "Cannot index" },
+	INVALID_METHOD_RECEIVER    { "Method receiver must be a variable or field; store temporary results in a variable first" },
 }
 
 struct TypeResult
