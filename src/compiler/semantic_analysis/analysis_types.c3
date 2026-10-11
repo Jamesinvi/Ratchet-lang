@@ -100,8 +100,9 @@ enum ErrorKind : char (String asStr)
 	UNDECLARED_NAME            { "Undeclared name" },
 	NO_RETURN                  { "No return" },
 	INVALID_GLOBAL_INITIALIZER { "Global initializer must be a constant value" },
-	CONTINUE_WITHOUT_LOOP      { "continue statement is only allowed inside a loop" },
-	BREAK_WITHOUT_LOOP         { "break statement is only allowed inside a loop" },
+	CONTINUE_WITHOUT_LOOP      { "\"continue\" statement is only allowed inside a loop" },
+	BREAK_WITHOUT_LOOP         { "\"break\" statement is only allowed inside a loop" },
+	NOT_INDEXABLE              { "Cannot index" },
 }
 
 struct TypeResult

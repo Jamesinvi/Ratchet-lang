@@ -20,6 +20,6 @@ fn int main(String[] args)
 	}
 	RunResult runResult = vm::run(&result.compiledProgram, io::stdout());
 	cleanup();
-	return (int)result.outcome;
+	return runResult == RunResult.OK ? 0 : 1;
 }
 

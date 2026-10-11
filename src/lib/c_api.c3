@@ -22,6 +22,10 @@ fn ZString ratchet_get_last_err() @export("ratchet_get_last_error")
 	if (ctx.analysisErrors.len() > 0)
 	{
 		TypeResult err = ctx.analysisErrors[ctx.analysisErrors.len() - 1];
+		if (err.errKind == ErrorKind.NOT_INDEXABLE)
+		{
+			return (ZString)string::format(&globals::compAllocator, "Analysis Error at line %s: %s %s; expected an array\0", err.errSpan.line, err.errKind.asStr, err.value.type);
+		}
 		return (ZString)string::format(&globals::compAllocator, "Anaylsis Error: %s at line %s, expected %s, got %s\0", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
 	}
 

@@ -1,0 +1,6 @@
+fn bool program() {
+    int[2] values;
+    int index = 0 - 1;
+    echo values[index];
+    return false;
+}

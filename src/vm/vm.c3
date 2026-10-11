@@ -92,6 +92,9 @@ fn RunResult Vm.execute_program(Vm* vm)
 
 	vm.untrackedHeap = { };
 	vm.untrackedHeap.init("untracked heap");
+	// Defer freeing so we always free memory no matter what happens
+	defer vm.trackedHeap.free();
+	defer vm.untrackedHeap.free();
 	if (vm.program.globalMemorySize > 0)
 	{
 		vm.globalMemory = (Byte*)vm.untrackedHeap.alloc((sz)vm.program.globalMemorySize, uptr::alignment);
@@ -173,17 +176,15 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.MOV_BYTES: vm.mov_bytes(inst);
 			case BCOpCode.MOV_REF: vm.mov_op(inst, uptr);  // TODO: Managed-reference loads/stores need GC bookkeeping once GC exists
 			case BCOpCode.LOAD_BORROW: vm.load_indirect(inst);
-			case BCOpCode.LOAD_REF_VALUE: vm.load_ref_value(inst);
-			case BCOpCode.LOAD_REF_FIELD: vm.load_indirect(inst);
 			case BCOpCode.STORE_BORROW: vm.store_indirect(inst);
-			case BCOpCode.STORE_REF_VALUE: vm.store_ref_value(inst);
-			case BCOpCode.STORE_REF_FIELD: vm.store_indirect(inst);
+			case BCOpCode.LOCAL_ADDR: nextcase;
+			case BCOpCode.GLOBAL_ADDR: nextcase;
+			case BCOpCode.OFFSET_ADDR: vm.place_address(inst);
+			case BCOpCode.INDEX_ADDR: if (!vm.index_address(inst)) return RunResult.RUNTIME_ERR;
 
 			// Globals. We could have typed opcodes, but for now, they're type-agnostic. Copy byte-by-byte
 			case BCOpCode.LOAD_GLOBAL: vm.load_global(inst);
-			case BCOpCode.LOAD_GLOBAL_REF_VALUE: vm.load_global_ref_value(inst);
 			case BCOpCode.STORE_GLOBAL: vm.store_global(inst);
-			case BCOpCode.STORE_GLOBAL_REF_VALUE: vm.store_global_ref_value(inst);
 
 			// Add
 			case BCOpCode.ADDI: vm.bin_math_op(inst, int, VmMathOp.ADD);
@@ -225,9 +226,53 @@ fn RunResult Vm.execute_program(Vm* vm)
 	}
 
 	// vm.print_stack();
-	vm.trackedHeap.free();
-	vm.untrackedHeap.free();
 	return RunResult.OK;
+}
+
+fn void Vm.place_address(Vm* vm, BCInstruction* inst)
+{
+	Byte* address;
+	// get the pointer stored in frame.base + leftOffset (+ option index) in either local or global memory
+	switch (inst.opCode)
+	{
+		case BCOpCode.LOCAL_ADDR: address = &vm.stack[vm.frame.base + inst.leftOffset];
+		case BCOpCode.GLOBAL_ADDR: address = &vm.globalMemory[inst.leftOffset];
+		case BCOpCode.OFFSET_ADDR: address = (Byte*)vm.deref_indirect(inst.leftOffset) + inst.immInt;
+		default: unreachable();
+	}
+	// then store it at destOffset
+	*(uptr*)&vm.stack[vm.frame.base + inst.destOffset] = (uptr)address;
+}
+
+fn bool Vm.index_address(Vm* vm, BCInstruction* inst)
+{
+	TypeInfo arrayType = vm.program.typeInfoTable[inst.typeInfoIdx];
+	int index          = *(int*)&vm.stack[vm.frame.base + inst.rightOffset];
+	// This is the base case for inline arrays
+	Byte* data         = (Byte*)vm.deref_indirect(inst.leftOffset);
+	int length         = arrayType.arraySize;
+	// Heap array? then look at the array handle to get info about it
+	if (arrayType.type != ValueType.ARR_INLINE)
+	{
+		ArrayHandle* handle = (ArrayHandle*)*(uptr*)data;
+		if (handle == null)
+		{
+			log::errlogn("Cannot index a null array");
+			return false;
+		}
+		data = (Byte*)handle.buffer;
+		length = handle.length;
+	}
+	// Bound checks
+	if (index < 0 || index >= length)
+	{
+		log::errlogn("Array index %s is out of bounds for length %s", index, length);
+		return false;
+	}
+	TypeInfo elementType = arrayType.element_type();
+	// store in offset the data found at: bufferStart + (index * sizeof(element))
+	*(uptr*)&vm.stack[vm.frame.base + inst.destOffset] = (uptr)(data + (sz)index * elementType.size());
+	return true;
 }
 
 macro Vm.echo(Vm* vm, BCInstruction* inst, $Type)
@@ -287,62 +332,6 @@ fn void Vm.load_global(Vm* vm, BCInstruction* inst) @inline
 	Byte* src = &vm.globalMemory[inst.leftOffset];
 	Byte* dst = &vm.stack[vm.frame.base + inst.destOffset];
 	mem::copy(dst, src, inst.byteCount, 1, 1);
-}
-
-fn void Vm.load_ref_value(Vm* vm, BCInstruction* inst) @inline
-{
-	Byte* refSlot;
-	if (inst.rightOffset == runtime::NO_OFFSET)
-	{
-		refSlot = &vm.stack[vm.frame.base + inst.leftOffset];
-	}
-	else
-	{
-		refSlot = (Byte*)vm.deref_indirect(inst.leftOffset) + inst.rightOffset;
-	}
-	Byte* refValueSrc = (Byte*)*(uptr*)refSlot;
-	Byte* refValueDst = &vm.stack[vm.frame.base + inst.destOffset];
-	mem::copy(refValueDst, refValueSrc, inst.byteCount, 1, 1);
-}
-
-fn void Vm.load_global_ref_value(Vm* vm, BCInstruction* inst) @inline
-{
-	// This it to access the ".value" of a global ref variable. (int&)
-	// There's an extra indirection because int& is already a reference,
-	// so we need to get the value stored at the address pointed by the reference
-	uptr* ptrToRefValue = (uptr*)&vm.globalMemory[inst.leftOffset];
-	uptr refValue       = *ptrToRefValue;
-	Byte* refValueSrc   = (Byte*)refValue;
-	Byte* refValueDst   = &vm.stack[vm.frame.base + inst.destOffset];
-	mem::copy(refValueDst, refValueSrc, inst.byteCount, 1, 1);
-}
-
-fn void Vm.store_global_ref_value(Vm* vm, BCInstruction* inst) @inline
-{
-	// This it to store the ".value" of a global ref variable. (int&)
-	// There's an extra indirection because int& is already a reference,
-	// so we need to get the value stored at the address pointed by the reference
-	uptr* ptrToRefValue = (uptr*)&vm.globalMemory[inst.destOffset];
-	uptr refValue       = *ptrToRefValue;
-	Byte* refValueDst   = (Byte*)refValue;
-	Byte* refValueSrc   = &vm.stack[vm.frame.base + inst.leftOffset];
-	mem::copy(refValueDst, refValueSrc, inst.byteCount, 1, 1);
-}
-
-fn void Vm.store_ref_value(Vm* vm, BCInstruction* inst) @inline
-{
-	Byte* refSlot;
-	if (inst.rightOffset == runtime::NO_OFFSET)
-	{
-		refSlot = &vm.stack[vm.frame.base + inst.destOffset];
-	}
-	else
-	{
-		refSlot = (Byte*)vm.deref_indirect(inst.destOffset) + inst.rightOffset;
-	}
-	Byte* refValueDst = (Byte*)*(uptr*)refSlot;
-	Byte* refValueSrc = &vm.stack[vm.frame.base + inst.leftOffset];
-	mem::copy(refValueDst, refValueSrc, inst.byteCount, 1, 1);
 }
 
 fn void Vm.store_global(Vm* vm, BCInstruction* inst) @inline

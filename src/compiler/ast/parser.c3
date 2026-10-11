@@ -538,7 +538,7 @@ fn TypeAst Parser.parse_type_ast(Parser* this)
 
 	// All of the following block handles arrays
 	// array types have a secondary suffix ("[]")
-	StorageKind arrayStorage =  StorageKind.NONE;
+	StorageKind arrayStorage = StorageKind.NONE;
 	short arraySize          = common::NO_LENGTH;
 	if (this.match(TokenType.OPEN_BRACKET))
 	{
@@ -737,6 +737,17 @@ fn ExprIdx Parser.grouping(Parser* this)
 	return rhs;
 }
 
+fn ExprIdx Parser.indexing(Parser* this, ExprIdx lhs)
+{
+	debug::@log_parse("indexer at %s", this.previous.value());
+	// Parse the index we're reading, then consume the closing bracket
+	ExprIdx index = this.expression();
+	Expr expr     = { .kind = ExprKind.INDEXER };
+	this.consume(TokenType.CLOSE_BRACKET, "Expected ']' after index value");
+	expr.indexer = { .base = lhs, .index = index };
+	expr.span = { .line = this.previous.line };
+	return this.push_expr_get_idx(&expr);
+}
 
 fn ExprIdx Parser.number(Parser* this)
 {

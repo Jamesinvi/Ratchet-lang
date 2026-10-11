@@ -83,7 +83,14 @@ fn CompilationResult compile_file(String path)
 	ctx.analysisErrors = analyzerErrors;
 	foreach (err : analyzerErrors)
 	{
-		log::errlogn("Type error: %s at line %s, expected %s, got %s", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
+		if (err.errKind == ErrorKind.NOT_INDEXABLE)
+		{
+			log::errlogn("Type error at line %s: %s %s; expected an array", err.errSpan.line, err.errKind.asStr, err.value.type);
+		}
+		else
+		{
+			log::errlogn("Type error: %s at line %s, expected %s, got %s", err.errKind.asStr, err.errSpan.line, err.expected.type, err.value.type);
+		}
 	}
 
 	if (PRINT_COMP_PIPELINE)

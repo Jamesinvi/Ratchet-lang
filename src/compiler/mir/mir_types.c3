@@ -88,10 +88,16 @@ enum MirOperandKind : char (String asStr)
 
 enum MirPlaceKind : char (String asStr)
 {
-	FIELD              { "field" },             // important that this is the default!
-	BUILT_IN_REF_VALUE { "built_in_ref_value" } // used for int&.value built-in assignments
+	FIELD              { "field" },              // important that this is the default!
+	BUILT_IN_REF_VALUE { "built_in_ref_value" }, // used for int&.value built-in assignments
+	ARRAY_SLOT         { "array slot" }          // used array slots (int[slot])
 }
 
+enum MirProjectionKind : char (String asStr)
+{
+	FIELD   { "field" },
+	INDEXER { "index" },
+}
 
 struct MirOperand
 {
@@ -135,8 +141,13 @@ struct MirPlace
 
 struct MirProjection
 {
-	int fieldIdx;
+	union
+	{
+		int fieldIdx;
+		MirOperand arrayIndex;
+	}
 	MirProjectionIdx prevProjectionIdx; // Each projection stores index to previous projection in the chain (NO_PROJECTION for first projection!)
+	MirProjectionKind projectionKind;
 }
 
 struct MirTerminator
@@ -300,7 +311,16 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 					else
 					{
 						MirProjection* projection = &this.projections[place.projectionIdx];
-						log::log("%s, _%s_@fieldIdx:%s", place.kind.asStr, place.baseSymbolIdx, projection.fieldIdx);
+						if (projection.projectionKind == MirProjectionKind.INDEXER)
+						{
+							log::log("%s, _%s[", place.kind.asStr, place.baseSymbolIdx);
+							this.print_operand(projection.arrayIndex, ast);
+							log::log("]");
+						}
+						else
+						{
+							log::log("%s, _%s_@fieldIdx:%s", place.kind.asStr, place.baseSymbolIdx, projection.fieldIdx);
+						}
 					}
 				}
 			}

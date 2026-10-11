@@ -659,8 +659,9 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			this.output.instructions.push(inst);
 
 			return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
+		case ExprKind.INDEXER: nextcase;
 		case ExprKind.MEMBER:
-			// Basically the same as VAR but we lower the place since we know it's a member
+			// Members and indexed elements both load from a place.
 			TypeInfo memberType = this.symbolTable.exprTypes[exprIdx];
 			MirOperand place = this.lower_place(exprIdx);
 			MirRegisterID resultReg = this.currentReg++;
@@ -808,50 +809,63 @@ fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 	return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
 }
 
+
 fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.inputAst.expressions[exprIdx];
+
 	switch (expr.kind)
 	{
 		case ExprKind.THIS: nextcase;
 		case ExprKind.VAR:
+			// Variables and "this" have a symbol describing their storage.
+			// Reuse its place, or create one if needed.
 			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			Symbol* symbol = &this.symbolTable.symbols[symbolIdx];
 			assert(symbolIdx < this.bindings.len());
+
 			MirOperand place = this.get_or_bind_place(symbolIdx);
 			assert(place.kind == MirOperandKind.PLACE);
 			return place;
+
 		case ExprKind.MEMBER:
-			MirOperand basePlaceOperand = this.lower_place(expr.member.base);
-			assert(basePlaceOperand.kind == MirOperandKind.PLACE);
-			MirPlace basePlace = this.output.places[basePlaceOperand.placeIdx];
+			// First describe the storage containing this member.
+			MirOperand baseOperand = this.lower_place(expr.member.base);
+			assert(baseOperand.kind == MirOperandKind.PLACE);
+			MirPlace basePlace = this.output.places[baseOperand.placeIdx];
 
-			// Each projection is part of a chain str.foo.bar.x
-			// 										   ↑   ↑  ↑_ stores index to 'bar'
-			// 										   |   |_ stores index to 'foo'
-			// 										   |_ index is NO_PROJECTION
-			// Projection chains are stored backwards: newest node points to previous one.
-			// This lets places share common prefixes (e.g. `a.x` reused by `a.x.y`).
+			TypeInfo baseType = this.symbolTable.exprTypes[expr.member.base];
 
-			TypeInfo symbolType = this.symbolTable.exprTypes[expr.member.base];
-			bool isBuiltinRef = symbolType.is_builtin_ref_like();
+			// Each projection is part of a chain:
+			// str.foo.bar.x
+			//      ↑   ↑  ↑_ stores index to 'bar'
+			//      ↑   |_ stores index to 'foo'
+			//      |_ index is NO_PROJECTION
+			// 
+			// These links are prevProjectionIdx. "str" is the base symbol.
+			// Projection chains are stored backwards: newest points to previous.
+			// This lets places share common prefixes.
 			MirProjectionIdx projectionIdx = basePlace.projectionIdx;
 			MirPlaceKind placeKind;
-			if (isBuiltinRef)
+
+			if (baseType.is_builtin_ref_like())
 			{
+				// Primitive reference ".value" uses a special place kind.
+				// Preserve any projections that locate the reference.
 				placeKind = MirPlaceKind.BUILT_IN_REF_VALUE;
 			}
 			else
 			{
 				placeKind = MirPlaceKind.FIELD;
-				MemberIdx fieldIdx = this.symbolTable.memberFieldIndices[exprIdx];
 				MirProjection projection = {
-					.fieldIdx = fieldIdx,
+					.fieldIdx = this.symbolTable.memberFieldIndices[exprIdx],
 					.prevProjectionIdx = basePlace.projectionIdx,
+					.projectionKind = MirProjectionKind.FIELD,
 				};
 				projectionIdx = this.push_projection_get_idx(&projection);
 			}
 
+			// Create a new place without modifying the base place.
+			// It retains the same root storage but selects a member.
 			MirPlace memberPlace = {
 				.baseSymbolIdx = basePlace.baseSymbolIdx,
 				.projectionIdx = projectionIdx,
@@ -861,8 +875,41 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 
 			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
 			return { .kind = MirOperandKind.PLACE, .placeIdx = placeIdx };
-		default:
-			unreachable("Unsupported lvalue expression in lower_place %s", expr.kind);
+
+		case ExprKind.INDEXER:
+			// Locate the array's storage, including preceding projections
+			// like the field in object.items[i].
+			MirOperand baseOperand = this.lower_place(expr.indexer.base);
+			assert(baseOperand.kind == MirOperandKind.PLACE);
+
+			// Copy the place before lowering the index expression,
+			// which may append more places to the output list.
+			MirPlace basePlace = this.output.places[baseOperand.placeIdx];
+
+			// Lower the index once and retain its resulting operand.
+			// This may be an immediate integer or a register holding
+			MirOperand indexOperand = this.lower_expr(expr.indexer.index);
+
+			// Append an indexing step to the existing projection chain.
+			// Retain the operand so the VM can use its runtime value.
+			MirProjection projection = {
+				.arrayIndex = indexOperand,
+				.prevProjectionIdx = basePlace.projectionIdx,
+				.projectionKind = MirProjectionKind.INDEXER,
+			};
+			MirProjectionIdx projectionIdx = this.push_projection_get_idx(&projection);
+
+			MirPlace elementPlace = {
+				.baseSymbolIdx = basePlace.baseSymbolIdx,
+				.projectionIdx = projectionIdx,
+				.isGlobal = basePlace.isGlobal,
+				.kind = MirPlaceKind.ARRAY_SLOT,
+			};
+
+			MirPlaceIdx placeIdx = this.push_place_get_idx(&elementPlace);
+			return { .kind = MirOperandKind.PLACE, .placeIdx = placeIdx };
+
+		default: unreachable("Unsupported lvalue expression in lower_place %s", expr.kind);
 	}
 }
 

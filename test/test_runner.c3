@@ -1,6 +1,7 @@
 import compiler;
 import main;
 import vm;
+import runtime;
 import log;
 
 
@@ -101,6 +102,39 @@ fn void t_18() @test
     compile_and_run_file("./test/18_break_continue.ratc", "1\n3\n4\n")!!;
 }
 
+fn void t_19() @test
+{
+    compile_and_run_file("./test/19_indexing.ratc", "42\n1\n42\n17\n2.500000\n13\n19\n2.500000\n13\n3.500000\n29\n31\n")!!;
+}
+
+fn void t_index_bounds() @test
+{
+	foreach (String filename : { "./test/20_index_negative.ratc", "./test/21_index_past_end.ratc" })
+	{
+		defer main::cleanup();
+		main::CompilationResult result = main::compile_file(filename);
+		assert(result.outcome == main::CompilationOutcome.NO_ERROR);
+		DString output = dstring::new(mem);
+		defer output.free();
+		assert(vm::run(&result.compiledProgram, &output) == vm::RunResult.RUNTIME_ERR);
+		assert(output.len() == 0);
+	}
+}
+
+fn void t_struct_offsets_stay_static() @test
+{
+	defer main::cleanup();
+	main::CompilationResult result = main::compile_file("./test/05_struct_simple.ratc");
+	assert(result.outcome == main::CompilationOutcome.NO_ERROR);
+	foreach (instruction : result.compiledProgram.instructions)
+	{
+		assert(instruction.opCode != runtime::BCOpCode.LOCAL_ADDR);
+		assert(instruction.opCode != runtime::BCOpCode.GLOBAL_ADDR);
+		assert(instruction.opCode != runtime::BCOpCode.OFFSET_ADDR);
+		assert(instruction.opCode != runtime::BCOpCode.INDEX_ADDR);
+	}
+}
+
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;
@@ -120,7 +154,7 @@ fn void? compile_and_run_file(String filename, String expectedResult)
 
 	DString output = dstring::new(mem);
 	defer output.free();
-	vm::run(&result.compiledProgram, &output);
+	if (vm::run(&result.compiledProgram, &output) != vm::RunResult.OK) return vm::RUNTIME_ERROR~;
 	log::logn("%s", output);
 	if(expectedResult != output.str_view()){
 		return OUTPUT_DOESNT_MATCH_ERROR~;

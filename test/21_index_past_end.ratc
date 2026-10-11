@@ -1,0 +1,5 @@
+fn bool program() {
+    int[]& values = new int[3]&;
+    values[3] = 42;
+    return false;
+}

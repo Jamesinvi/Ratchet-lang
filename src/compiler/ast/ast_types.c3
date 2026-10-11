@@ -109,15 +109,16 @@ enum ExprKind : char
 	BOOL,
 	NULL,
 	STRING_LITERAL,
-	CAST,   // k as float
-	VAR,    // identifier
-	UNARY,  // -x, !x
-	BINARY, // x + y, x * y, ...
-	CALL,   // f(a,b)
-	MEMBER, // a.b
-	NEW,    // new
-	GROUP,  // (x) optional; often you skip this and just use Span
-	THIS,   // used in methods to reference current receiver
+	CAST,    // k as float
+	VAR,     // identifier
+	UNARY,   // -x, !x
+	BINARY,  // x + y, x * y, ...
+	CALL,    // f(a,b)
+	MEMBER,  // a.b
+	NEW,     // new
+	GROUP,   // (x) optional; often you skip this and just use Span
+	THIS,    // used in methods to reference current receiver
+	INDEXER, // arr[i]
 }
 
 enum BinOp : char (String asStr)
@@ -150,7 +151,8 @@ struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
 struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd;  ExprIdx memberCaller;}
 struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
 struct ExprNew		{ TypeAst type; 	 ExprIdx init;			ExprIdx arraySize; }
-struct ExprCast 	{ ExprIdx value;	TypeAst targetType; }
+struct ExprCast 	{ ExprIdx value;	 TypeAst targetType; }
+struct ExprIndexer 	{ ExprIdx base;	 	 ExprIdx index; }
 // c3fmt on
 
 struct Expr
@@ -171,6 +173,7 @@ struct Expr
 		ExprBinary binary;
 		ExprCall call;
 		ExprMember member;
+		ExprIndexer indexer;
 		ExprNew new;
 		ExprCast cast;
 	}
@@ -472,6 +475,11 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 			if (expr.new.init != NO_IDX) this.print_expression(&this.expressions[expr.new.init]);
 			log::log("}");
 		case ExprKind.GROUP: log::log("(<group>)");
+		case ExprKind.INDEXER:
+			log::log("@index");
+			this.print_expression(&this.expressions[expr.indexer.index]);
+			log::log(" of ");
+			this.print_expression(&this.expressions[expr.indexer.base]);
 		default: log::log("<?expr?>");
 	}
 }

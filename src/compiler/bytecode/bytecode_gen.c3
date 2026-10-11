@@ -305,107 +305,10 @@ fn void BCGenerator.lower_zero_bytes(BCGenerator* this, MirInstruction* mirInstr
 
 fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction)
 {
-	MirRegisterID dest = mirInstruction.result;
-	MirOperand source  = this.mirInput.operands[mirInstruction.operandsStart];
-	MirPlace* place    = &this.mirInput.places[source.placeIdx];
-	if (place.kind == MirPlaceKind.BUILT_IN_REF_VALUE)
-	{
-		this.lower_load_ref_value(mirInstruction);
-		return;
-	}
-
-	SymbolIdx symbolIdx    = place.baseSymbolIdx;
-	Symbol* symbol         = &this.symbolTable.symbols[symbolIdx];
-	TypeInfo symbolType    = this.symbolTable.symbols[symbolIdx].type;
-	bool baseIsRefLike     = symbolType.is_ref_like();
-	short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-	short destOffset       = this.bind_mir_register_get_offset(dest, mirInstruction.type);
-	if (place.isGlobal)
-	{
-		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
-		BCInstruction instruction = {
-			.opCode = BCOpCode.LOAD_GLOBAL,
-			.destOffset = destOffset,
-			.leftOffset = globalOffset + projectionOffset,
-			.rightOffset = runtime::NO_OFFSET,
-			.byteCount = mirInstruction.type.size(),
-			.immKind = BCOperandKind.SIZE,
-		};
-		this.push_instruction_get_idx(&instruction);
-	}
-	else if (baseIsRefLike && place.projectionIdx != mir::NO_PROJECTION)
-	{
-		short srcOffset = this.bind_symbol_get_offset(symbolIdx);
-		BCInstruction instruction = {
-			.opCode = BCOpCode.LOAD_REF_FIELD,
-			.destOffset = destOffset,
-			.leftOffset = srcOffset,
-			.rightOffset = projectionOffset,
-			.byteCount = mirInstruction.type.size(),
-			.immKind = BCOperandKind.SIZE,
-		};
-		this.push_instruction_get_idx(&instruction);
-	}
-	else if (symbol.passMode != ParamPassMode.VALUE)
-	{
-		short srcOffset = this.bind_symbol_get_offset(symbolIdx);
-		BCInstruction instruction = {
-			.opCode = BCOpCode.LOAD_BORROW,
-			.destOffset = destOffset,
-			.leftOffset = srcOffset,
-			.rightOffset = projectionOffset,
-			.byteCount = mirInstruction.type.size(),
-			.immKind = BCOperandKind.SIZE,
-		};
-		this.push_instruction_get_idx(&instruction);
-	}
-	else
-	{
-		short srcOffset = this.bind_symbol_get_offset(symbolIdx);
-		this.load_value(mirInstruction.type, srcOffset + projectionOffset, destOffset);
-	}
-}
-
-fn void BCGenerator.lower_load_ref_value(BCGenerator* this, MirInstruction* mirInstruction)
-{
-	MirRegisterID dest     = mirInstruction.result;
-	MirOperand source      = this.mirInput.operands[mirInstruction.operandsStart];
-	MirPlace* place        = &this.mirInput.places[source.placeIdx];
-	SymbolIdx symbolIdx    = place.baseSymbolIdx;
-	Symbol* symbol         = &this.symbolTable.symbols[symbolIdx];
-	TypeInfo symbolType    = this.symbolTable.symbols[symbolIdx].type;
-	short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-	short destOffset       = this.bind_mir_register_get_offset(dest, mirInstruction.type);
-	BCInstruction instruction = {
-		.destOffset = destOffset,
-		.byteCount = mirInstruction.type.size(),
-		.immKind = BCOperandKind.SIZE,
-	};
-	if (place.isGlobal)
-	{
-		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
-		instruction.opCode = BCOpCode.LOAD_GLOBAL_REF_VALUE;
-		instruction.leftOffset = globalOffset + projectionOffset;
-		instruction.rightOffset = runtime::NO_OFFSET;
-	}
-	else
-	{
-		short baseOffset = this.bind_symbol_get_offset(symbolIdx);
-		instruction.opCode = BCOpCode.LOAD_REF_VALUE;
-		if (symbol.passMode != ParamPassMode.VALUE)
-		{
-			// The parameter slot holds the address of caller storage. The VM follows
-			// that address, applies the projection, then follows the managed ref.
-			instruction.leftOffset = baseOffset;
-			instruction.rightOffset = projectionOffset;
-		}
-		else
-		{
-			instruction.leftOffset = baseOffset + projectionOffset;
-			instruction.rightOffset = runtime::NO_OFFSET;
-		}
-	}
-	this.push_instruction_get_idx(&instruction);
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	BCPlace place = this.resolve_place(&this.mirInput.places[source.placeIdx]);
+	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+	this.load_place(place, mirInstruction.type, destOffset);
 }
 
 fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOffset, short destOffset)
@@ -426,111 +329,33 @@ fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOf
 
 fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstruction)
 {
-	MirOperand dest   = this.mirInput.operands[mirInstruction.operandsStart];
+	MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
 	MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
-	MirPlace* place   = &this.mirInput.places[dest.placeIdx];
-
-	if (place.kind == MirPlaceKind.BUILT_IN_REF_VALUE)
+	BCPlace place = this.resolve_place(&this.mirInput.places[dest.placeIdx]);
+	if (place.kind == BCPlaceKind.LOCAL)
 	{
-		this.lower_store_ref_value(mirInstruction);
+		// Keep direct stores, including immediates, on the existing path.
+		this.store_value(mirInstruction, source, place.baseOffset + place.fieldOffset);
+		return;
 	}
-	else
-	{
-		SymbolIdx symbolIdx    = place.baseSymbolIdx;
-		Symbol* symbol         = &this.symbolTable.symbols[symbolIdx];
-		TypeInfo symbolType    = this.symbolTable.symbols[symbolIdx].type;
-		bool baseIsRefLike     = symbolType.is_ref_like();
-		short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-		if (place.isGlobal)
-		{
-			short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
-			short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
 
-			BCInstruction instruction = {
-				.opCode = BCOpCode.STORE_GLOBAL,
-				.destOffset = globalOffset + projectionOffset,
-				.leftOffset = sourceOffset,
-				.rightOffset = runtime::NO_OFFSET,
-				.byteCount = mirInstruction.type.size(),
-				.immKind = BCOperandKind.SIZE,
-			};
-			this.push_instruction_get_idx(&instruction);
-		}
-		else if (baseIsRefLike && place.projectionIdx != mir::NO_PROJECTION)
-		{
-			short baseOffset   = this.bind_symbol_get_offset(symbolIdx);
-			short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
-			BCInstruction instruction = {
-				.opCode = BCOpCode.STORE_REF_FIELD,
-				.destOffset = baseOffset,
-				.leftOffset = sourceOffset,
-				.rightOffset = projectionOffset,
-				.byteCount = mirInstruction.type.size(),
-				.immKind = BCOperandKind.SIZE,
-			};
-			this.push_instruction_get_idx(&instruction);
-		}
-		else if (symbol.passMode != ParamPassMode.VALUE)
-		{
-			short baseOffset   = this.bind_symbol_get_offset(symbolIdx);
-			// Analysis guarantees that stores through borrowed parameters only target inout parameters.
-			short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
-			BCInstruction instruction = {
-				.opCode = BCOpCode.STORE_BORROW,
-				.destOffset = baseOffset,
-				.leftOffset = sourceOffset,
-				.rightOffset = projectionOffset,
-				.byteCount = mirInstruction.type.size(),
-				.immKind = BCOperandKind.SIZE,
-			};
-			this.push_instruction_get_idx(&instruction);
-		}
-		else
-		{
-			short baseOffset = this.bind_symbol_get_offset(symbolIdx);
-			this.store_value(mirInstruction, source, baseOffset + projectionOffset);
-		}
-	}
-}
-
-fn void BCGenerator.lower_store_ref_value(BCGenerator* this, MirInstruction* mirInstruction)
-{
-	MirOperand dest        = this.mirInput.operands[mirInstruction.operandsStart];
-	MirOperand source      = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
-	MirPlace* place        = &this.mirInput.places[dest.placeIdx];
-	SymbolIdx symbolIdx    = place.baseSymbolIdx;
-	Symbol* symbol         = &this.symbolTable.symbols[symbolIdx];
-	TypeInfo symbolType    = this.symbolTable.symbols[symbolIdx].type;
-	short projectionOffset = this.resolve_projection_get_offset(place.projectionIdx, &symbolType);
-	short sourceOffset     = this.bind_operand_get_offset(source, mirInstruction.type);
+	short sourceOffset = this.bind_operand_get_offset(source, mirInstruction.type);
 	BCInstruction instruction = {
 		.leftOffset = sourceOffset,
 		.byteCount = mirInstruction.type.size(),
 		.immKind = BCOperandKind.SIZE,
 	};
-	if (place.isGlobal)
+	if (place.kind == BCPlaceKind.GLOBAL)
 	{
-		short globalOffset = this.bind_global_symbol_get_offset(symbolIdx);
-		instruction.opCode = BCOpCode.STORE_GLOBAL_REF_VALUE;
-		instruction.destOffset = globalOffset + projectionOffset;
+		instruction.opCode = BCOpCode.STORE_GLOBAL;
+		instruction.destOffset = place.baseOffset + place.fieldOffset;
 		instruction.rightOffset = runtime::NO_OFFSET;
 	}
 	else
 	{
-		short baseOffset = this.bind_symbol_get_offset(symbolIdx);
-		instruction.opCode = BCOpCode.STORE_REF_VALUE;
-		if (symbol.passMode != ParamPassMode.VALUE)
-		{
-			// The parameter slot holds the address of caller storage. The VM follows
-			// that address, applies the projection, then follows the managed ref.
-			instruction.destOffset = baseOffset;
-			instruction.rightOffset = projectionOffset;
-		}
-		else
-		{
-			instruction.destOffset = baseOffset + projectionOffset;
-			instruction.rightOffset = runtime::NO_OFFSET;
-		}
+		instruction.opCode = BCOpCode.STORE_BORROW;
+		instruction.destOffset = place.baseOffset;
+		instruction.rightOffset = place.fieldOffset;
 	}
 	this.push_instruction_get_idx(&instruction);
 }
@@ -792,12 +617,15 @@ fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction
 		{
 			MirOperand argOperand = this.mirInput.operands[k];
 			assert(argOperand.kind == MirOperandKind.PLACE);
-			MirPlace* argPlace      = &this.mirInput.places[argOperand.placeIdx];
-			Symbol* callerSymbol    = &this.symbolTable.symbols[argPlace.baseSymbolIdx];
-			TypeInfo callerBaseType = callerSymbol.type;
-			callArg.callerOffset = this.bind_symbol_get_offset(argPlace.baseSymbolIdx);
-			callArg.projectionOffset = this.resolve_projection_get_offset(argPlace.projectionIdx, &callerBaseType);
-			callArg.callerIsBorrow = callerSymbol.passMode != ParamPassMode.VALUE;
+			BCPlace place = this.resolve_place(&this.mirInput.places[argOperand.placeIdx]);
+			if (place.kind == BCPlaceKind.GLOBAL)
+			{
+				place = { .kind = BCPlaceKind.INDIRECT, .baseOffset = this.get_place_address(place) };
+			}
+			callArg.callerOffset = place.baseOffset;
+			callArg.projectionOffset = place.fieldOffset;
+			// Indirect places already hold the address to forward to the callee.
+			callArg.callerIsBorrow = place.kind == BCPlaceKind.INDIRECT;
 			callArg.size = (short)uptr::size;
 			// Analysis guarantees that the argument place is compatible with the borrow mode.
 		}

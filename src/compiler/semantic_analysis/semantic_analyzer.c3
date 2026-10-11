@@ -606,6 +606,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr(SemanticAnalyzer* this, ExprIdx expr
 		case ExprKind.CALL: result = this.analyze_expr_call(exprIdx);
 		case ExprKind.MEMBER: result = this.analyze_expr_member(exprIdx);
 		case ExprKind.CAST: result = this.analyze_expr_cast(exprIdx);
+		case ExprKind.INDEXER: result = this.analyze_expr_indexer(exprIdx);
 		default: result = type_ok(make_type(ValueType.NULL));
 	}
 	if (!result.hadError)
@@ -757,6 +758,28 @@ fn TypeResult SemanticAnalyzer.analyze_expr_cast(SemanticAnalyzer* this, ExprIdx
 	if (!is_numeric_type(source.value) || !is_numeric_type(target.value)) return this.type_error(ErrorKind.TYPE_MISMATCH, source.value, target.value, expr.span);
 
 	return type_ok(target.value);
+}
+
+fn TypeResult SemanticAnalyzer.analyze_expr_indexer(SemanticAnalyzer* this, ExprIdx exprIdx)
+{
+	Expr* expr           = &this.ast.expressions[exprIdx];
+	// Analyze the array base
+	TypeResult arrayType = this.analyze_expr(expr.indexer.base);
+	if (arrayType.hadError) return arrayType;
+	// Not an array? indexing on non-arrays is not valid
+	if (!arrayType.value.is_array())
+	{
+		return this.type_error(ErrorKind.NOT_INDEXABLE, arrayType.value, nullType, this.ast.expressions[expr.indexer.base].span);
+	}
+	// Analyze the index expression
+	TypeResult indexType = this.analyze_expr(expr.indexer.index);
+	if (indexType.hadError) return indexType;
+	// Used a non-integer index? error
+	if (indexType.value.type != ValueType.INT)
+	{
+		return this.type_error(ErrorKind.TYPE_MISMATCH, indexType.value, make_type(ValueType.INT), this.ast.expressions[expr.indexer.index].span);
+	}
+	return type_ok(arrayType.value.element_type());
 }
 
 fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprIdx exprIdx)

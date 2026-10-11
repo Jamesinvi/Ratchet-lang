@@ -1,7 +1,8 @@
 // Entry-point. Should return true if errors occurred
-fn bool program(){
+fn bool program()
+{
 	int[25] a;
-	int[]& b = new int[25]&;
-	int[]* c = new int[25]*;
+	a[5] = 12102;
 	return false;
 }
+

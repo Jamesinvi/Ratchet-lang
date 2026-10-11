@@ -1,0 +1,64 @@
+struct Item {
+    int padding;
+    double value;
+    int[3] counts;
+}
+
+struct Items {
+    int padding;
+    Item[2] values;
+}
+
+int[3] globalValues;
+
+fn int nextIndex(inout int calls) {
+    calls = calls + 1;
+    return 1;
+}
+
+fn int readBorrowed(in int[3] values, int index) {
+    return values[index];
+}
+
+fn bool program() {
+    int[3] values;
+    int calls = 0;
+    values[nextIndex(calls)] = 42;
+    echo values[1];
+    echo calls;
+    echo readBorrowed(values, 1);
+
+    globalValues[2] = 17;
+    echo globalValues[2];
+
+    Items items;
+    int i = 1;
+    items.values[i].value = 2.5;
+    items.values[i].counts[2] = 13;
+    echo items.values[i].value;
+    echo items.values[i].counts[2];
+
+    Items& ref = new Items& { items };
+    ref.values[i].counts[0] = 19;
+    echo ref.values[i].counts[0];
+
+    Item[]& heap = new Item[3]&;
+    heap[i] = items.values[i];
+    echo heap[i].value;
+    echo heap[i].counts[2];
+
+    Item&[]& refs = new Item&[2]&;
+    refs[i] = new Item& { items.values[i] };
+    refs[i].value = 3.5;
+    echo refs[i].value;
+
+    int&[2] scalars;
+    scalars[i] = new int& { 23 };
+    scalars[i].value = 29;
+    echo scalars[i].value;
+
+    int[]* manual = new int[3]*;
+    manual[i] = 31;
+    echo manual[i];
+    return false;
+}
