@@ -1,0 +1,294 @@
+// Compilation benchmark: nested managed references, alias assignments, and method calls.
+// Work is in the source structure; runtime loops stay small.
+
+struct Vec2 {
+    float x;
+    float y;
+}
+
+struct Material {
+    double mass;
+    float drag;
+}
+
+struct Settings {
+    int limit;
+    Material& material;
+}
+
+struct Entity {
+    Vec2 position;
+    Vec2 velocity;
+    Settings& settings;
+
+    method null advance(float delta) {
+        this.position.x = this.position.x + this.velocity.x * delta;
+        this.position.y = this.position.y + this.velocity.y * delta;
+    }
+}
+
+fn int updateEntity0(int seed) {
+    Material material;
+    material.mass = 2.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 3.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity1(int seed) {
+    Material material;
+    material.mass = 3.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 4.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity2(int seed) {
+    Material material;
+    material.mass = 4.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 5.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity3(int seed) {
+    Material material;
+    material.mass = 5.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 6.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity4(int seed) {
+    Material material;
+    material.mass = 6.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 7.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity5(int seed) {
+    Material material;
+    material.mass = 7.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 8.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity6(int seed) {
+    Material material;
+    material.mass = 8.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 9.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity7(int seed) {
+    Material material;
+    material.mass = 9.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 10.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity8(int seed) {
+    Material material;
+    material.mass = 10.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 11.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn int updateEntity9(int seed) {
+    Material material;
+    material.mass = 11.5;
+    material.drag = 0.125f;
+    Settings settings;
+    settings.limit = 100 + seed;
+    settings.material = new Material& { material };
+    Entity initial;
+    initial.position.x = seed as float;
+    initial.position.y = 12.0f;
+    initial.velocity.x = 1.5f;
+    initial.velocity.y = 0.5f;
+    initial.settings = new Settings& { settings };
+    initial.advance(0.5f);
+    Entity& entity = new Entity& { initial };
+    Entity& alias = entity;
+    alias.settings.material.mass = alias.settings.material.mass + 0.25;
+    entity.velocity.x = entity.velocity.x * (1.0f - entity.settings.material.drag);
+    if (entity.position.x > (entity.settings.limit as float)) {
+        entity.position.x = 0.0f;
+    }
+    double weighted = (alias.position.y as double) * entity.settings.material.mass;
+    return (weighted as int) + (entity.velocity.x as int);
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + updateEntity0(8);
+    checksum = checksum + updateEntity1(9);
+    checksum = checksum + updateEntity2(10);
+    checksum = checksum + updateEntity3(11);
+    checksum = checksum + updateEntity4(12);
+    checksum = checksum + updateEntity5(13);
+    checksum = checksum + updateEntity6(14);
+    checksum = checksum + updateEntity7(15);
+    checksum = checksum + updateEntity8(16);
+    checksum = checksum + updateEntity9(17);
+    echo checksum;
+    return false;
+}

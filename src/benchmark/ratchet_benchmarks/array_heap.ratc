@@ -1,0 +1,314 @@
+// Compilation benchmark: dynamic array types, struct/reference elements, and mixed projections.
+// Work is in the source structure; runtime loops stay small.
+
+struct Sample {
+    int count;
+    double total;
+    int[4] bins;
+}
+
+fn int scanBuffer0(int seed) {
+    int length = 8 + 0;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 2;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 2;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer1(int seed) {
+    int length = 8 + 1;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 3;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 3;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer2(int seed) {
+    int length = 8 + 2;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 4;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 4;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer3(int seed) {
+    int length = 8 + 3;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 5;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 5;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer4(int seed) {
+    int length = 8 + 4;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 6;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 6;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer5(int seed) {
+    int length = 8 + 5;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 7;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 7;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer6(int seed) {
+    int length = 8 + 6;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 8;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 8;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer7(int seed) {
+    int length = 8 + 7;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 9;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 9;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer8(int seed) {
+    int length = 8 + 8;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 10;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 10;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer9(int seed) {
+    int length = 8 + 9;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 11;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 11;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer10(int seed) {
+    int length = 8 + 10;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 12;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 12;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn int scanBuffer11(int seed) {
+    int length = 8 + 11;
+    int[]& values = new int[length]&;
+    Sample[]& samples = new Sample[4]&;
+    Sample&[]& references = new Sample&[4]&;
+    int[]* scratch = new int[4]*;
+    int index = 0;
+    while (index < length) {
+        values[index] = seed + index * 13;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    samples[lane].count = values[lane + 4];
+    samples[lane].total = (values[lane] as double) * 1.5;
+    samples[lane].bins[2] = values[lane + 1];
+    Sample snapshot = samples[lane];
+    references[lane] = new Sample& { snapshot };
+    references[lane].bins[3] = references[lane].bins[2] + 13;
+    scratch[lane] = references[lane].count;
+    int[]& alias = values;
+    alias[lane] = scratch[lane] + samples[lane].bins[2];
+    return alias[lane] + references[lane].bins[3] + (references[lane].total as int);
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + scanBuffer0(5);
+    checksum = checksum + scanBuffer1(6);
+    checksum = checksum + scanBuffer2(7);
+    checksum = checksum + scanBuffer3(8);
+    checksum = checksum + scanBuffer4(9);
+    checksum = checksum + scanBuffer5(10);
+    checksum = checksum + scanBuffer6(11);
+    checksum = checksum + scanBuffer7(12);
+    checksum = checksum + scanBuffer8(13);
+    checksum = checksum + scanBuffer9(14);
+    checksum = checksum + scanBuffer10(15);
+    checksum = checksum + scanBuffer11(16);
+    echo checksum;
+    return false;
+}

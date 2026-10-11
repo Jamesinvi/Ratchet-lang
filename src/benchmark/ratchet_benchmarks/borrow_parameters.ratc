@@ -1,0 +1,221 @@
+// Compilation benchmark: borrowed structs, arrays and fields, plus forwarding calls.
+// Work is in the source structure; runtime loops stay small.
+
+struct Totals {
+    int accepted;
+    int rejected;
+    double balance;
+}
+
+struct Ledger {
+    Totals totals;
+    int[8] buckets;
+}
+
+fn null addCount(inout int count, int amount) {
+    count = count + amount;
+}
+
+fn null addBalance(inout double balance, double amount) {
+    balance = balance + amount;
+}
+
+fn null record(inout Ledger ledger, int slot, int amount) {
+    addCount(ledger.totals.accepted, amount);
+    addBalance(ledger.totals.balance, (amount as double) * 1.25);
+    ledger.buckets[slot] = ledger.buckets[slot] + amount;
+}
+
+fn int bucketSum(in int[8] buckets) {
+    int total = 0;
+    int index = 0;
+    while (index < 8) {
+        total = total + buckets[index];
+        index = index + 1;
+    }
+    return total;
+}
+
+fn int inspect(in Ledger ledger) {
+    return bucketSum(ledger.buckets) + ledger.totals.accepted;
+}
+
+fn null forwardRecord(inout Ledger ledger, int slot, int amount) {
+    record(ledger, slot, amount);
+}
+
+fn int reconcile0(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 2);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile1(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 3);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile2(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 4);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile3(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 5);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile4(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 6);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile5(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 7);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile6(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 8);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile7(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 9);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile8(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 10);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn int reconcile9(int seed) {
+    Ledger ledger;
+    int index = 0;
+    while (index < 8) {
+        forwardRecord(ledger, index, seed + index + 11);
+        if (index > 3) {
+            addCount(ledger.totals.rejected, 1);
+        }
+        index = index + 1;
+    }
+    int total = inspect(ledger);
+    addBalance(ledger.totals.balance, 0.5);
+    int balance = ledger.totals.balance as int;
+    return total + balance - ledger.totals.rejected;
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + reconcile0(5);
+    checksum = checksum + reconcile1(6);
+    checksum = checksum + reconcile2(7);
+    checksum = checksum + reconcile3(8);
+    checksum = checksum + reconcile4(9);
+    checksum = checksum + reconcile5(10);
+    checksum = checksum + reconcile6(11);
+    checksum = checksum + reconcile7(12);
+    checksum = checksum + reconcile8(13);
+    checksum = checksum + reconcile9(14);
+    echo checksum;
+    return false;
+}

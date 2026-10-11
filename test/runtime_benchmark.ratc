@@ -1,0 +1,53 @@
+// Runtime benchmark: 10,000 diffusion steps on a 32x32 grid.
+// Keep dimensions, step count, and arithmetic identical to ../test2.py.
+// Two buffers preserve the previous step while computing the next one.
+fn int simulate(int steps) {
+    int width = 32;
+    int count = width * width;
+    int[]& current = new int[count]&;
+    int[]& next = new int[count]&;
+    int index = 0;
+    while (index < count) {
+        int value = index * 17 + 13;
+        value = value - (value / 256) * 256;
+        current[index] = value;
+        next[index] = value;
+        index = index + 1;
+    }
+
+    int source = (width / 2) * width + width / 2;
+    int step = 0;
+    while (step < steps) {
+        int row = 1;
+        while (row < width - 1) {
+            index = row * width + 1;
+            int end = (row + 1) * width - 1;
+            while (index < end) {
+                int total = current[index] * 4;
+                total = total + current[index - 1] + current[index + 1];
+                total = total + current[index - width] + current[index + width];
+                next[index] = total / 8;
+                index = index + 1;
+            }
+            row = row + 1;
+        }
+        next[source] = 1024 + step - (step / 64) * 64;
+        int[]& previous = current;
+        current = next;
+        next = previous;
+        step = step + 1;
+    }
+
+    int checksum = 0;
+    index = 0;
+    while (index < count) {
+        checksum = checksum + current[index] * (index + 1);
+        index = index + 1;
+    }
+    return checksum;
+}
+
+fn bool program() {
+    echo simulate(10000);
+    return false;
+}

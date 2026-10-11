@@ -1,0 +1,198 @@
+// Compilation benchmark: nested arguments, forward declarations, and a typed call graph.
+// Work is in the source structure; runtime loops stay small.
+
+fn int addFee(int amount, int fee) {
+    return amount + fee;
+}
+
+fn int blend(int left, int right, int weight) {
+    return (left * weight + right) / (weight + 1);
+}
+
+fn int clampPrice(int value, int low, int high) {
+    if (value < low) {
+        return low;
+    }
+    if (value > high) {
+        return high;
+    }
+    return value;
+}
+
+fn double applyRate(int value, double rate) {
+    return (value as double) * rate;
+}
+
+fn int quote11(int base, int units) {
+    int prior = quote10(base / 2, units);
+    int first = addFee(base, blend(units, 13, 2));
+    int second = blend(addFee(base, units), addFee(units, 16), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 13);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote10(int base, int units) {
+    int prior = quote9(base / 2, units);
+    int first = addFee(base, blend(units, 12, 2));
+    int second = blend(addFee(base, units), addFee(units, 15), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 12);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote9(int base, int units) {
+    int prior = quote8(base / 2, units);
+    int first = addFee(base, blend(units, 11, 2));
+    int second = blend(addFee(base, units), addFee(units, 14), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 11);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote8(int base, int units) {
+    int prior = quote7(base / 2, units);
+    int first = addFee(base, blend(units, 10, 2));
+    int second = blend(addFee(base, units), addFee(units, 13), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 10);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote7(int base, int units) {
+    int prior = quote6(base / 2, units);
+    int first = addFee(base, blend(units, 9, 2));
+    int second = blend(addFee(base, units), addFee(units, 12), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 9);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote6(int base, int units) {
+    int prior = quote5(base / 2, units);
+    int first = addFee(base, blend(units, 8, 2));
+    int second = blend(addFee(base, units), addFee(units, 11), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 8);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote5(int base, int units) {
+    int prior = quote4(base / 2, units);
+    int first = addFee(base, blend(units, 7, 2));
+    int second = blend(addFee(base, units), addFee(units, 10), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 7);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote4(int base, int units) {
+    int prior = quote3(base / 2, units);
+    int first = addFee(base, blend(units, 6, 2));
+    int second = blend(addFee(base, units), addFee(units, 9), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 6);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote3(int base, int units) {
+    int prior = quote2(base / 2, units);
+    int first = addFee(base, blend(units, 5, 2));
+    int second = blend(addFee(base, units), addFee(units, 8), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 5);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote2(int base, int units) {
+    int prior = quote1(base / 2, units);
+    int first = addFee(base, blend(units, 4, 2));
+    int second = blend(addFee(base, units), addFee(units, 7), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 4);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote1(int base, int units) {
+    int prior = quote0(base / 2, units);
+    int first = addFee(base, blend(units, 3, 2));
+    int second = blend(addFee(base, units), addFee(units, 6), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 3);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn int quote0(int base, int units) {
+    int prior = addFee(base, units);
+    int first = addFee(base, blend(units, 2, 2));
+    int second = blend(addFee(base, units), addFee(units, 5), 3);
+    int bounded = clampPrice(blend(first, second, 2), 1, 5000);
+    double taxed = applyRate(addFee(bounded, prior), 1.125);
+    int rounded = taxed as int;
+    int handling = addFee(blend(units, prior, 4), 2);
+    int result = blend(rounded, handling, 2);
+    int floor = clampPrice(prior, 1, 100);
+    return addFee(clampPrice(result, floor, 6000), units);
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + quote0(40, 2);
+    checksum = checksum + quote1(41, 3);
+    checksum = checksum + quote2(42, 4);
+    checksum = checksum + quote3(43, 5);
+    checksum = checksum + quote4(44, 6);
+    checksum = checksum + quote5(45, 7);
+    checksum = checksum + quote6(46, 8);
+    checksum = checksum + quote7(47, 9);
+    checksum = checksum + quote8(48, 10);
+    checksum = checksum + quote9(49, 11);
+    checksum = checksum + quote10(50, 12);
+    checksum = checksum + quote11(51, 13);
+    echo checksum;
+    return false;
+}

@@ -1,0 +1,319 @@
+// Compilation benchmark: inline array types, chained projections, indexed reads/writes, and copies.
+// Work is in the source structure; runtime loops stay small.
+
+struct Sample {
+    int count;
+    double total;
+    int[4] bins;
+}
+
+struct Window {
+    Sample[4] samples;
+    int[16] values;
+}
+
+fn int scanWindow0(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 2;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow1(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 3;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow2(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 4;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow3(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 5;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow4(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 6;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow5(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 7;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow6(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 8;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow7(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 9;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow8(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 10;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow9(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 11;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow10(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 12;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn int scanWindow11(int seed) {
+    Window window;
+    bool[4] selected;
+    float[4] weights;
+    int index = 0;
+    while (index < 16) {
+        window.values[index] = seed + index * 13;
+        index = index + 1;
+    }
+    int lane = seed - (seed / 4) * 4;
+    selected[lane] = true;
+    weights[lane] = 0.5f + (lane as float) * 0.125f;
+    window.samples[lane].count = window.values[lane + 4];
+    window.samples[lane].total = (window.values[lane] as double) * 1.25;
+    window.samples[lane].bins[2] = window.values[lane + 8];
+    Sample snapshot = window.samples[lane];
+    int[4] saved = snapshot.bins;
+    int result = snapshot.count + saved[2];
+    if (selected[lane]) {
+        result = result + ((weights[lane] as double) * snapshot.total as int);
+    }
+    return result;
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + scanWindow0(5);
+    checksum = checksum + scanWindow1(6);
+    checksum = checksum + scanWindow2(7);
+    checksum = checksum + scanWindow3(8);
+    checksum = checksum + scanWindow4(9);
+    checksum = checksum + scanWindow5(10);
+    checksum = checksum + scanWindow6(11);
+    checksum = checksum + scanWindow7(12);
+    checksum = checksum + scanWindow8(13);
+    checksum = checksum + scanWindow9(14);
+    checksum = checksum + scanWindow10(15);
+    checksum = checksum + scanWindow11(16);
+    echo checksum;
+    return false;
+}

@@ -1,0 +1,280 @@
+// Compilation benchmark: nested integer expressions, precedence, and local bindings.
+// Work is in the source structure; runtime loops stay small.
+
+fn int priceBand0(int base, int units) {
+    int gross = (base + 3) * (units + 2);
+    int shipping = (units * 5 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 5) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 3) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand1(int base, int units) {
+    int gross = (base + 4) * (units + 2);
+    int shipping = (units * 7 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 7) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 4) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand2(int base, int units) {
+    int gross = (base + 5) * (units + 2);
+    int shipping = (units * 9 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 9) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 5) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand3(int base, int units) {
+    int gross = (base + 6) * (units + 2);
+    int shipping = (units * 11 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 11) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 6) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand4(int base, int units) {
+    int gross = (base + 7) * (units + 2);
+    int shipping = (units * 13 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 13) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 7) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand5(int base, int units) {
+    int gross = (base + 8) * (units + 2);
+    int shipping = (units * 15 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 15) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 8) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand6(int base, int units) {
+    int gross = (base + 9) * (units + 2);
+    int shipping = (units * 17 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 17) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 9) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand7(int base, int units) {
+    int gross = (base + 10) * (units + 2);
+    int shipping = (units * 19 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 19) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 10) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand8(int base, int units) {
+    int gross = (base + 11) * (units + 2);
+    int shipping = (units * 21 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 21) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 11) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand9(int base, int units) {
+    int gross = (base + 12) * (units + 2);
+    int shipping = (units * 23 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 23) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 12) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand10(int base, int units) {
+    int gross = (base + 13) * (units + 2);
+    int shipping = (units * 25 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 25) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 13) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand11(int base, int units) {
+    int gross = (base + 14) * (units + 2);
+    int shipping = (units * 27 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 27) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 14) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand12(int base, int units) {
+    int gross = (base + 15) * (units + 2);
+    int shipping = (units * 29 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 29) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 15) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand13(int base, int units) {
+    int gross = (base + 16) * (units + 2);
+    int shipping = (units * 31 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 31) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 16) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand14(int base, int units) {
+    int gross = (base + 17) * (units + 2);
+    int shipping = (units * 33 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 33) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 17) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn int priceBand15(int base, int units) {
+    int gross = (base + 18) * (units + 2);
+    int shipping = (units * 35 + base / 3) / 2;
+    int discount = (gross / 7 + shipping) / 3;
+    int taxable = gross + shipping - discount;
+    int tax = (taxable * 7 + 99) / 100;
+    int subtotal = taxable + tax;
+    int rounded = ((subtotal + 4) / 5) * 5;
+    int fee = (base * base + units * units + 35) / 11;
+    int reserve = (rounded + fee * 3) / 8;
+    int adjusted = rounded + fee - reserve;
+    int remainder = adjusted - (adjusted / 97) * 97;
+    int weighted = (adjusted * 3 + remainder * 18) / 4;
+    return weighted + (gross - discount) / 9;
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + priceBand0(19, 3);
+    checksum = checksum + priceBand1(20, 4);
+    checksum = checksum + priceBand2(21, 5);
+    checksum = checksum + priceBand3(22, 6);
+    checksum = checksum + priceBand4(23, 7);
+    checksum = checksum + priceBand5(24, 8);
+    checksum = checksum + priceBand6(25, 9);
+    checksum = checksum + priceBand7(26, 10);
+    checksum = checksum + priceBand8(27, 11);
+    checksum = checksum + priceBand9(28, 12);
+    checksum = checksum + priceBand10(29, 13);
+    checksum = checksum + priceBand11(30, 14);
+    checksum = checksum + priceBand12(31, 15);
+    checksum = checksum + priceBand13(32, 16);
+    checksum = checksum + priceBand14(33, 17);
+    checksum = checksum + priceBand15(34, 18);
+    echo checksum;
+    return false;
+}

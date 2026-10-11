@@ -9,7 +9,7 @@ import std::core::mem;
 alias Byte = char;
 
 
-const FRAMES_MAX = 64;
+const FRAMES_MAX = 128;
 const STACK_MAX  = (FRAMES_MAX * Byte::max);
 
 faultdef RUNTIME_ERROR;

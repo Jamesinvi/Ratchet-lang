@@ -47,7 +47,7 @@ struct CompilationContext
 	bool hadBytecodeError;
 }
 
-fn CompilationResult compile_file(String path)
+fn CompilationResult compile_file(String path, bool silent = false)
 {
 	CompilationResult result;
 	String? file = (String)file::load(mem, path);
@@ -110,7 +110,10 @@ fn CompilationResult compile_file(String path)
 	}
 	else
 	{
-		log::logn("Compiled successfully");
+		if (!silent)
+		{
+			log::logn("Compiled successfully");
+		}
 	}
 
 	// ------------ Lower, MIR -----------

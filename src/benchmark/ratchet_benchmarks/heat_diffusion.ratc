@@ -1,0 +1,243 @@
+// Compilation benchmark: a mixed simulation with arrays, structs, borrows, and calls.
+// Small runtime dimensions keep this practical to execute as a correctness check.
+struct Simulation {
+    int width;
+    int height;
+    int steps;
+    int ambient;
+    float energyScale;
+}
+
+struct HeatSource {
+    int x;
+    int y;
+    int temperature;
+    int variation;
+}
+
+struct Statistics {
+    int minimum;
+    int maximum;
+    int total;
+    int warmCells;
+    int checksum;
+    double energy;
+}
+
+fn int cellCount(in Simulation config) {
+    return config.width * config.height;
+}
+
+fn int cellIndex(int x, int y, int width) {
+    return y * width + x;
+}
+
+fn int wrap(int value, int limit) {
+    return value - (value / limit) * limit;
+}
+
+fn bool inside(in Simulation config, int x, int y) {
+    return x >= 0 and y >= 0 and x < config.width and y < config.height;
+}
+
+fn int clampTemperature(int value, int minimum, int maximum) {
+    if (value < minimum) {
+        return minimum;
+    }
+    if (value > maximum) {
+        return maximum;
+    }
+    return value;
+}
+
+fn null seedGrid(int[]& grid, in Simulation config, int seed) {
+    int row = 0;
+    while (row < config.height) {
+        int column = 0;
+        while (column < config.width) {
+            int index = cellIndex(column, row, config.width);
+            int noise = wrap(seed + row * 17 + column * 13, 64);
+            grid[index] = config.ambient + noise;
+            column = column + 1;
+        }
+        row = row + 1;
+    }
+}
+
+fn null copyGrid(int[]& source, int[]& target, int count) {
+    int index = 0;
+    while (index < count) {
+        target[index] = source[index];
+        index = index + 1;
+    }
+}
+
+fn null copyEdges(int[]& source, int[]& target, in Simulation config) {
+    int column = 0;
+    while (column < config.width) {
+        int top = cellIndex(column, 0, config.width);
+        int bottom = cellIndex(column, config.height - 1, config.width);
+        target[top] = source[top];
+        target[bottom] = source[bottom];
+        column = column + 1;
+    }
+    int row = 1;
+    while (row < config.height - 1) {
+        int left = cellIndex(0, row, config.width);
+        int right = cellIndex(config.width - 1, row, config.width);
+        target[left] = source[left];
+        target[right] = source[right];
+        row = row + 1;
+    }
+}
+
+fn int diffuseCell(int[]& grid, int index, int width) {
+    int horizontal = grid[index - 1] + grid[index + 1];
+    int vertical = grid[index - width] + grid[index + width];
+    int center = grid[index] * 4;
+    return (center + horizontal + vertical) / 8;
+}
+
+fn null diffuseRows(int[]& current, int[]& next, in Simulation config) {
+    int row = 1;
+    while (row < config.height - 1) {
+        int column = 1;
+        while (column < config.width - 1) {
+            int index = cellIndex(column, row, config.width);
+            next[index] = diffuseCell(current, index, config.width);
+            column = column + 1;
+        }
+        row = row + 1;
+    }
+}
+
+fn int sourceTemperature(in HeatSource source, int step) {
+    int phase = wrap(step * 7, source.variation + 1);
+    return source.temperature + phase;
+}
+
+fn null injectHeat(int[]& grid, in Simulation config, in HeatSource source, int step) {
+    if (inside(config, source.x, source.y)) {
+        int index = cellIndex(source.x, source.y, config.width);
+        grid[index] = sourceTemperature(source, step);
+    }
+}
+
+fn null coolEdges(int[]& grid, in Simulation config) {
+    int row = 0;
+    while (row < config.height) {
+        int left = cellIndex(0, row, config.width);
+        int right = cellIndex(config.width - 1, row, config.width);
+        grid[left] = (grid[left] * 3 + config.ambient) / 4;
+        grid[right] = (grid[right] * 3 + config.ambient) / 4;
+        row = row + 1;
+    }
+}
+
+fn null moveSource(inout HeatSource source, in Simulation config, int step) {
+    if (wrap(step, 2) == 0) {
+        source.x = 1 + wrap(source.x, config.width - 2);
+    } else {
+        source.y = 1 + wrap(source.y, config.height - 2);
+    }
+    source.temperature = clampTemperature(source.temperature + 1, 100, 2000);
+}
+
+fn null includeSample(inout Statistics stats, int value, int index, int threshold) {
+    if (value < stats.minimum) {
+        stats.minimum = value;
+    }
+    if (value > stats.maximum) {
+        stats.maximum = value;
+    }
+    if (value > threshold) {
+        stats.warmCells = stats.warmCells + 1;
+    }
+    stats.total = stats.total + value;
+    stats.checksum = stats.checksum + value * (index + 1);
+}
+
+fn double sampleEnergy(int temperature, float scale) {
+    double value = temperature as double;
+    return value * value * (scale as double) / 2.0;
+}
+
+fn Statistics measureGrid(int[]& grid, in Simulation config) {
+    Statistics stats;
+    stats.minimum = grid[0];
+    stats.maximum = grid[0];
+    int count = cellCount(config);
+    int index = 0;
+    while (index < count) {
+        int value = grid[index];
+        includeSample(stats, value, index, config.ambient + 100);
+        stats.energy = stats.energy + sampleEnergy(value, config.energyScale);
+        index = index + 1;
+    }
+    return stats;
+}
+
+fn int compareGrids(int[]& left, int[]& right, int count) {
+    int difference = 0;
+    int index = 0;
+    while (index < count) {
+        int delta = left[index] - right[index];
+        if (delta < 0) {
+            delta = 0 - delta;
+        }
+        difference = difference + delta;
+        index = index + 1;
+    }
+    return difference;
+}
+
+fn Statistics runSimulation(in Simulation config, HeatSource source) {
+    int count = cellCount(config);
+    int[]& current = new int[count]&;
+    int[]& next = new int[count]&;
+    seedGrid(current, config, 17);
+    copyGrid(current, next, count);
+
+    HeatSource secondary = source;
+    secondary.x = config.width - 2;
+    secondary.y = config.height - 2;
+    secondary.temperature = source.temperature / 2;
+    int changes = 0;
+    int step = 0;
+    while (step < config.steps) {
+        diffuseRows(current, next, config);
+        copyEdges(current, next, config);
+        injectHeat(next, config, source, step);
+        injectHeat(next, config, secondary, step);
+        coolEdges(next, config);
+        changes = changes + compareGrids(current, next, count);
+        int[]& previous = current;
+        current = next;
+        next = previous;
+        moveSource(source, config, step);
+        step = step + 1;
+    }
+    Statistics stats = measureGrid(current, config);
+    stats.checksum = stats.checksum + changes;
+    return stats;
+}
+
+fn bool program() {
+    Simulation config;
+    config.width = 8;
+    config.height = 8;
+    config.steps = 6;
+    config.ambient = 20;
+    config.energyScale = 0.125f;
+    HeatSource source;
+    source.x = 2;
+    source.y = 3;
+    source.temperature = 512;
+    source.variation = 31;
+    Statistics first = runSimulation(config, source);
+    config.ambient = 30;
+    source.temperature = 768;
+    Statistics second = runSimulation(config, source);
+    echo first.checksum + second.checksum + (second.energy as int);
+    return false;
+}

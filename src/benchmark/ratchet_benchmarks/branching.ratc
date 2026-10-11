@@ -1,0 +1,304 @@
+// Compilation benchmark: nested scopes, conditions, loops, break, and continue.
+// Work is in the source structure; runtime loops stay small.
+
+fn int routeBatch0(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 3 + column * 2) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch1(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 4 + column * 3) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch2(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 5 + column * 4) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch3(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 6 + column * 5) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch4(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 7 + column * 6) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch5(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 8 + column * 7) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch6(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 9 + column * 8) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn int routeBatch7(int seed, int limit) {
+    int total = 0;
+    int row = 0;
+    while (row < 4) {
+        int column = 0;
+        while (column < 6) {
+            column = column + 1;
+            int value = (seed + row * 10 + column * 9) / 2;
+            if (value == limit) {
+                continue;
+            }
+            if (value > limit * 4) {
+                break;
+            }
+            bool urgent = value > limit and column < 4;
+            if (urgent or row == 0) {
+                int premium = value + row * 3;
+                if (premium > limit * 2) {
+                    total = total + premium / 2;
+                } else {
+                    total = total + premium + 1;
+                }
+            } else {
+                int standard = value - value / 3;
+                if (column == 5 or row == 3) {
+                    total = total + standard / 2;
+                } else {
+                    total = total + standard;
+                }
+            }
+        }
+        row = row + 1;
+    }
+    return total;
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + routeBatch0(7, 13);
+    checksum = checksum + routeBatch1(8, 14);
+    checksum = checksum + routeBatch2(9, 15);
+    checksum = checksum + routeBatch3(10, 16);
+    checksum = checksum + routeBatch4(11, 17);
+    checksum = checksum + routeBatch5(12, 18);
+    checksum = checksum + routeBatch6(13, 19);
+    checksum = checksum + routeBatch7(14, 20);
+    echo checksum;
+    return false;
+}

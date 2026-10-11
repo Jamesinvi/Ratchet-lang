@@ -1,0 +1,260 @@
+// Compilation benchmark: float/double expressions, casts, and typed comparisons.
+// Work is in the source structure; runtime loops stay small.
+
+fn double calibrateBand0(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 1.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 2.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand1(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 2.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 3.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand2(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 3.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 4.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand3(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 4.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 5.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand4(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 5.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 6.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand5(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 6.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 7.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand6(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 7.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 8.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand7(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 8.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 9.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand8(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 9.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 10.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand9(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 10.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 11.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand10(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 11.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 12.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn double calibrateBand11(float sample, double bias, int count) {
+    float gain = 0.5f + (count as float) * 0.125f;
+    float scaled = (sample + 12.0f) * gain;
+    float correction = (sample * sample + scaled) / 8.0f;
+    double precise = (scaled as double) + bias;
+    double weighted = precise * 0.75 + (correction as double) * 0.25;
+    double baseline = (sample as double) / 4.0 + 13.125;
+    double error = weighted - baseline;
+    float feedback = (error / 16.0) as float;
+    float adjusted = scaled - feedback;
+    double total = weighted + (adjusted as double);
+    double average = total / ((count + 1) as double);
+    if (average > baseline) {
+        average = (average + baseline * 3.0) / 4.0;
+    } else {
+        average = average + (gain as double) * 0.5;
+    }
+    return average + (feedback as double) / 8.0;
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + (calibrateBand0(2.5f, 1.25, 3) as int);
+    checksum = checksum + (calibrateBand1(3.5f, 2.25, 4) as int);
+    checksum = checksum + (calibrateBand2(4.5f, 3.25, 5) as int);
+    checksum = checksum + (calibrateBand3(5.5f, 4.25, 6) as int);
+    checksum = checksum + (calibrateBand4(6.5f, 5.25, 7) as int);
+    checksum = checksum + (calibrateBand5(7.5f, 6.25, 8) as int);
+    checksum = checksum + (calibrateBand6(8.5f, 7.25, 9) as int);
+    checksum = checksum + (calibrateBand7(9.5f, 8.25, 10) as int);
+    checksum = checksum + (calibrateBand8(10.5f, 9.25, 11) as int);
+    checksum = checksum + (calibrateBand9(11.5f, 10.25, 12) as int);
+    checksum = checksum + (calibrateBand10(12.5f, 11.25, 13) as int);
+    checksum = checksum + (calibrateBand11(13.5f, 12.25, 14) as int);
+    echo checksum;
+    return false;
+}

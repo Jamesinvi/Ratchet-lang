@@ -1,0 +1,272 @@
+// Compilation benchmark: nested value layouts, struct copies, fields, and method receivers.
+// Work is in the source structure; runtime loops stay small.
+
+struct Vec2 {
+    float x;
+    float y;
+
+    method null translate(float dx, float dy) {
+        this.x = this.x + dx;
+        this.y = this.y + dy;
+    }
+}
+
+struct Bounds {
+    Vec2 low;
+    Vec2 high;
+}
+
+struct Material {
+    double mass;
+    float drag;
+    int tag;
+}
+
+struct Particle {
+    Vec2 position;
+    Vec2 velocity;
+    Bounds bounds;
+    Material material;
+
+    method double energy() {
+        double x = this.velocity.x as double;
+        double y = this.velocity.y as double;
+        return (x * x + y * y) * this.material.mass * 0.5;
+    }
+}
+
+fn int moveParticle0(float delta) {
+    Particle particle;
+    particle.position.x = 1.0f;
+    particle.position.y = 4.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 1.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 0;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle1(float delta) {
+    Particle particle;
+    particle.position.x = 2.0f;
+    particle.position.y = 5.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 2.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 1;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle2(float delta) {
+    Particle particle;
+    particle.position.x = 3.0f;
+    particle.position.y = 6.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 3.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 2;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle3(float delta) {
+    Particle particle;
+    particle.position.x = 4.0f;
+    particle.position.y = 7.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 4.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 3;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle4(float delta) {
+    Particle particle;
+    particle.position.x = 5.0f;
+    particle.position.y = 8.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 5.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 4;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle5(float delta) {
+    Particle particle;
+    particle.position.x = 6.0f;
+    particle.position.y = 9.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 6.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 5;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle6(float delta) {
+    Particle particle;
+    particle.position.x = 7.0f;
+    particle.position.y = 10.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 7.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 6;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle7(float delta) {
+    Particle particle;
+    particle.position.x = 8.0f;
+    particle.position.y = 11.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 8.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 7;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle8(float delta) {
+    Particle particle;
+    particle.position.x = 9.0f;
+    particle.position.y = 12.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 9.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 8;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn int moveParticle9(float delta) {
+    Particle particle;
+    particle.position.x = 10.0f;
+    particle.position.y = 13.0f;
+    particle.velocity.x = delta * 2.0f;
+    particle.velocity.y = delta * 3.0f;
+    particle.bounds.high.x = 100.0f;
+    particle.bounds.high.y = 80.0f;
+    particle.material.mass = 10.25;
+    particle.material.drag = 0.125f;
+    particle.material.tag = 9;
+    particle.position.translate(particle.velocity.x, particle.velocity.y);
+    Particle snapshot = particle;
+    snapshot.velocity.x = snapshot.velocity.x * (1.0f - snapshot.material.drag);
+    snapshot.velocity.y = snapshot.velocity.y * (1.0f - snapshot.material.drag);
+    if (snapshot.position.x > snapshot.bounds.high.x) {
+        snapshot.position.x = snapshot.bounds.low.x;
+    }
+    double energy = snapshot.energy();
+    return (energy as int) + (snapshot.position.y as int) + snapshot.material.tag;
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + moveParticle0(1.5f);
+    checksum = checksum + moveParticle1(2.5f);
+    checksum = checksum + moveParticle2(3.5f);
+    checksum = checksum + moveParticle3(4.5f);
+    checksum = checksum + moveParticle4(5.5f);
+    checksum = checksum + moveParticle5(6.5f);
+    checksum = checksum + moveParticle6(7.5f);
+    checksum = checksum + moveParticle7(8.5f);
+    checksum = checksum + moveParticle8(9.5f);
+    checksum = checksum + moveParticle9(10.5f);
+    echo checksum;
+    return false;
+}

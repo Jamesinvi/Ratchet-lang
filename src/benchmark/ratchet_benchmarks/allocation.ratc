@@ -1,0 +1,280 @@
+// Compilation benchmark: managed scalar, struct, and array construction with typed initializers.
+// Work is in the source structure; runtime loops stay small.
+
+struct Receipt {
+    int quantity;
+    double cost;
+    int& discount;
+}
+
+struct Package {
+    Receipt& receipt;
+    float& weight;
+    int[]& tracking;
+}
+
+fn int packOrder0(int seed) {
+    int& quantity = new int& { seed + 1 };
+    double& rate = new double& { 2.25 };
+    float& weight = new float& { 1.5f };
+    bool& priority = new bool& { seed > 1 };
+    int[]& tracking = new int[8 + 0]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 2 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder1(int seed) {
+    int& quantity = new int& { seed + 2 };
+    double& rate = new double& { 3.25 };
+    float& weight = new float& { 2.5f };
+    bool& priority = new bool& { seed > 2 };
+    int[]& tracking = new int[8 + 1]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 3 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder2(int seed) {
+    int& quantity = new int& { seed + 3 };
+    double& rate = new double& { 4.25 };
+    float& weight = new float& { 3.5f };
+    bool& priority = new bool& { seed > 3 };
+    int[]& tracking = new int[8 + 2]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 4 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder3(int seed) {
+    int& quantity = new int& { seed + 4 };
+    double& rate = new double& { 5.25 };
+    float& weight = new float& { 4.5f };
+    bool& priority = new bool& { seed > 4 };
+    int[]& tracking = new int[8 + 3]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 5 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder4(int seed) {
+    int& quantity = new int& { seed + 5 };
+    double& rate = new double& { 6.25 };
+    float& weight = new float& { 5.5f };
+    bool& priority = new bool& { seed > 5 };
+    int[]& tracking = new int[8 + 4]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 6 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder5(int seed) {
+    int& quantity = new int& { seed + 6 };
+    double& rate = new double& { 7.25 };
+    float& weight = new float& { 6.5f };
+    bool& priority = new bool& { seed > 6 };
+    int[]& tracking = new int[8 + 5]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 7 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder6(int seed) {
+    int& quantity = new int& { seed + 7 };
+    double& rate = new double& { 8.25 };
+    float& weight = new float& { 7.5f };
+    bool& priority = new bool& { seed > 7 };
+    int[]& tracking = new int[8 + 6]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 8 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder7(int seed) {
+    int& quantity = new int& { seed + 8 };
+    double& rate = new double& { 9.25 };
+    float& weight = new float& { 8.5f };
+    bool& priority = new bool& { seed > 8 };
+    int[]& tracking = new int[8 + 7]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 9 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder8(int seed) {
+    int& quantity = new int& { seed + 9 };
+    double& rate = new double& { 10.25 };
+    float& weight = new float& { 9.5f };
+    bool& priority = new bool& { seed > 9 };
+    int[]& tracking = new int[8 + 8]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 10 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn int packOrder9(int seed) {
+    int& quantity = new int& { seed + 10 };
+    double& rate = new double& { 11.25 };
+    float& weight = new float& { 10.5f };
+    bool& priority = new bool& { seed > 10 };
+    int[]& tracking = new int[8 + 9]&;
+    Receipt initial;
+    initial.quantity = quantity.value;
+    initial.cost = rate.value * (quantity.value as double);
+    initial.discount = new int& { 11 };
+    Receipt& receipt = new Receipt& { initial };
+    Package package;
+    package.receipt = receipt;
+    package.weight = weight;
+    package.tracking = tracking;
+    Package& stored = new Package& { package };
+    stored.tracking[0] = stored.receipt.quantity;
+    stored.tracking[1] = stored.receipt.discount.value;
+    stored.weight.value = stored.weight.value + 0.5f;
+    if (priority.value) {
+        stored.receipt.discount.value = stored.receipt.discount.value + 1;
+    }
+    return (stored.receipt.cost as int) + stored.tracking[0] + stored.tracking[1];
+}
+
+fn bool program() {
+    int checksum = 0;
+    checksum = checksum + packOrder0(5);
+    checksum = checksum + packOrder1(6);
+    checksum = checksum + packOrder2(7);
+    checksum = checksum + packOrder3(8);
+    checksum = checksum + packOrder4(9);
+    checksum = checksum + packOrder5(10);
+    checksum = checksum + packOrder6(11);
+    checksum = checksum + packOrder7(12);
+    checksum = checksum + packOrder8(13);
+    checksum = checksum + packOrder9(14);
+    echo checksum;
+    return false;
+}
