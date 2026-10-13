@@ -56,7 +56,7 @@ comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term           -> factor ( ( "-" | "+" ) factor )* ;
 factor         -> unary ( ( "/" | "*" ) unary )* ;
 unary          -> ( "!" | "-" ) unary | call ;
-call           -> primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+call           -> primary ( "(" arguments? ")" | "." IDENTIFIER | "[" expression "]" )* ;
 primary        -> "true"
                | "false"
                | "null"
@@ -73,9 +73,8 @@ primary        -> "true"
 newExpr        -> "new" baseType ( "{" expression "}"
                                 | "[" expression "]" ( "&" | "*" ) ) ;
 
-arguments      -> expression ( "," expression )* ;
+arguments      -> argument ( "," argument )* ;
+argument       -> ( "in" | "inout" )? expression ;
 
-// Array types and heap allocation parse; array analysis/execution remain unfinished.
 // Not currently parsed despite older grammar entries:
-// top-level method declarations, for statements, array indexing,
-// struct literals.
+// top-level method declarations, for statements, struct literals.

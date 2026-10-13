@@ -623,7 +623,7 @@ fn void Parser.fill_call_args(Parser* this, ExprCall* exprCall)
 	// Consume as many as we can find.
 	exprCall.argsStart = (ExprIdx)this.outputAst.args.len();
 
-	List{ExprIdx} tempList = { };
+	List{ExprArg} tempList = { };
 	tempList.init(tmem, 8);
 	defer tempList.free();
 
@@ -631,20 +631,30 @@ fn void Parser.fill_call_args(Parser* this, ExprCall* exprCall)
 	{
 		do
 		{
+			ParamPassMode passMode = ParamPassMode.VALUE;
+			// Accet inout or in as pass mode. NOT BOTH!
+			if (this.match(TokenType.INOUT))
+			{
+				passMode = ParamPassMode.INOUT;
+			}
+			else if (this.match(TokenType.IN))
+			{
+				passMode = ParamPassMode.IN;
+			}
 			ExprIdx argExprIdx = this.expression();
 			if (tempList.len() >= Byte::max)
 			{
 				this.error("Can't have more than 255 arguments");
 			}
 			// Keep this call's arguments separate from nested calls by using this temp list
-			tempList.push(argExprIdx);
+			tempList.push({ .exprIdx = argExprIdx, .passMode = passMode });
 		} while (this.match(TokenType.COMMA));
 	}
 	this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
 	// Nested calls are finished; append our arguments together.
-	exprCall.argsStart = (ExprIdx)this.outputAst.args.len();
+	exprCall.argsStart = (ArgIdx)this.outputAst.args.len();
 	this.outputAst.args.add_all(&tempList);
-	exprCall.argsEnd = (ExprIdx)this.outputAst.args.len();
+	exprCall.argsEnd = (ArgIdx)this.outputAst.args.len();
 }
 
 // ---------- Expressions & precedence ----------

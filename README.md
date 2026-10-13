@@ -21,7 +21,7 @@ At a high level:
 
 This model lets you start with straightforward code, then selectively move specific values to GC-tracked or manual heap storage only where performance and allocation behavior matters.
 
-Ratchet is still being actively built and is **not fully working yet**. The current implementation is moving toward a typed register-based VM. Older proof-of-concept releases may not match the design described here.
+Ratchet is still being actively built and is **not fully working yet**. The current implementation uses a typed register-based VM. Older proof-of-concept releases may not match the design described here.
 
 The runtime direction is interpreted execution first, with a planned **JIT** and a possible optional **AOT** path later.
 
@@ -129,7 +129,7 @@ fn <return-type> <name>(<typed-params>) {
 Notes:
 
 1. `null` is used for functions that do not return a value.
-2. Parameters are passed by value unless they use reference, pointer, or borrow forms.
+2. Parameters, including reference and pointer handles, are passed by value unless marked `in` or `inout`.
 3. `wait` is not legal inside a normal function.
 
 
@@ -255,11 +255,11 @@ Vec2&[]& e = new Vec2&[5]&;   // GC-tracked array of GC-tracked Vec2 references
 Notes:
 
 1. `T[N]` is an inline array with a compile-time known size; it cannot resize.
-2. `T[]&` and `T[]*` are runtime-sized, resizable heap arrays. Resizing may move their element storage.
+2. `T[]&` and `T[]*` are runtime-sized heap arrays. Resizing is planned and may move their element storage.
 3. `T&[]&` stores references to separate `T` objects. Resizing moves the reference slots, not the referenced objects.
 4. Managed arrays are owned by the runtime; manual/native arrays have explicit lifetimes.
 
-Array types and heap allocation syntax are parsed; array analysis and execution remain unfinished.
+Array allocation and indexing work. Inline and heap arrays expose read-only `.length` and `.capacity` properties.
 
 <a id="borrow-parameters" name="borrow-parameters"></a>
 ## Borrow Parameters
@@ -273,7 +273,7 @@ Intent:
 3. Borrowed arguments may alias; no uniqueness is required.
 4. Borrow parameters cannot escape function scope.
 5. Borrow parameters cannot remain live across a coroutine `wait` point.
-6. This model allows mutation without requiring value copies for large value types.
+6. Calls must repeat the declared `in`/`inout` modifier; value arguments are unmarked. Mismatches are compile errors.
 
 Borrowable storage must stay alive and address-stable throughout the call:
 
@@ -296,6 +296,12 @@ fn null translate(inout Vec2 v, float dx, float dy) {
     v.x = v.x + dx;
     v.y = v.y + dy;
 }
+
+fn bool program() {
+    Vec2 p;
+    translate(inout p, 1.0f, 2.0f);
+    return true;
+}
 ```
 
 <a id="structs-and-methods" name="structs-and-methods"></a>
@@ -310,9 +316,9 @@ struct Vec2 {
 }
 ```
 
-Methods are intended as an alternative call style over free functions, not a separate ownership model. In other words, they are syntax sugar over the same core parameter-passing rules.
+Methods use the same call rules as free functions. The receiver is implicitly `inout`, with no call-site modifier; explicit arguments must match their declared modes.
 
-Conceptual sugar direction:
+Equivalent signatures:
 
 ```cpp
 // method style
@@ -421,14 +427,6 @@ coroutine shield(Enemy& enemy) {
 
 Ratchet is experimental and under active development.
 
-Current implementation direction:
+The C3 compiler lowers parsed and semantically checked code through MIR to bytecode. The typed register VM uses raw frame storage, known field offsets, and direct function references.
 
-1. Migrate the compiler/runtime to the current C3 toolchain.
-2. Restore compilation of simple programs.
-3. Move from the old stack-based VM to a typed register-based VM.
-4. Use raw typed frame storage rather than boxed `Value[]` frames.
-5. Lower parsed and semantically checked code into a simple MIR.
-6. Compile MIR into VM bytecode.
-7. Add coroutines after ordinary functions, calls, scopes, frame layout, and control flow are stable.
-
-Near-term priority is correctness and architectural shape, not micro-optimization. The VM should still be designed around typed registers, known frame offsets, known field offsets, and direct function references so the implementation does not need a major rewrite later.
+Coroutines remain planned. Near-term priority is correctness and stable functions, calls, scopes, frame layout, and control flow.

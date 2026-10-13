@@ -1,0 +1,352 @@
+// Mixed compilation benchmark: order processing, inventory, and reconciliation.
+// Source size and the connected call graph are the workload; runtime loops stay small.
+// The benchmark runner compiles this file without running program().
+
+struct Policy {
+    int minimumUnits;
+    float discountRate;
+    double taxRate;
+    int shippingFee;
+
+    method int discount(int units, int subtotal) {
+        if (units < this.minimumUnits) {
+            return 0;
+        }
+        return ((subtotal as float) * this.discountRate) as int;
+    }
+
+    method int shipping(bool priority) {
+        if (priority) {
+            return this.shippingFee * 2;
+        }
+        return this.shippingFee;
+    }
+}
+
+struct Order {
+    int sku;
+    int units;
+    int price;
+    bool priority;
+
+    method int subtotal() {
+        return this.units * this.price;
+    }
+}
+
+struct Inventory {
+    int[8] initial;
+    int[8] sold;
+    int[8] replenished;
+    int[]& stock;
+}
+
+struct Totals {
+    int accepted;
+    int rejected;
+    int units;
+    int subtotal;
+    int discounts;
+    int shipping;
+    double tax;
+}
+
+struct Report {
+    Totals totals;
+    int[8] revenue;
+    int checksum;
+    Policy& policy;
+}
+
+fn int remainder(int value, int divisor) {
+    return value - (value / divisor) * divisor;
+}
+
+fn Policy makePolicy(int seed) {
+    Policy policy;
+    policy.minimumUnits = 3;
+    policy.discountRate = 0.125f;
+    policy.taxRate = 0.25;
+    policy.shippingFee = 5 + remainder(seed, 3);
+    return policy;
+}
+
+fn Policy snapshotPolicy(Policy& source) {
+    Policy copy;
+    copy.minimumUnits = source.minimumUnits;
+    copy.discountRate = source.discountRate;
+    copy.taxRate = source.taxRate;
+    copy.shippingFee = source.shippingFee;
+    return copy;
+}
+
+fn Order makeOrder(int seed, int index) {
+    Order order;
+    order.sku = remainder(seed + index * 3, 8);
+    order.units = 1 + remainder(seed + index * 2, 5);
+    order.price = 20 + order.sku * 7;
+    order.priority = remainder(index, 3) == 0;
+    return order;
+}
+
+fn null initializeInventory(inout Inventory inventory, int seed) {
+    inventory.stock = new int[inventory.initial.length]&;
+    int index = 0;
+    while (index < inventory.initial.length) {
+        int quantity = 6 + remainder(seed + index * 5, 9);
+        inventory.initial[index] = quantity;
+        inventory.stock[index] = quantity;
+        inventory.sold[index] = 0;
+        inventory.replenished[index] = 0;
+        index = index + 1;
+    }
+}
+
+fn int totalInline(in int[8] values) {
+    int total = 0;
+    int index = 0;
+    while (index < values.length) {
+        total = total + values[index];
+        index = index + 1;
+    }
+    return total;
+}
+
+fn int totalStock(int[]& stock) {
+    int total = 0;
+    int index = 0;
+    while (index < stock.length) {
+        total = total + stock[index];
+        index = index + 1;
+    }
+    return total;
+}
+
+fn int stockChecksum(in Inventory inventory) {
+    int checksum = 0;
+    int index = 0;
+    while (index < inventory.stock.length) {
+        checksum = checksum + inventory.stock[index] * (index + 1);
+        checksum = checksum + inventory.sold[index] * (index + 3);
+        index = index + 1;
+    }
+    return checksum;
+}
+
+fn bool canFulfil(in Inventory inventory, in Order order) {
+    if (order.sku < 0 or order.sku >= inventory.stock.length) {
+        return false;
+    }
+    if (order.units < 1 or order.price < 1) {
+        return false;
+    }
+    return inventory.stock[order.sku] >= order.units;
+}
+
+fn null reserve(inout Inventory inventory, in Order order) {
+    int sku = order.sku;
+    inventory.stock[sku] = inventory.stock[sku] - order.units;
+    inventory.sold[sku] = inventory.sold[sku] + order.units;
+}
+
+fn null replenish(inout Inventory inventory, int seed) {
+    int index = 0;
+    while (index < inventory.stock.length) {
+        if (inventory.stock[index] < 5) {
+            int quantity = 4 + remainder(seed + index, 3);
+            inventory.stock[index] = inventory.stock[index] + quantity;
+            inventory.replenished[index] = inventory.replenished[index] + quantity;
+        }
+        index = index + 1;
+    }
+}
+
+fn double taxCharge(int amount, double rate) {
+    double taxable = amount as double;
+    if (amount < 0) {
+        taxable = 0.0;
+    }
+    return taxable * rate;
+}
+
+fn null updateTotals(inout Totals totals, in Order order, int discount, int shipping, double tax) {
+    totals.accepted = totals.accepted + 1;
+    totals.units = totals.units + order.units;
+    totals.subtotal = totals.subtotal + order.units * order.price;
+    totals.discounts = totals.discounts + discount;
+    totals.shipping = totals.shipping + shipping;
+    totals.tax = totals.tax + tax;
+}
+
+fn null recordSale(inout Report report, Order order) {
+    Policy policy = snapshotPolicy(report.policy);
+    int subtotal = order.subtotal();
+    int discount = policy.discount(order.units, subtotal);
+    int shipping = policy.shipping(order.priority);
+    int net = subtotal - discount;
+    double tax = taxCharge(net, policy.taxRate);
+    updateTotals(report.totals, order, discount, shipping, tax);
+    report.revenue[order.sku] = report.revenue[order.sku] + net;
+    report.checksum = report.checksum + net * (order.sku + 1);
+}
+
+fn null rejectOrder(inout Report report, in Order order) {
+    report.totals.rejected = report.totals.rejected + 1;
+    if (order.sku < 0 or order.sku >= report.revenue.length) {
+        report.checksum = report.checksum + 17;
+    } else {
+        report.checksum = report.checksum + order.units * 3;
+    }
+}
+
+fn bool processOrder(inout Inventory inventory, inout Report report, Order order) {
+    if (canFulfil(inventory, order) == false) {
+        rejectOrder(report, order);
+        return false;
+    }
+    reserve(inventory, order);
+    recordSale(report, order);
+    return true;
+}
+
+fn int processBatch(inout Inventory inventory, inout Report report, int seed) {
+    int accepted = 0;
+    int index = 0;
+    while (index < inventory.initial.length) {
+        Order order = makeOrder(seed, index);
+        if (processOrder(inventory, report, order)) {
+            accepted = accepted + 1;
+        }
+        index = index + 1;
+    }
+    Order invalid = makeOrder(seed, 0);
+    invalid.sku = 0 - 1;
+    if (processOrder(inventory, report, invalid)) {
+        return 0 - 1;
+    }
+    return accepted;
+}
+
+fn bool inventoryBalances(in Inventory inventory) {
+    if (inventory.stock.length != inventory.initial.length) {
+        return false;
+    }
+    if (inventory.stock.capacity < inventory.stock.length) {
+        return false;
+    }
+    int index = 0;
+    while (index < inventory.stock.length) {
+        int available = inventory.initial[index] + inventory.replenished[index];
+        if (available != inventory.stock[index] + inventory.sold[index]) {
+            return false;
+        }
+        index = index + 1;
+    }
+    int acquired = totalInline(inventory.initial) + totalInline(inventory.replenished);
+    return acquired == totalStock(inventory.stock) + totalInline(inventory.sold);
+}
+
+fn bool revenueBalances(in Report report) {
+    int net = report.totals.subtotal - report.totals.discounts;
+    if (totalInline(report.revenue) != net) {
+        return false;
+    }
+    double expectedTax = (net as double) * report.policy.taxRate;
+    return report.totals.tax == expectedTax;
+}
+
+fn int reportDigest(in Report report) {
+    int digest = report.checksum;
+    digest = digest + report.totals.accepted * 11;
+    digest = digest + report.totals.rejected * 13;
+    digest = digest + report.totals.units * 7;
+    digest = digest + report.totals.shipping;
+    digest = digest + (report.totals.tax as int);
+    int index = 0;
+    while (index < report.revenue.length) {
+        digest = digest + report.revenue[index] * (8 - index);
+        index = index + 1;
+    }
+    return digest;
+}
+
+fn bool checkPolicyAlias(inout Report report) {
+    Policy& alias = report.policy;
+    int previous = alias.shippingFee;
+    alias.shippingFee = previous + 1;
+    bool shared = report.policy.shippingFee == previous + 1;
+    report.policy.shippingFee = previous;
+    return shared and alias.shippingFee == previous;
+}
+
+fn bool checkReportCopy(in Report report) {
+    Report copy = report;
+    int accepted = report.totals.accepted;
+    int revenue = report.revenue[0];
+    copy.totals.accepted = copy.totals.accepted + 1;
+    copy.revenue[0] = copy.revenue[0] + 10;
+    if (report.totals.accepted != accepted or report.revenue[0] != revenue) {
+        return false;
+    }
+    return copy.totals.accepted == accepted + 1 and copy.revenue[0] == revenue + 10;
+}
+
+fn bool checkInventoryCopy(in Inventory inventory) {
+    Inventory copy = inventory;
+    int initial = inventory.initial[0];
+    int stock = inventory.stock[0];
+    copy.initial[0] = initial + 1;
+    copy.stock[0] = stock + 1;
+    bool independentInline = inventory.initial[0] == initial;
+    bool sharedHeap = inventory.stock[0] == stock + 1;
+    copy.stock[0] = stock;
+    if (independentInline == false or sharedHeap == false) {
+        return false;
+    }
+    return copy.initial[0] == initial + 1 and inventory.stock[0] == stock;
+}
+
+fn int scenarioScore(in Inventory inventory, in Report report, int accepted) {
+    if (inventoryBalances(inventory) == false or revenueBalances(report) == false) {
+        return 0 - 1;
+    }
+    if (checkReportCopy(report) == false or checkInventoryCopy(inventory) == false) {
+        return 0 - 2;
+    }
+    if (report.totals.accepted != accepted) {
+        return 0 - 3;
+    }
+    if (report.totals.units != totalInline(inventory.sold)) {
+        return 0 - 4;
+    }
+    return reportDigest(report) + stockChecksum(inventory);
+}
+
+fn int runScenario(int seed, int batches) {
+    Inventory inventory;
+    initializeInventory(inventory, seed);
+    Policy policy = makePolicy(seed);
+    Report report;
+    report.policy = new Policy& { policy };
+    if (checkPolicyAlias(report) == false) {
+        return 0 - 5;
+    }
+
+    int accepted = 0;
+    int batch = 0;
+    while (batch < batches) {
+        accepted = accepted + processBatch(inventory, report, seed + batch);
+        replenish(inventory, seed + batch);
+        batch = batch + 1;
+    }
+    return scenarioScore(inventory, report, accepted);
+}
+
+fn bool program() {
+    int first = runScenario(3, 2);
+    int second = runScenario(11, 3);
+    // One compact result makes the fixture convenient to smoke-test independently.
+    echo first;
+    echo second;
+    return false;
+}

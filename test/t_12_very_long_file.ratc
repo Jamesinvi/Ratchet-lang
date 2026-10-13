@@ -301,12 +301,12 @@ fn null seedResources(inout City city)
 fn City seedCity()
 {
     City city;
-    seedTerrain(city);
-    seedWater(city);
-    seedPopulation(city);
-    seedFood(city);
-    seedRoads(city);
-    seedResources(city);
+    seedTerrain(inout city);
+    seedWater(inout city);
+    seedPopulation(inout city);
+    seedFood(inout city);
+    seedRoads(inout city);
+    seedResources(inout city);
     city.money.credit(2000);
     return city;
 }
@@ -440,7 +440,7 @@ fn null redistributeWater(inout City city)
         while (x < 8)
         {
             int i = tileIndex(x, y);
-            int total = neighborWater(city.world, x, y);
+            int total = neighborWater(in city.world, x, y);
             int neighbors = neighborCount(x, y);
             next[i] = (city.world.tiles[i].water * 4 + total) / (4 + neighbors);
             x = x + 1;
@@ -476,11 +476,11 @@ fn null updateHeat(inout City city)
 
 fn null updateClimate(inout City city)
 {
-    addRain(city);
-    evaporate(city);
-    drainBorder(city);
-    redistributeWater(city);
-    updateHeat(city);
+    addRain(inout city);
+    evaporate(inout city);
+    drainBorder(inout city);
+    redistributeWater(inout city);
+    updateHeat(inout city);
 }
 
 // Farming mutates independent resources and records conservation totals.
@@ -575,10 +575,10 @@ fn null tradeSurplusFood(inout City city)
 
 fn null updateAgriculture(inout City city)
 {
-    irrigateFields(city);
-    growFood(city);
-    consumeFood(city);
-    tradeSurplusFood(city);
+    irrigateFields(inout city);
+    growFood(inout city);
+    consumeFood(inout city);
+    tradeSurplusFood(inout city);
 }
 
 // Population changes depend on the preceding climate and harvest stages.
@@ -663,10 +663,10 @@ fn null collectTaxes(inout City city)
 
 fn null updatePopulation(inout City city)
 {
-    settleNewcomers(city);
-    evacuateFlooded(city);
-    moveCrowding(city);
-    collectTaxes(city);
+    settleNewcomers(inout city);
+    evacuateFlooded(inout city);
+    moveCrowding(inout city);
+    collectTaxes(inout city);
 }
 
 // Roads affect both future climate and current traffic income.
@@ -774,11 +774,11 @@ fn null collectTolls(inout City city)
 
 fn null updateRoads(inout City city)
 {
-    buildRoads(city);
-    damageRoads(city);
-    repairRoads(city);
-    computeTraffic(city);
-    collectTolls(city);
+    buildRoads(inout city);
+    damageRoads(inout city);
+    repairRoads(inout city);
+    computeTraffic(inout city);
+    collectTolls(inout city);
 }
 
 // Extraction, sales, and maintenance feed one shared treasury.
@@ -853,9 +853,9 @@ fn null grantAid(inout City city)
 
 fn null updateEconomy(inout City city)
 {
-    extractResources(city);
-    chargeMaintenance(city);
-    grantAid(city);
+    extractResources(inout city);
+    chargeMaintenance(inout city);
+    grantAid(inout city);
 }
 
 // Dijkstra's algorithm traverses the same evolving road/terrain graph.
@@ -927,7 +927,7 @@ fn Routes findRoutes(in World world)
     int step = 0;
     while (step < 64)
     {
-        int current = chooseNext(routes);
+        int current = chooseNext(in routes);
         if (current < 0)
         {
             break;
@@ -937,10 +937,10 @@ fn Routes findRoutes(in World world)
         routes.sum = routes.sum + routes.cost[current];
         int x = remainder(current, 8);
         int y = current / 8;
-        relaxRoute(world, routes, current, x - 1, y);
-        relaxRoute(world, routes, current, x + 1, y);
-        relaxRoute(world, routes, current, x, y - 1);
-        relaxRoute(world, routes, current, x, y + 1);
+        relaxRoute(in world, inout routes, current, x - 1, y);
+        relaxRoute(in world, inout routes, current, x + 1, y);
+        relaxRoute(in world, inout routes, current, x, y - 1);
+        relaxRoute(in world, inout routes, current, x, y + 1);
         step = step + 1;
     }
     return routes;
@@ -963,8 +963,8 @@ fn int routeSignature(in Routes routes)
 
 fn null updateRoutes(inout City city)
 {
-    Routes routes = findRoutes(city.world);
-    city.routeScore = routeSignature(routes);
+    Routes routes = findRoutes(in city.world);
+    city.routeScore = routeSignature(in routes);
     if (routes.reached < 40)
     {
         city.warnings = city.warnings + 1;
@@ -1099,11 +1099,11 @@ fn int totalCapacity(in World world)
 
 fn int healthIndex(in World world)
 {
-    RunningStats population = populationStats(world);
-    RunningStats food = foodStats(world);
-    RunningStats water = waterStats(world);
+    RunningStats population = populationStats(in world);
+    RunningStats food = foodStats(in world);
+    RunningStats water = waterStats(in world);
     int score = population.total * 3 + food.total;
-    score = score - totalNeeds(world) * 4;
+    score = score - totalNeeds(in world) * 4;
     score = score + water.average() * 5 - water.spread();
     return score;
 }
@@ -1119,12 +1119,12 @@ fn int financeIndex(inout Treasury money)
 
 fn Report makeReport(inout City city)
 {
-    RunningStats water = waterStats(city.world);
-    RunningStats food = foodStats(city.world);
-    RunningStats population = populationStats(city.world);
-    RunningStats roads = roadStats(city.world);
-    RunningStats ore = oreStats(city.world);
-    RunningStats heat = heatStats(city.world);
+    RunningStats water = waterStats(in city.world);
+    RunningStats food = foodStats(in city.world);
+    RunningStats population = populationStats(in city.world);
+    RunningStats roads = roadStats(in city.world);
+    RunningStats ore = oreStats(in city.world);
+    RunningStats heat = heatStats(in city.world);
     Report report;
     report.water = water.total;
     report.food = food.total;
@@ -1132,10 +1132,10 @@ fn Report makeReport(inout City city)
     report.roads = roads.total;
     report.ore = ore.total;
     report.heat = heat.total;
-    report.health = healthIndex(city.world);
-    report.finance = financeIndex(city.money);
+    report.health = healthIndex(in city.world);
+    report.finance = financeIndex(inout city.money);
     report.routes = city.routeScore;
-    report.checksum = worldChecksum(city.world);
+    report.checksum = worldChecksum(in city.world);
     return report;
 }
 
@@ -1151,20 +1151,20 @@ fn int reportSignature(Report report)
 
 fn null recordHistory(inout City city)
 {
-    Report report = makeReport(city);
+    Report report = makeReport(inout city);
     city.history = folded(city.history * 7 + reportSignature(report));
 }
 
 fn null runDay(inout City city)
 {
     city.world.day = city.world.day + 1;
-    updateClimate(city);
-    updateAgriculture(city);
-    updatePopulation(city);
-    updateRoads(city);
-    updateEconomy(city);
-    updateRoutes(city);
-    recordHistory(city);
+    updateClimate(inout city);
+    updateAgriculture(inout city);
+    updatePopulation(inout city);
+    updateRoads(inout city);
+    updateEconomy(inout city);
+    updateRoutes(inout city);
+    recordHistory(inout city);
 }
 
 fn null runSeason(inout City city)
@@ -1172,8 +1172,8 @@ fn null runSeason(inout City city)
     int day = 0;
     while (day < 4)
     {
-        runDay(city);
-        echo worldChecksum(city.world);
+        runDay(inout city);
+        echo worldChecksum(in city.world);
         echo city.money.cash;
         echo city.history;
         day = day + 1;
@@ -1237,7 +1237,7 @@ fn int snapshotDifference(in World world, Tile[]& snapshot)
 
 fn int referenceAudit(inout City city)
 {
-    Report report = makeReport(city);
+    Report report = makeReport(inout city);
     Report& first = new Report& { report };
     Report& alias = first;
     alias.health = alias.health + 7;
@@ -1263,8 +1263,8 @@ fn double climateScore(int water, int heat)
 
 fn int numericReport(inout City city)
 {
-    Report report = makeReport(city);
-    int capacity = totalCapacity(city.world);
+    Report report = makeReport(inout city);
+    int capacity = totalCapacity(in city.world);
     float density = densityScore(report.population, capacity);
     double climate = climateScore(report.water, report.heat);
     double combined = (density as double) + climate;
@@ -1300,7 +1300,7 @@ fn null inspectTreasury(inout Treasury money, inout Inspection inspection)
 
 fn null inspectRoutes(in World world, inout Inspection inspection)
 {
-    Routes routes = findRoutes(world);
+    Routes routes = findRoutes(in world);
     inspection.check(routes.cost[0] == 0, 47);
     inspection.check(routes.visited[0], 53);
     inspection.check(routes.reached > 0 and routes.reached <= 64, 59);
@@ -1321,8 +1321,8 @@ fn null inspectRoutes(in World world, inout Inspection inspection)
 
 fn null inspectConservation(in City city, inout Inspection inspection)
 {
-    RunningStats food = foodStats(city.world);
-    RunningStats ore = oreStats(city.world);
+    RunningStats food = foodStats(in city.world);
+    RunningStats ore = oreStats(in city.world);
     inspection.check(city.world.produced > 0, 71);
     inspection.check(city.world.eaten > city.world.produced, 73);
     inspection.check(city.world.mined + ore.total == 1205, 79);
@@ -1337,12 +1337,12 @@ fn Inspection inspectCity(inout City city)
     int i = 0;
     while (i < 64)
     {
-        inspectTile(city.world.tiles[i], inspection);
+        inspectTile(city.world.tiles[i], inout inspection);
         i = i + 1;
     }
-    inspectTreasury(city.money, inspection);
-    inspectRoutes(city.world, inspection);
-    inspectConservation(city, inspection);
+    inspectTreasury(inout city.money, inout inspection);
+    inspectRoutes(in city.world, inout inspection);
+    inspectConservation(in city, inout inspection);
     inspection.check(city.world.day == 4, 101);
     inspection.check(city.history >= 0 and city.history < 1000003, 103);
     return inspection;
@@ -1413,8 +1413,8 @@ fn int unmetDemand(in Forecast forecast, int region)
 
 fn null moveRelief(inout Forecast forecast, int source, int target)
 {
-    int available = availableFood(forecast, source);
-    int needed = unmetDemand(forecast, target);
+    int available = availableFood(in forecast, source);
+    int needed = unmetDemand(in forecast, target);
     int amount = minimum(available, needed);
     forecast.supply[source] = forecast.supply[source] - amount;
     forecast.supply[target] = forecast.supply[target] + amount;
@@ -1434,7 +1434,7 @@ fn null planRelief(inout Forecast forecast)
         {
             if (source != target)
             {
-                moveRelief(forecast, source, target);
+                moveRelief(inout forecast, source, target);
             }
             target = target - 1;
         }
@@ -1462,7 +1462,7 @@ fn int forecastRisk(in Forecast forecast)
     int i = 0;
     while (i < 4)
     {
-        int missing = unmetDemand(forecast, i);
+        int missing = unmetDemand(in forecast, i);
         total = total + missing * (i + 1);
         if (missing > forecast.population[i] / 2)
         {
@@ -1491,10 +1491,10 @@ fn null inspectForecast(in Forecast forecast, inout Inspection inspection)
 fn bool program()
 {
     City city = seedCity();
-    echo worldChecksum(city.world);
-    runSeason(city);
+    echo worldChecksum(in city.world);
+    runSeason(inout city);
 
-    Report report = makeReport(city);
+    Report report = makeReport(inout city);
     echo report.water;
     echo report.food;
     echo report.population;
@@ -1506,35 +1506,35 @@ fn bool program()
     echo report.routes;
     echo reportSignature(report);
 
-    Tile[]& snapshot = snapshotWorld(city.world);
+    Tile[]& snapshot = snapshotWorld(in city.world);
     echo snapshot.length;
     echo snapshot.capacity;
     echo snapshotChecksum(snapshot);
     Tile[]& alias = snapshot;
     updateSnapshot(alias);
     echo snapshotChecksum(snapshot);
-    echo snapshotDifference(city.world, snapshot);
-    echo worldChecksum(city.world);
+    echo snapshotDifference(in city.world, snapshot);
+    echo worldChecksum(in city.world);
 
-    echo referenceAudit(city);
-    echo numericReport(city);
+    echo referenceAudit(inout city);
+    echo numericReport(inout city);
     echo city.warnings;
     echo city.world.produced;
     echo city.world.eaten;
     echo city.world.mined;
     echo city.world.emigrated;
 
-    Forecast forecast = buildForecast(city.world);
-    echo forecastChecksum(forecast);
-    echo forecastRisk(forecast);
-    planRelief(forecast);
-    echo forecastChecksum(forecast);
-    echo forecastRisk(forecast);
+    Forecast forecast = buildForecast(in city.world);
+    echo forecastChecksum(in forecast);
+    echo forecastRisk(in forecast);
+    planRelief(inout forecast);
+    echo forecastChecksum(in forecast);
+    echo forecastRisk(in forecast);
     echo forecast.moved;
     echo forecast.transport;
 
-    Inspection inspection = inspectCity(city);
-    inspectForecast(forecast, inspection);
+    Inspection inspection = inspectCity(inout city);
+    inspectForecast(in forecast, inout inspection);
     echo inspection.errors;
     echo inspection.checks;
     echo inspection.signature;

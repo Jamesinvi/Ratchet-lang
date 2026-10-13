@@ -18,11 +18,11 @@ fn null increment(inout int value) {
 }
 
 fn null incrementNested(inout int value) {
-    increment(value);
+    increment(inout value);
 }
 
 fn null incrementX(inout Pair value) {
-    increment(value.x);
+    increment(inout value.x);
 }
 
 fn int sum(in Pair value) {
@@ -30,20 +30,20 @@ fn int sum(in Pair value) {
 }
 
 fn int sumNested(in Pair value) {
-    return sum(value);
+    return sum(in value);
 }
 
 fn bool program() {
     int counter = 5;
-    incrementNested(counter);
+    incrementNested(inout counter);
     echo counter;
 
     Pair pair;
     pair.x = 10;
     pair.y = 20;
-    incrementX(pair);
+    incrementX(inout pair);
     echo pair.x;
-    echo sumNested(pair);
+    echo sumNested(in pair);
 
     pair.shiftTwice(3);
     echo pair.x;

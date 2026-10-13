@@ -758,7 +758,7 @@ fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 		sz paramIdx              = (sz)(calleeFunction.paramRange.start + explicitParamOffset + explicitArgIdx);
 		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[paramIdx];
 		ParamPassMode passMode   = this.symbolTable.symbols[paramSymbolIdx].passMode;
-		ExprIdx argExprIdx       = this.inputAst.args[i];
+		ExprIdx argExprIdx       = this.inputAst.args[i].exprIdx;
 		// in/inout params are "places"
 		MirOperand arg           = passMode == ParamPassMode.VALUE ? this.lower_expr(argExprIdx) : this.lower_place(argExprIdx);
 		callOperands.push(arg);

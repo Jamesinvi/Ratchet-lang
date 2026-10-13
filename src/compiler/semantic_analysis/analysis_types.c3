@@ -106,6 +106,7 @@ enum ErrorKind : char (String asStr)
 	INVALID_METHOD_RECEIVER    { "Method receiver must be a variable or field; store temporary results in a variable first" },
 	MEMBER_IS_READONLY         { "Member is readonly" },
 	INVALID_CALL               { "Unknown function or method" },
+	PASS_MODE_MISMATCH         { "In/Inout modifiers must match between function definition and function call" },
 }
 
 struct TypeResult

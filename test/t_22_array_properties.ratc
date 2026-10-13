@@ -22,11 +22,11 @@ fn int heapProperties(in int[]& values) {
 }
 
 fn int holderProperties(in Holder holder) {
-    return inlineProperties(holder.inlineValues) + heapProperties(holder.heapValues);
+    return inlineProperties(in holder.inlineValues) + heapProperties(in holder.heapValues);
 }
 
 fn int forwardProperties(in Holder holder) {
-    return holderProperties(holder);
+    return holderProperties(in holder);
 }
 
 fn bool program() {
@@ -67,12 +67,12 @@ fn bool program() {
     echo outer.inner.inlineValues.capacity;
     echo outer.inner.heapValues.length;
 
-    echo inlineProperties(holder.inlineValues);
-    echo heapProperties(localHeap);
-    echo holderProperties(holder);
-    echo forwardProperties(holder);
-    echo heapProperties(globalHeap);
-    echo holderProperties(globalHolder);
+    echo inlineProperties(in holder.inlineValues);
+    echo heapProperties(in localHeap);
+    echo holderProperties(in holder);
+    echo forwardProperties(in holder);
+    echo heapProperties(in globalHeap);
+    echo holderProperties(in globalHolder);
 
     int[]* manual = new int[6]*;
     echo manual.length;

@@ -23,10 +23,10 @@ fn int readBorrowed(in int[3] values, int index) {
 fn bool program() {
     int[3] values;
     int calls = 0;
-    values[nextIndex(calls)] = 42;
+    values[nextIndex(inout calls)] = 42;
     echo values[1];
     echo calls;
-    echo readBorrowed(values, 1);
+    echo readBorrowed(in values, 1);
 
     globalValues[2] = 17;
     echo globalValues[2];

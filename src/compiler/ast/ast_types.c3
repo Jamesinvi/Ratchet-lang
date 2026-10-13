@@ -7,6 +7,7 @@ alias NameIdx = int;
 alias ExprIdx = int;
 alias DeclIdx = int;
 alias StmtIdx = int;
+alias ArgIdx = int;
 
 const NO_IDX = -1;
 
@@ -33,7 +34,7 @@ struct ProgramAst
 	List{Stmt} statements; // global statement list indexed by nodes
 	List{Expr} expressions; // global expression list indexed by nodes
 	List{InternedString} names; // global name list indexed by nodes.
-	List{ExprIdx} args; // global function argument list, indices into expression list
+	List{ExprArg} args; // global function argument list
 }
 
 struct GlobalBlock
@@ -148,11 +149,12 @@ enum UnOp : char (String asStr)
 // c3fmt off
 struct ExprUnary    { UnOp op;           ExprIdx rhs; }
 struct ExprBinary   { BinOp op;          ExprIdx lhs;    		ExprIdx rhs; }
-struct ExprCall     { ExprIdx callee;    ExprIdx argsStart;		ExprIdx argsEnd;  ExprIdx memberCaller;}
+struct ExprCall     { ExprIdx callee;    ArgIdx argsStart;		ArgIdx argsEnd;  ExprIdx memberCaller;}
 struct ExprMember   { ExprIdx base;      NameIdx memberIdx; }
 struct ExprNew		{ TypeAst type; 	 ExprIdx init;			ExprIdx arraySize; }
 struct ExprCast 	{ ExprIdx value;	 TypeAst targetType; }
 struct ExprIndexer 	{ ExprIdx base;	 	 ExprIdx index; }
+struct ExprArg		{ ExprIdx exprIdx;	 ParamPassMode passMode; }
 // c3fmt on
 
 struct Expr
@@ -301,12 +303,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 				if (counter > 0) log::log(", ");
 				InternedString paramName = this.names[param.nameIdx];
 				InternedString paramType = this.names[param.type.nameIdx];
-				switch (param.passMode)
-				{
-					case ParamPassMode.IN: log::log("in ");
-					case ParamPassMode.INOUT: log::log("inout ");
-					default: break;
-				}
+				this.print_pass_mode(param.passMode);
 				log::log("<%s> %s", paramType.text(), paramName.text());
 			}
 			log::logn(") returns <%s>", retType.text());
@@ -343,6 +340,16 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 				this.print_statement(stmt, indent + 2);
 			}
 			log::logn("}");
+	}
+}
+
+fn void ProgramAst.print_pass_mode(ProgramAst* this, ParamPassMode passMode)
+{
+	switch (passMode)
+	{
+		case ParamPassMode.IN: log::log("in ");
+		case ParamPassMode.INOUT: log::log("inout ");
+		default: break;
 	}
 }
 
@@ -458,7 +465,8 @@ fn void ProgramAst.print_expression(ProgramAst* this, Expr* expr)
 			for (sz i = expr.call.argsStart; i < expr.call.argsEnd; i++)
 			{
 				if (counter > 0) log::log(", ");
-				ExprIdx argExprIdx = this.args[i];
+				this.print_pass_mode(this.args[i].passMode);
+				ExprIdx argExprIdx = this.args[i].exprIdx;
 				this.print_expression(&this.expressions[argExprIdx]);
 				counter++;
 			}

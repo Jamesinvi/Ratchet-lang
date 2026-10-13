@@ -257,15 +257,16 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 	for (int i = 0; i < argCount; i++)
 	{
 		ExprIdx argListIdx = call.argsStart + i;
-		ExprIdx argExprIdx = this.ast.args[argListIdx];
+		ExprIdx argExprIdx = this.ast.args[argListIdx].exprIdx;
 		TypeResult argType = this.analyze_expr(argExprIdx);
 		if (argType.hadError)
 		{
 			*out = argType;
 			return true;
 		}
-		TypeResult expectedType = this.create_type_from_ast(&method.params[i].type, span);
-		ParamPassMode passMode  = method.params[i].passMode;
+		TypeResult expectedType     = this.create_type_from_ast(&method.params[i].type, span);
+		ParamPassMode paramPassMode = method.params[i].passMode;        // original declaration pass mode
+		ParamPassMode argPassMode   = this.ast.args[argListIdx].passMode; // call site pass mode
 		if (expectedType.hadError)
 		{
 			*out = expectedType;
@@ -276,8 +277,14 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 			*out = this.type_error(ErrorKind.TYPE_MISMATCH, argType.value, expectedType.value, span);
 			return true;
 		}
+		// In/inout must match between the declaration and call
+		if (paramPassMode != argPassMode)
+		{
+			*out = this.type_error(ErrorKind.PASS_MODE_MISMATCH, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
+			return true;
+		}
 		// If parameter was passed as inout but is readonly, error
-		if (passMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
+		if (paramPassMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
 		{
 			*out = this.type_error(ErrorKind.MEMBER_IS_READONLY, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
 			return true;
@@ -959,9 +966,10 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		if (argCount != (int)fnDecl.params.len()) return this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, expr.span);
 		for (sz i = expr.call.argsStart; i < expr.call.argsEnd; i++)
 		{
-			sz paramIdx            = i - expr.call.argsStart;
-			ParamPassMode passMode = fnDecl.params[paramIdx].passMode;
-			ExprIdx argExprIdx     = this.ast.args[i];
+			sz paramIdx                 = i - expr.call.argsStart;
+			ParamPassMode paramPassMode = fnDecl.params[paramIdx].passMode; // original declaration pass mode
+			ExprIdx argExprIdx          = this.ast.args[i].exprIdx;
+			ParamPassMode argPassMode   = this.ast.args[i].passMode;        // call site pass mode
 
 			// Analyze the argument.
 			TypeResult argType = this.analyze_expr(argExprIdx);
@@ -969,8 +977,13 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 			{
 				return argType;
 			}
+			// In/inout must match between the declaration and call
+			if (paramPassMode != argPassMode)
+			{
+				return this.type_error(ErrorKind.PASS_MODE_MISMATCH, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
+			}
 			// If it was passed as inout but was readonly, error
-			if (passMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
+			if (paramPassMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
 			{
 				return this.type_error(ErrorKind.MEMBER_IS_READONLY, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
 			}
