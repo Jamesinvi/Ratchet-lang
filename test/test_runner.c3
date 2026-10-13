@@ -57,14 +57,16 @@ fn void t_10_simple_math() @test
 
 fn void t_11_long_file() @test
 {
-	compile_and_run_file("./test/t_11_long_file.ratc", "4598913\n1848215163\n-1274708953\n18.870001\n-15.869999\n25.424101\n")!!;
+	// Day 4/day 8 stock, sales, receipts, fingerprint and revenue; ledger totals; 25 checks, 0 failures.
+	compile_and_run_file("./test/t_11_long_file.ratc", "107\n397\n108\n17597\n734.000000\n23\n589\n216\n26548\n1135.000000\n864\n275\n49\n2161\n25\n0\n")!!;
 }
 
 fn void t_12_very_long_file() @test
 {
+	// Daily/final reports, snapshot/reference checks and relief planning; 0 failures in 676 checks.
 	compile_and_run_file(
 		"./test/t_12_very_long_file.ratc",
-		"4598913\n1848215163\n81242\n144625\n5.000000\n7.000000\n9.000000\n2.500000\n3.500000\n4.500000\n777.892090\n-100.336113\n724.901245\n32.000000\n-2.000000\n5.000000\n11.000000\n3.000000\nfalse\nfalse\n0.350000\n0.325000\n0.525000\n0.687500\n0.156250\n0.356250\n0.344755\n0.283634\n-11.500000\n-37.000000\n"
+		"771621\n454963\n3142\n577225\n248942\n4245\n440959\n111084\n5154\n348503\n962680\n5963\n542343\n1693\n578\n447\n41\n657\n1324\n1368\n11408\n103817\n102828\n64\n64\n962680\n988121\n57\n962680\n117047\n4669\n48\n1398\n1899\n548\n238\n31511\n174\n33474\n0\n68\n87\n0\n676\n11326\n"
 	)!!;
 }
 

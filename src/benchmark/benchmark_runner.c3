@@ -58,6 +58,12 @@ fn void b_struct_references() @benchmark
 	compile_file("./src/benchmark/compilation_benchmarks/b_struct_references.ratc")!!;
 }
 
+fn void b_long_file() @benchmark
+{
+	compile_file("./src/benchmark/compilation_benchmarks/b_long_file.ratc")!!;
+}
+
+
 faultdef UNKNOWN_COMPILE_ERROR;
 
 

@@ -1,111 +1,321 @@
-struct Vec3 {
-    float x;
-    float y;
-    float z;
+// Eight days of orders across six products and three depots.
+// Checkpoints cover quantities, revenue, stock conservation, and copy semantics.
+// Prices are multiples of 0.5, so expected floating-point results are exact.
+
+struct Stock {
+    int[3] units;
 }
 
-fn Vec3 mkVec3(float x, float y, float z) {
-    Vec3 v;
-    v.x = x;
-    v.y = y;
-    v.z = z;
-    return v;
+struct Product {
+    int code;
+    double price;
+    Stock stock;
+    int sold;
+    int received;
 }
 
-fn Vec3 stepVec3(Vec3 v, float s) {
-    v.x = v.x + s;
-    v.y = v.y - s;
-    v.z = v.z + (s * s);
-    return v;
+struct Ledger {
+    int requested;
+    int shipped;
+    int missing;
+    int transferred;
+    double revenue;
+    int[]& dailyTotals;
 }
 
-fn int stressint(int x) {
-    int a = 3;
-    int b = 7;
-    int c = 11;
+struct Inventory {
+    int day;
+    Product[6] products;
+    Ledger ledger;
+}
 
-    x = x + a;  x = x * b;  x = x - c;  x = x + 17;  x = x / 2;
-    x = x + 5;  x = x * 3;  x = x - 9;  x = x + 21;  x = x / 3;
-    x = x + 8;  x = x * 2;  x = x - 6;  x = x + 19;  x = x / 2;
+struct Order {
+    int product;
+    int depot;
+    int count;
+    bool express;
+}
 
-    if (x > 1000) { x = x - 333; } else { x = x + 111; }
-    if (x < 0)    { x = 0; }
+struct Snapshot {
+    int units;
+    int sold;
+    int received;
+    int fingerprint;
+    double revenue;
+}
 
-    x = x + 13; x = x * 5;  x = x - 27; x = x + 41; x = x / 2;
-    x = x + 29; x = x * 2;  x = x - 14; x = x + 9;  x = x / 3;
-    x = x + 31; x = x * 3;  x = x - 22; x = x + 7;  x = x / 2;
+struct Audit {
+    int checks;
+    int failures;
 
-    if (x > 5000) { x = x / 4; } else { x = x + 123; }
-    if (x > 2000) { x = x - 999; }
+    method null expect(bool condition) {
+        this.checks = this.checks + 1;
+        if (condition == false) {
+            this.failures = this.failures + 1;
+        }
+    }
+}
 
-    x = x + 1;  x = x * 2;  x = x - 3;  x = x + 4;  x = x / 2;
-    x = x + 6;  x = x * 3;  x = x - 7;  x = x + 8;  x = x / 3;
-    x = x + 9;  x = x * 2;  x = x - 5;  x = x + 12; x = x / 2;
+fn int wrap(int value, int limit) {
+    return value - (value / limit) * limit;
+}
 
-    if (x > 100) { x = x - 10; }
-    if (x > 200) { x = x - 20; }
-    if (x > 300) { x = x - 30; }
-    if (x > 400) { x = x - 40; }
-    if (x > 500) { x = x - 50; }
+fn int smaller(int a, int b) {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
 
-    x = x + 17; x = x * 7;  x = x - 19; x = x + 23; x = x / 2;
-    x = x + 31; x = x * 5;  x = x - 29; x = x + 37; x = x / 3;
-    x = x + 41; x = x * 3;  x = x - 43; x = x + 47; x = x / 2;
+fn int initialUnits(int product, int depot) {
+    return (product + 1) * 4 + depot * 3 + 5;
+}
 
-    if (x > 10000) { x = x / 5; }
-    if (x > 5000)  { x = x - 1234; } else { x = x + 4321; }
+fn Product makeProduct(int index) {
+    Product product;
+    product.code = 100 + index;
+    product.price = ((index + 1) as double) * 0.5;
+    int depot = 0;
+    while (depot < product.stock.units.length) {
+        product.stock.units[depot] = initialUnits(index, depot);
+        depot = depot + 1;
+    }
+    return product;
+}
 
-    x = x + a; x = x * b; x = x - c;
-    x = x + 101; x = x / 2;
-    x = x + 103; x = x * 2; x = x - 97;
-    x = x + 109; x = x / 3;
-    x = x + 113; x = x * 3; x = x - 107;
-    x = x + 127; x = x / 2;
+fn Inventory makeInventory() {
+    Inventory inventory;
+    inventory.ledger.dailyTotals = new int[8]&;
+    int i = 0;
+    while (i < inventory.products.length) {
+        inventory.products[i] = makeProduct(i);
+        i = i + 1;
+    }
+    return inventory;
+}
 
-    if (x > 2500) { x = x - 250; } else { x = x + 250; }
-    if (x > 1500) { x = x - 150; } else { x = x + 150; }
-    if (x >  500) { x = x -  50; } else { x = x +  50; }
+fn int stockTotal(in Stock stock) {
+    int total = 0;
+    int i = 0;
+    while (i < stock.units.length) {
+        total = total + stock.units[i];
+        i = i + 1;
+    }
+    return total;
+}
 
-    x = x + 7;  x = x * 2; x = x - 5;
-    x = x + 11; x = x * 3; x = x - 9;
-    x = x + 13; x = x * 5; x = x - 17;
+fn int stockFingerprint(in Product product) {
+    int result = product.code;
+    int i = 0;
+    while (i < product.stock.units.length) {
+        result = result + product.stock.units[i] * (i + 1);
+        i = i + 1;
+    }
+    return result + product.sold * 7 + product.received * 11;
+}
 
-    return x;
+fn Snapshot summarize(in Inventory inventory) {
+    Snapshot result;
+    int i = 0;
+    while (i < inventory.products.length) {
+        result.units = result.units + stockTotal(inventory.products[i].stock);
+        result.sold = result.sold + inventory.products[i].sold;
+        result.received = result.received + inventory.products[i].received;
+        result.fingerprint = result.fingerprint + stockFingerprint(inventory.products[i]) * (i + 1);
+        i = i + 1;
+    }
+    result.revenue = inventory.ledger.revenue;
+    return result;
+}
+
+fn null addUnits(inout int units, int amount) {
+    units = units + amount;
+}
+
+fn null receive(inout Product product, int depot, int amount) {
+    addUnits(product.stock.units[depot], amount);
+    product.received = product.received + amount;
+}
+
+fn null restock(inout Inventory inventory) {
+    int i = 0;
+    while (i < inventory.products.length) {
+        int depot = 0;
+        while (depot < 3) {
+            int amount = wrap(inventory.day + i + depot, 4);
+            receive(inventory.products[i], depot, amount);
+            depot = depot + 1;
+        }
+        i = i + 1;
+    }
+}
+
+fn Order makeOrder(int day, int sequence) {
+    Order order;
+    order.product = wrap(sequence * 5 + day, 6);
+    order.depot = wrap(sequence + day, 3);
+    order.count = 1 + wrap(sequence * 3 + day * 2, 11);
+    order.express = wrap(sequence, 2) == 0;
+    return order;
+}
+
+fn int transfer(inout Product product, int from, int to, int wanted) {
+    int moved = smaller(product.stock.units[from], wanted);
+    product.stock.units[from] = product.stock.units[from] - moved;
+    product.stock.units[to] = product.stock.units[to] + moved;
+    return moved;
+}
+
+fn int reserve(inout Product product, in Order order, inout int transferred) {
+    int available = product.stock.units[order.depot];
+    if (order.express and available < order.count) {
+        int donor = wrap(order.depot + 1, 3);
+        int moved = transfer(product, donor, order.depot, order.count - available);
+        transferred = transferred + moved;
+    }
+    int shipped = smaller(product.stock.units[order.depot], order.count);
+    product.stock.units[order.depot] = product.stock.units[order.depot] - shipped;
+    product.sold = product.sold + shipped;
+    return shipped;
+}
+
+fn null record(inout Ledger ledger, in Order order, int shipped, double price) {
+    ledger.requested = ledger.requested + order.count;
+    ledger.shipped = ledger.shipped + shipped;
+    ledger.missing = ledger.missing + order.count - shipped;
+    ledger.revenue = ledger.revenue + (shipped as double) * price;
+}
+
+fn int fulfill(inout Inventory inventory, in Order order) {
+    int shipped = reserve(inventory.products[order.product], order, inventory.ledger.transferred);
+    record(inventory.ledger, order, shipped, inventory.products[order.product].price);
+    return shipped;
+}
+
+fn int runDay(inout Inventory inventory) {
+    restock(inventory);
+    int sequence = 0;
+    int shipped = 0;
+    while (sequence < 18) {
+        Order order = makeOrder(inventory.day, sequence);
+        shipped = shipped + fulfill(inventory, order);
+        sequence = sequence + 1;
+    }
+    inventory.ledger.dailyTotals[inventory.day] = shipped;
+    inventory.day = inventory.day + 1;
+    return shipped;
+}
+
+fn null runUntil(inout Inventory inventory, int day) {
+    while (inventory.day < day) {
+        runDay(inventory);
+    }
+}
+
+fn int historyTotal(in int[]& history) {
+    int result = 0;
+    int i = 0;
+    while (i < history.length) {
+        result = result + history[i];
+        i = i + 1;
+    }
+    return result;
+}
+
+fn int historyFingerprint(in int[]& history) {
+    int result = 0;
+    int i = 0;
+    while (i < history.length) {
+        result = result + history[i] * (i + 1);
+        i = i + 1;
+    }
+    return result;
+}
+
+fn bool nonnegativeStock(in Inventory inventory) {
+    int i = 0;
+    while (i < inventory.products.length) {
+        int depot = 0;
+        while (depot < 3) {
+            if (inventory.products[i].stock.units[depot] < 0) {
+                return false;
+            }
+            depot = depot + 1;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn null auditInventory(in Inventory inventory, in Snapshot initial, inout Audit audit) {
+    Snapshot current = summarize(inventory);
+    audit.expect(current.units + current.sold == initial.units + current.received);
+    audit.expect(current.sold == inventory.ledger.shipped);
+    audit.expect(inventory.ledger.requested == inventory.ledger.shipped + inventory.ledger.missing);
+    audit.expect(historyTotal(inventory.ledger.dailyTotals) == current.sold);
+    audit.expect(nonnegativeStock(inventory));
+}
+
+fn null printSnapshot(in Snapshot snapshot) {
+    echo snapshot.units;
+    echo snapshot.sold;
+    echo snapshot.received;
+    echo snapshot.fingerprint;
+    echo snapshot.revenue;
+}
+
+fn null checkCopies(in Inventory original, inout Audit audit) {
+    // Inline arrays copy with their enclosing values, including on the heap.
+    Inventory copy = original;
+    int oldUnits = original.products[2].stock.units[1];
+    copy.products[2].stock.units[1] = oldUnits + 37;
+    audit.expect(original.products[2].stock.units[1] == oldUnits);
+    audit.expect(copy.products[2].stock.units[1] == oldUnits + 37);
+
+    Inventory& managed = new Inventory& { copy };
+    Inventory& alias = managed;
+    alias.products[2].stock.units[1] = oldUnits + 41;
+    audit.expect(managed.products[2].stock.units[1] == oldUnits + 41);
+    audit.expect(copy.products[2].stock.units[1] == oldUnits + 37);
+
+    // The heap history handle is shared by all three inventory copies.
+    int oldHistory = original.ledger.dailyTotals[0];
+    alias.ledger.dailyTotals[0] = oldHistory + 9;
+    audit.expect(copy.ledger.dailyTotals[0] == oldHistory + 9);
+    audit.expect(original.ledger.dailyTotals[0] == oldHistory + 9);
+    alias.ledger.dailyTotals[0] = oldHistory;
 }
 
 fn bool program() {
-    int r0 = stressint(12345);
-    int r1 = stressint(r0 + 77);
-    int r2 = stressint(r1 - 33);
-    echo(r0);
-    echo(r1);
-    echo(r2);
+    Inventory inventory = makeInventory();
+    Snapshot initial = summarize(inventory);
+    Audit audit;
+    audit.expect(initial.units == 396);
+    audit.expect(initial.sold == 0);
+    audit.expect(inventory.products.length == 6);
+    audit.expect(inventory.products.capacity == 6);
+    audit.expect(inventory.ledger.dailyTotals.length == 8);
+    audit.expect(inventory.ledger.dailyTotals.capacity == 8);
 
-    Vec3 v = mkVec3(1.0f, 2.0f, 3.0f);
-    v = stepVec3(v, 0.25f);
-    v = stepVec3(v, 0.50f);
-    v = stepVec3(v, 0.75f);
-    v = stepVec3(v, 1.00f);
-    v = stepVec3(v, 0.10f);
-    v = stepVec3(v, 0.20f);
-    v = stepVec3(v, 0.30f);
-    v = stepVec3(v, 0.40f);
-    v = stepVec3(v, 0.60f);
-    v = stepVec3(v, 0.80f);
-    v = stepVec3(v, 1.20f);
-    v = stepVec3(v, 1.40f);
-    v = stepVec3(v, 1.60f);
-    v = stepVec3(v, 1.80f);
-    v = stepVec3(v, 2.00f);
-    v = stepVec3(v, 0.33f);
-    v = stepVec3(v, 0.66f);
-    v = stepVec3(v, 0.99f);
-    v = stepVec3(v, 1.33f);
-    v = stepVec3(v, 1.66f);
+    runUntil(inventory, 4);
+    Snapshot halfway = summarize(inventory);
+    printSnapshot(halfway);
+    auditInventory(inventory, initial, audit);
 
-    echo(v.x);
-    echo(v.y);
-    echo(v.z);
+    runUntil(inventory, 8);
+    Snapshot final = summarize(inventory);
+    printSnapshot(final);
+    auditInventory(inventory, initial, audit);
+    echo inventory.ledger.requested;
+    echo inventory.ledger.missing;
+    echo inventory.ledger.transferred;
+    echo historyFingerprint(inventory.ledger.dailyTotals);
 
+    checkCopies(inventory, audit);
+    audit.expect(historyTotal(inventory.ledger.dailyTotals) == final.sold);
+    audit.expect(summarize(inventory).fingerprint == final.fingerprint);
+    audit.expect(halfway.sold < final.sold);
+    echo audit.checks;
+    echo audit.failures;
     return false;
 }
