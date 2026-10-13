@@ -246,12 +246,14 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 
 	MethodDeclAst* method = &structDecl.structDecl.methods[methodIdx];
 	int argCount          = call.argsEnd - call.argsStart;
+	// Check argument count matchest the declaration
 	if (argCount != (int)method.params.len())
 	{
 		*out = this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, span);
 		return true;
 	}
 
+	// Check all arguments
 	for (int i = 0; i < argCount; i++)
 	{
 		ExprIdx argListIdx = call.argsStart + i;
@@ -263,6 +265,7 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 			return true;
 		}
 		TypeResult expectedType = this.create_type_from_ast(&method.params[i].type, span);
+		ParamPassMode passMode  = method.params[i].passMode;
 		if (expectedType.hadError)
 		{
 			*out = expectedType;
@@ -273,14 +276,16 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 			*out = this.type_error(ErrorKind.TYPE_MISMATCH, argType.value, expectedType.value, span);
 			return true;
 		}
+		// If parameter was passed as inout but is readonly, error
+		if (passMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
+		{
+			*out = this.type_error(ErrorKind.MEMBER_IS_READONLY, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
+			return true;
+		}
 	}
 
 	this.symbolTable.callTargets[callExprIdx].kind = CallTargetKind.METHOD;
-	this.symbolTable.callTargets[callExprIdx].methodId = {
-		.structDeclIdx = structDeclIdx,
-		.methodIdx = methodIdx,
-	};
-
+	this.symbolTable.callTargets[callExprIdx].methodId = { .structDeclIdx = structDeclIdx, .methodIdx = methodIdx };
 	*out = this.create_type_from_ast(&method.returnType, span);
 	return true;
 }
@@ -842,13 +847,19 @@ fn TypeResult SemanticAnalyzer.analyze_expr_binary(SemanticAnalyzer* this, ExprI
 			}
 			return type_ok(make_type(ValueType.BOOL));
 		case BinOp.STORE:
-			if (this.ast.expressions[expr.binary.lhs].kind == ExprKind.THIS)
+			ExprKind lhsKind = this.ast.expressions[expr.binary.lhs].kind;
+			if (lhsKind == ExprKind.THIS)
 			{
 				return this.type_error(ErrorKind.INVALID_LVALUE, lhsType.value, lhsType.value, expr.span);
 			}
 			if (!common::type_info_matches(lhsType.value, rhsType.value))
 			{
 				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, expr.span);
+			}
+			// Assigning to a readonly variable is not allowed
+			if (this.is_expression_readonly(expr.binary.lhs))
+			{
+				return this.type_error(ErrorKind.MEMBER_IS_READONLY, lhsType.value, lhsType.value, expr.span);
 			}
 			return type_ok(lhsType.value);
 		default:
@@ -931,16 +942,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		return calleeType;
 	}
 
-	for (sz i = expr.call.argsStart; i < expr.call.argsEnd; i++)
-	{
-		ExprIdx argExprIdx = this.ast.args[i];
-		TypeResult argType = this.analyze_expr(argExprIdx);
-		if (argType.hadError)
-		{
-			return argType;
-		}
-	}
-
+	// Get the function symbol, we need some extra data from the declaration
 	SymbolIdx symbolIdx = this.symbolTable.exprSymbols[expr.call.callee];
 	if (symbolIdx != NO_SYMBOL && this.symbolTable.symbols[symbolIdx].kind == SymbolKind.FUNCTION)
 	{
@@ -949,9 +951,36 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		this.symbolTable.callTargets[exprIdx].fnDeclIdx = this.symbolTable.symbols[symbolIdx].idx;
 		this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 
+
+		Symbol* calleeSymbol = &this.symbolTable.symbols[symbolIdx];
+		FnDeclAst* fnDecl    = &this.ast.declarations[calleeSymbol.idx].fnDecl;
+		int argCount         = expr.call.argsEnd - expr.call.argsStart;
+		// Check argument count matchest he declaration
+		if (argCount != (int)fnDecl.params.len()) return this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, expr.span);
+		for (sz i = expr.call.argsStart; i < expr.call.argsEnd; i++)
+		{
+			sz paramIdx            = i - expr.call.argsStart;
+			ParamPassMode passMode = fnDecl.params[paramIdx].passMode;
+			ExprIdx argExprIdx     = this.ast.args[i];
+
+			// Analyze the argument.
+			TypeResult argType = this.analyze_expr(argExprIdx);
+			if (argType.hadError)
+			{
+				return argType;
+			}
+			// If it was passed as inout but was readonly, error
+			if (passMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
+			{
+				return this.type_error(ErrorKind.MEMBER_IS_READONLY, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
+			}
+		}
 		return type_ok(this.symbolTable.symbols[symbolIdx].type);
 	}
-	return type_ok(calleeType.value);
+	else
+	{
+		return this.type_error(ErrorKind.INVALID_CALL, nullType, nullType, expr.span);
+	}
 }
 
 fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprIdx exprIdx)
@@ -979,6 +1008,20 @@ fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprI
 			return this.type_error(ErrorKind.UNDECLARED_NAME, nullType, builtinPointee, expr.span);
 		}
 	}
+
+	// Array handling for .length and .capacity properties
+	bool isArray = baseInfo.is_array();
+	if (isArray)
+	{
+		InternedString fieldName = this.ast.names[expr.member.memberIdx];
+		String fieldString       = fieldName.text();
+		if (fieldString == "length" || fieldString == "capacity")
+		{
+			return type_ok(make_type(ValueType.INT));
+		}
+	}
+
+	// struct handling for generic fields
 	bool isStruct = baseInfo.type == ValueType.STRUCT;
 	if (!isStruct && !baseInfo.is_struct_ref_like())
 	{

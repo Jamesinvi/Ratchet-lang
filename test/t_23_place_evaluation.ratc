@@ -1,0 +1,90 @@
+struct Box {
+    int padding;
+    int[3] values;
+}
+
+int calls;
+int indexCalls;
+int order;
+int[]& selected;
+int[]& replacement;
+
+fn int[3] makeInline() {
+    calls = calls + 1;
+    int[3] values;
+    values[1] = 12;
+    return values;
+}
+
+fn int[]& makeHeap() {
+    calls = calls + 1;
+    int[]& values = new int[6]&;
+    values[1] = 23;
+    return values;
+}
+
+fn int nextIndex() {
+    indexCalls = indexCalls + 1;
+    return 1;
+}
+
+fn int switchArray() {
+    indexCalls = indexCalls + 1;
+    selected = replacement;
+    return 1;
+}
+
+fn int rhsValue() {
+    order = order * 10 + 1;
+    return 61;
+}
+
+fn int indexAfterRhs() {
+    order = order * 10 + 2;
+    return 0;
+}
+
+fn bool program() {
+    echo makeInline().length;
+    echo calls;
+    echo makeInline().capacity;
+    echo calls;
+    echo makeHeap().length;
+    echo calls;
+    echo makeHeap().capacity;
+    echo calls;
+    echo makeInline()[1];
+    echo calls;
+    echo makeHeap()[1];
+    echo calls;
+
+    Box[2] boxes;
+    echo boxes[nextIndex()].values.length;
+    echo indexCalls;
+    boxes[nextIndex()].values.capacity;
+    echo indexCalls;
+
+    selected = new int[2]&;
+    replacement = new int[2]&;
+    selected[1] = 31;
+    replacement[1] = 42;
+    int[]& original = selected;
+
+    // The index call rebinds selected after its array handle is evaluated.
+    echo selected[switchArray()];
+    echo selected[1];
+    echo indexCalls;
+
+    selected = original;
+    selected[switchArray()] = 57;
+    echo original[1];
+    echo replacement[1];
+    echo indexCalls;
+
+    // Assignment still evaluates its RHS before its destination expression.
+    selected = original;
+    selected[indexAfterRhs()] = rhsValue();
+    echo order;
+    echo original[0];
+    return false;
+}

@@ -372,6 +372,25 @@ fn StructLayoutResult SemanticAnalyzer.check_fields_are_defined(SemanticAnalyzer
 	return StructLayoutResult.OK;
 }
 
+fn bool SemanticAnalyzer.is_expression_readonly(SemanticAnalyzer* this, ExprIdx exprIdx)
+{
+	Expr* expr = &this.ast.expressions[exprIdx];
+	// Is it a field/method?
+	if (expr.kind == ExprKind.MEMBER)
+	{
+		TypeInfo baseType = this.symbolTable.exprTypes[expr.member.base];
+		// Is it one of the readonly .length and .capacity? if so return true
+		if (baseType.is_array())
+		{
+			String memberName = this.ast.names[expr.member.memberIdx].text();
+			if (memberName == "length" || memberName == "capacity")
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 macro SymbolIdx SemanticAnalyzer.symbols_len(SemanticAnalyzer* this)
 {

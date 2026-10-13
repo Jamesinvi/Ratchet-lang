@@ -1,0 +1,13 @@
+fn bool program() {
+    echo(identityDouble(2.3));
+    echo(identityFloat(2.3f));
+    return false;
+}
+
+fn double identityDouble(double t) {
+    return t;
+}
+
+fn float identityFloat(float t) {
+    return t;
+}

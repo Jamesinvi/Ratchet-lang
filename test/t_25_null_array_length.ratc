@@ -1,0 +1,6 @@
+fn bool program() {
+    int[]& values;
+    values.length;
+    echo 99;
+    return false;
+}

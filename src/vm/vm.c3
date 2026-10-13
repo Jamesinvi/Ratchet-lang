@@ -181,6 +181,12 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.GLOBAL_ADDR: nextcase;
 			case BCOpCode.OFFSET_ADDR: vm.place_address(inst);
 			case BCOpCode.INDEX_ADDR: if (!vm.index_address(inst)) return RunResult.RUNTIME_ERR;
+			case BCOpCode.CHECK_NONNULL:
+				if (vm.deref_indirect(inst.leftOffset) == null)
+				{
+					log::errlogn("Cannot dereference a null reference");
+					return RunResult.RUNTIME_ERR;
+				}
 
 			// Globals. We could have typed opcodes, but for now, they're type-agnostic. Copy byte-by-byte
 			case BCOpCode.LOAD_GLOBAL: vm.load_global(inst);
@@ -251,10 +257,10 @@ fn bool Vm.index_address(Vm* vm, BCInstruction* inst)
 	// This is the base case for inline arrays
 	Byte* data         = (Byte*)vm.deref_indirect(inst.leftOffset);
 	int length         = arrayType.arraySize;
-	// Heap array? then look at the array handle to get info about it
+	// MIR supplies the captured heap handle directly, or inline storage's address.
 	if (arrayType.type != ValueType.ARR_INLINE)
 	{
-		ArrayHandle* handle = (ArrayHandle*)*(uptr*)data;
+		ArrayHandle* handle = (ArrayHandle*)data;
 		if (handle == null)
 		{
 			log::errlogn("Cannot index a null array");
@@ -270,7 +276,7 @@ fn bool Vm.index_address(Vm* vm, BCInstruction* inst)
 		return false;
 	}
 	TypeInfo elementType = arrayType.element_type();
-	// store in offset the data found at: bufferStart + (index * sizeof(element))
+	// store at destOffset the address we found at: bufferStart + (index * sizeof(element))
 	*(uptr*)&vm.stack[vm.frame.base + inst.destOffset] = (uptr)(data + (sz)index * elementType.size());
 	return true;
 }

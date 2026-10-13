@@ -193,6 +193,9 @@ fn BCBlockIdx BCGenerator.lower_block(BCGenerator* this, MirBlock* mirBlock, BCF
 			case MirOpCode.ALLOC_GC: this.lower_alloc(mirInstruction, true);
 			case MirOpCode.ALLOC_ARRAY: this.lower_alloc_array(mirInstruction);
 			case MirOpCode.LOAD: this.lower_load(mirInstruction);
+			case MirOpCode.ADDR: this.lower_address(mirInstruction);
+			case MirOpCode.INDEX_ADDR: this.lower_index_address(mirInstruction);
+			case MirOpCode.CHECK_NONNULL: this.lower_check_nonnull(mirInstruction);
 			case MirOpCode.STORE: this.lower_store(mirInstruction);
 			case MirOpCode.CALL: this.lower_call(mirInstruction);
 			case MirOpCode.AS: this.lower_cast(mirInstruction);
@@ -285,19 +288,16 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 
 fn void BCGenerator.lower_zero_bytes(BCGenerator* this, MirInstruction* mirInstruction)
 {
-	MirRegisterID dest  = mirInstruction.result;
-	MirOperand source   = this.mirInput.operands[mirInstruction.operandsStart];
-	MirPlace* place     = &this.mirInput.places[source.placeIdx];
-	SymbolIdx symbolIdx = place.baseSymbolIdx;
-	TypeInfo symbolType = this.symbolTable.symbols[symbolIdx].type;
-	short destOffset    = this.bind_symbol_get_offset(symbolIdx);
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	BCPlace place = this.bind_place(&this.mirInput.places[source.placeIdx]);
+	assert(place.kind == BCPlaceKind.LOCAL);
 	BCInstruction instruction = {
-		.destOffset = destOffset,
+		.destOffset = place.baseOffset + place.fieldOffset,
 		.leftOffset = runtime::NO_OFFSET,
 		.rightOffset = runtime::NO_OFFSET,
 		.immInt = runtime::NO_OFFSET,
 		.opCode = BCOpCode.ZERO_BYTES,
-		.byteCount = symbolType.size(),
+		.byteCount = mirInstruction.type.size(),
 		.immKind = BCOperandKind.SIZE,
 	};
 	this.push_instruction_get_idx(&instruction);
@@ -306,9 +306,78 @@ fn void BCGenerator.lower_zero_bytes(BCGenerator* this, MirInstruction* mirInstr
 fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction)
 {
 	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
-	BCPlace place = this.resolve_place(&this.mirInput.places[source.placeIdx]);
+	BCPlace place = this.bind_place(&this.mirInput.places[source.placeIdx]);
 	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
 	this.load_place(place, mirInstruction.type, destOffset);
+}
+
+fn void BCGenerator.lower_address(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	assert(source.kind == MirOperandKind.PLACE);
+	BCPlace place = this.bind_place(&this.mirInput.places[source.placeIdx]);
+	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+	BCInstruction instruction = {
+		.destOffset = destOffset,
+		.rightOffset = runtime::NO_OFFSET,
+		.immKind = BCOperandKind.INVALID,
+	};
+	switch (place.kind)
+	{
+		case BCPlaceKind.LOCAL:
+			instruction.opCode = BCOpCode.LOCAL_ADDR;
+			instruction.leftOffset = place.baseOffset + place.fieldOffset;
+		case BCPlaceKind.GLOBAL:
+			instruction.opCode = BCOpCode.GLOBAL_ADDR;
+			instruction.leftOffset = place.baseOffset + place.fieldOffset;
+		case BCPlaceKind.INDIRECT:
+			instruction.leftOffset = place.baseOffset;
+			if (place.fieldOffset == 0)
+			{
+				instruction.opCode = BCOpCode.MOV_REF;
+			}
+			else
+			{
+				instruction.opCode = BCOpCode.OFFSET_ADDR;
+				instruction.immInt = place.fieldOffset;
+				instruction.immKind = BCOperandKind.IMM_INT;
+			}
+	}
+	this.push_instruction_get_idx(&instruction);
+}
+
+fn void BCGenerator.lower_index_address(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirOperand base = this.mirInput.operands[mirInstruction.operandsStart];
+	MirOperand index = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
+	assert(base.kind == MirOperandKind.REGISTER);
+	short baseOffset = this.bind_operand_get_offset(base, this.get_type_from_operand(&base));
+	short indexOffset = this.bind_operand_get_offset(index, analyzer::make_type(ValueType.INT));
+	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+	BCInstruction instruction = {
+		.opCode = BCOpCode.INDEX_ADDR,
+		.destOffset = destOffset,
+		.leftOffset = baseOffset,
+		.rightOffset = indexOffset,
+		.typeInfoIdx = this.push_typeinfo_get_idx(mirInstruction.arrayType),
+		.immKind = BCOperandKind.TYPE_INFO,
+	};
+	this.push_instruction_get_idx(&instruction);
+}
+
+fn void BCGenerator.lower_check_nonnull(BCGenerator* this, MirInstruction* mirInstruction)
+{
+	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
+	assert(source.kind == MirOperandKind.REGISTER);
+	short sourceOffset = this.bind_operand_get_offset(source, this.get_type_from_operand(&source));
+	BCInstruction instruction = {
+		.opCode = BCOpCode.CHECK_NONNULL,
+		.destOffset = runtime::NO_OFFSET,
+		.leftOffset = sourceOffset,
+		.rightOffset = runtime::NO_OFFSET,
+		.immKind = BCOperandKind.INVALID,
+	};
+	this.push_instruction_get_idx(&instruction);
 }
 
 fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOffset, short destOffset)
@@ -331,7 +400,7 @@ fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstructio
 {
 	MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
 	MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
-	BCPlace place = this.resolve_place(&this.mirInput.places[dest.placeIdx]);
+	BCPlace place = this.bind_place(&this.mirInput.places[dest.placeIdx]);
 	if (place.kind == BCPlaceKind.LOCAL)
 	{
 		// Keep direct stores, including immediates, on the existing path.
@@ -617,7 +686,7 @@ fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction
 		{
 			MirOperand argOperand = this.mirInput.operands[k];
 			assert(argOperand.kind == MirOperandKind.PLACE);
-			BCPlace place = this.resolve_place(&this.mirInput.places[argOperand.placeIdx]);
+			BCPlace place = this.bind_place(&this.mirInput.places[argOperand.placeIdx]);
 			if (place.kind == BCPlaceKind.GLOBAL)
 			{
 				place = { .kind = BCPlaceKind.INDIRECT, .baseOffset = this.get_place_address(place) };

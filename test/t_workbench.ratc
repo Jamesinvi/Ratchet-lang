@@ -1,8 +1,10 @@
 // Entry-point. Should return true if errors occurred
 fn bool program()
 {
-	int[25] a;
-	a[5] = 12102;
+	int[]& b = new int[33]&;
+	int blen = b.length;
+	b[12] = 55353;
+	echo b[12];
 	return false;
 }
 

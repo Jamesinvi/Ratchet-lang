@@ -1,0 +1,81 @@
+struct Holder {
+    int padding;
+    int[4] inlineValues;
+    int[]& heapValues;
+}
+
+struct Outer {
+    int padding;
+    Holder inner;
+}
+
+int[5] globalInline;
+int[]& globalHeap;
+Holder globalHolder;
+
+fn int inlineProperties(in int[4] values) {
+    return values.length + values.capacity;
+}
+
+fn int heapProperties(in int[]& values) {
+    return values.length + values.capacity;
+}
+
+fn int holderProperties(in Holder holder) {
+    return inlineProperties(holder.inlineValues) + heapProperties(holder.heapValues);
+}
+
+fn int forwardProperties(in Holder holder) {
+    return holderProperties(holder);
+}
+
+fn bool program() {
+    int[3] localInline;
+    echo localInline.length;
+    echo localInline.capacity;
+
+    int[]& localHeap = new int[7]&;
+    echo localHeap.length;
+    echo localHeap.capacity;
+
+    echo globalInline.length;
+    echo globalInline.capacity;
+    globalHeap = new int[9]&;
+    echo globalHeap.length;
+    echo globalHeap.capacity;
+
+    Holder holder;
+    holder.padding = 123;
+    holder.heapValues = new int[11]&;
+    echo holder.inlineValues.length;
+    echo holder.inlineValues.capacity;
+    echo holder.heapValues.length;
+    echo holder.heapValues.capacity;
+
+    globalHolder.heapValues = new int[13]&;
+    echo globalHolder.inlineValues.length;
+    echo globalHolder.inlineValues.capacity;
+    echo globalHolder.heapValues.length;
+    echo globalHolder.heapValues.capacity;
+
+    Holder& managed = new Holder& { holder };
+    echo managed.inlineValues.length;
+    echo managed.heapValues.capacity;
+
+    Outer outer;
+    outer.inner.heapValues = new int[17]&;
+    echo outer.inner.inlineValues.capacity;
+    echo outer.inner.heapValues.length;
+
+    echo inlineProperties(holder.inlineValues);
+    echo heapProperties(localHeap);
+    echo holderProperties(holder);
+    echo forwardProperties(holder);
+    echo heapProperties(globalHeap);
+    echo holderProperties(globalHolder);
+
+    int[]* manual = new int[6]*;
+    echo manual.length;
+    echo manual.capacity;
+    return false;
+}

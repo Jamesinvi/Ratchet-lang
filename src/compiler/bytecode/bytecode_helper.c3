@@ -4,7 +4,6 @@ import compiler::mir;
 import common;
 import runtime;
 import log;
-import globals;
 
 <*
  Should be called before lowering a function.
@@ -112,26 +111,6 @@ fn short BCGenerator.bind_global_symbol_get_offset(BCGenerator* this, SymbolIdx 
 }
 
 <*
- Change the place to describe the storage pointed to by its reference.
-*>
-fn void BCGenerator.dereference_place(BCGenerator* this, BCPlace* place)
-{
-	short pointerOffset;
-	if (place.kind == BCPlaceKind.LOCAL)
-	{
-		// A local reference already occupies a pointer-sized frame slot.
-		pointerOffset = place.baseOffset + place.fieldOffset;
-	}
-	else
-	{
-		// In this case we need to reserve a slot to store the pointer
-		pointerOffset = this.reserve_address_slot();
-		this.load_place(*place, analyzer::make_type(ValueType.PTR), pointerOffset);
-	}
-	*place = { .kind = BCPlaceKind.INDIRECT, .baseOffset = pointerOffset };
-}
-
-<*
  Return the offset of a frame slot holding the place’s address, reserving and filling one if needed
 *>
 fn short BCGenerator.get_place_address(BCGenerator* this, BCPlace place)
@@ -210,66 +189,24 @@ fn short BCGenerator.reserve_address_slot(BCGenerator* this)
 	return offset;
 }
 
-fn BCPlace BCGenerator.resolve_place(BCGenerator* this, MirPlace* place)
+// MIR has already selected the storage and folded any fixed field offsets.
+fn BCPlace BCGenerator.bind_place(BCGenerator* this, MirPlace* place)
 {
-	Symbol* symbol = &this.symbolTable.symbols[place.baseSymbolIdx];
-	TypeInfo type  = symbol.type;
-	BCPlace result = { .kind = BCPlaceKind.LOCAL };
-	if (place.isGlobal)
+	assert(!place.isGlobal || !place.isIndirect);
+	BCPlace result = {
+		.kind = place.isIndirect ? BCPlaceKind.INDIRECT : (place.isGlobal ? BCPlaceKind.GLOBAL : BCPlaceKind.LOCAL),
+		.fieldOffset = place.byteOffset,
+	};
+	switch (place.baseKind)
 	{
-		result.kind = BCPlaceKind.GLOBAL;
-		result.baseOffset = this.bind_global_symbol_get_offset(place.baseSymbolIdx);
+		case MirPlaceBaseKind.SYMBOL:
+			result.baseOffset = place.isGlobal ? this.bind_global_symbol_get_offset(place.baseSymbolIdx) : this.bind_symbol_get_offset(place.baseSymbolIdx);
+		case MirPlaceBaseKind.REGISTER:
+			assert(!place.isGlobal);
+			result.baseOffset = this.mirRegToOffset[place.baseReg];
+			assert(result.baseOffset != runtime::NO_OFFSET);
 	}
-	else
-	{
-		result.baseOffset = this.bind_symbol_get_offset(place.baseSymbolIdx);
-		if (symbol.passMode != ParamPassMode.VALUE) result.kind = BCPlaceKind.INDIRECT;
-	}
-
-	this.resolve_projection(place.projectionIdx, &type, &result);
-	if (place.kind == MirPlaceKind.BUILT_IN_REF_VALUE) this.dereference_place(&result);
 	return result;
-}
-
-fn void BCGenerator.resolve_projection(BCGenerator* this, MirProjectionIdx idx, TypeInfo* type, BCPlace* place)
-{
-	if (idx == mir::NO_PROJECTION) return;
-	MirProjection* projection = &this.mirInput.projections[idx];
-	// Follow the backward chain links first, then process the chain from its base.
-	this.resolve_projection(projection.prevProjectionIdx, type, place);
-	switch (projection.projectionKind)
-	{
-		case MirProjectionKind.FIELD:
-			if (type.is_struct_ref_like())
-			{
-				this.dereference_place(place);
-				*type = type.pointee_type();
-			}
-			assert(type.type == ValueType.STRUCT);
-			FieldInfo* field = &globals::structTypes[type.structTypeIndex].fieldInfos[projection.fieldIdx];
-			// Fields accumulate a constant offset; no address instruction is needed here.
-			place.fieldOffset += (short)field.offset;
-			*type = field.typeInfo;
-
-		case MirProjectionKind.INDEXER:
-			assert(type.is_array());
-			short baseAddress = this.get_place_address(*place);
-			short indexOffset = this.bind_operand_get_offset(projection.arrayIndex, analyzer::make_type(ValueType.INT));
-			// Reserve a slot in the stack frame to store the indexing result, since we don't know where exactly it is at compile-time
-			short resultOffset = this.reserve_address_slot();
-			BCInstruction instruction = {
-				.opCode = BCOpCode.INDEX_ADDR,
-				.destOffset = resultOffset,
-				.leftOffset = baseAddress,
-				.rightOffset = indexOffset,
-				.typeInfoIdx = this.push_typeinfo_get_idx(*type),
-				.immKind = BCOperandKind.TYPE_INFO,
-			};
-			this.push_instruction_get_idx(&instruction);
-			// Later fields are relative to the selected element's address.
-			*place = { .kind = BCPlaceKind.INDIRECT, .baseOffset = resultOffset };
-			*type = type.element_type();
-	}
 }
 
 <*
@@ -340,27 +277,24 @@ fn short BCGenerator.bind_operand_get_offset(BCGenerator* this, MirOperand opera
 		case MirOperandKind.REGISTER:
 			return this.bind_mir_register_get_offset(operand.regId, typeInfo);
 		case MirOperandKind.PLACE:
+			MirPlace* place = &this.mirInput.places[operand.placeIdx];
+			BCPlace resolved = this.bind_place(place);
+			if (resolved.kind == BCPlaceKind.LOCAL) return resolved.baseOffset + resolved.fieldOffset;
 
-			{
-				MirPlace* place  = &this.mirInput.places[operand.placeIdx];
-				BCPlace resolved = this.resolve_place(place);
-				if (resolved.kind == BCPlaceKind.LOCAL) return resolved.baseOffset + resolved.fieldOffset;
-
-				// A value operand needs the contents of the place, not its address.
-				short size = (short)typeInfo.size();
-				this.localFrameOffset = common::align_offset(this.localFrameOffset, (short)typeInfo.alignment());
-				short offset = this.localFrameOffset;
-				this.localFrameOffset += size;
-				BCFrameSlot slot = {
-					.symbolIdx = compiler::analyzer::NO_SYMBOL,
-					.offset = offset,
-					.size = size,
-					.type = typeInfo.type,
-				};
-				this.bcOutput.functionFrameSlots.push(slot);
-				this.load_place(resolved, typeInfo, offset);
-				return offset;
-			}
+			// A value operand needs the contents of the place, not its address
+			short size = (short)typeInfo.size();
+			this.localFrameOffset = common::align_offset(this.localFrameOffset, (short)typeInfo.alignment());
+			short offset = this.localFrameOffset;
+			this.localFrameOffset += size;
+			BCFrameSlot slot = {
+				.symbolIdx = compiler::analyzer::NO_SYMBOL,
+				.offset = offset,
+				.size = size,
+				.type = typeInfo.type,
+			};
+			this.bcOutput.functionFrameSlots.push(slot);
+			this.load_place(resolved, typeInfo, offset);
+			return offset;
 		default:
 			unreachable("Unsupported bytecode operand binding for %s", operand.kind);
 	}
@@ -475,9 +409,7 @@ fn TypeInfo BCGenerator.get_type_from_operand(BCGenerator* this, MirOperand* ope
 		case MirOperandKind.IMM_BOOL: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.BOOL, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
 		case MirOperandKind.IMM_NULL: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.NULL, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
 		case MirOperandKind.IMM_STRING: return { .structTypeIndex = common::NOT_STRUCT, .type = ValueType.STRING_LITERAL, .refToType = ValueType.NULL, .arraySize = common::NO_LENGTH };
-		case MirOperandKind.PLACE:
-			log::logn("Places need to be implemented");
-			unreachable();
+		case MirOperandKind.PLACE: return this.mirInput.places[operand.placeIdx].type;
 		case MirOperandKind.BLOCK: unreachable();
 		case MirOperandKind.FUNCTION: unreachable();
 		case MirOperandKind.INVALID: unreachable();
@@ -502,6 +434,7 @@ fn BCOpCode select_mov_op_code(TypeInfo typeInfo, ushort* byteCount)
 		case ValueType.DOUBLE: return BCOpCode.MOVD;
 		case ValueType.BOOL: return BCOpCode.MOVB;
 		case ValueType.REF: return BCOpCode.MOV_REF;
+		case ValueType.PTR: return BCOpCode.MOV_REF;
 		case ValueType.ARR_REF_GC: return BCOpCode.MOV_REF;
 		case ValueType.ARR_REF_NOGC: return BCOpCode.MOV_REF;
 		case ValueType.ARR_INLINE: nextcase;  // inline arrays move the whole block like structs

@@ -7,7 +7,6 @@ import log;
 alias MirRegisterID = int;
 alias MirBlockIdx = int;
 alias MirPlaceIdx = int;
-alias MirProjectionIdx = int;
 alias MirInstructionIdx = int;
 alias MirTerminatorIdx = int;
 alias MirFunctionIdx = int;
@@ -15,7 +14,6 @@ alias OperandIdx = int;
 
 const NO_REG        = -1;
 const NO_TERMINATOR = -1;
-const NO_PROJECTION = -1;
 const NO_BLOCK      = -1;
 const NO_METHOD     = -1;
 const NO_FUNCTION   = -1;
@@ -42,26 +40,29 @@ struct MirRegister
 
 enum MirOpCode : char (String asStr)
 {
-	ADD         { "add" },
-	SUB         { "sub" },
-	MUL         { "mul" },
-	DIV         { "div" },
-	EQ          { "eq" },
-	NEQ         { "noteq" },
-	LESS        { "less" },
-	LESS_EQ     { "lesseq" },
-	GREATER     { "greater" },
-	GREATER_EQ  { "greatereq" },
-	AND         { "and" },
-	OR          { "or" },
-	AS          { "as" },
-	STORE       { "store" },
-	CALL        { "call" },
-	LOAD        { "load" },
-	ECHO        { "echo" },
-	ALLOC_GC    { "alloc_gc" },
-	ALLOC_ARRAY { "alloc_array" },
-	ZERO_BYTES  { "zero_bytes" }
+	ADD           { "add" },
+	SUB           { "sub" },
+	MUL           { "mul" },
+	DIV           { "div" },
+	EQ            { "eq" },
+	NEQ           { "noteq" },
+	LESS          { "less" },
+	LESS_EQ       { "lesseq" },
+	GREATER       { "greater" },
+	GREATER_EQ    { "greatereq" },
+	AND           { "and" },
+	OR            { "or" },
+	AS            { "as" },
+	STORE         { "store" },
+	CALL          { "call" },
+	LOAD          { "load" },
+	ADDR          { "addr" },
+	INDEX_ADDR    { "index_addr" },
+	CHECK_NONNULL { "check_nonnull" },
+	ECHO          { "echo" },
+	ALLOC_GC      { "alloc_gc" },
+	ALLOC_ARRAY   { "alloc_array" },
+	ZERO_BYTES    { "zero_bytes" }
 }
 
 enum MirTerminatorOp : char (String asStr)
@@ -86,17 +87,10 @@ enum MirOperandKind : char (String asStr)
 	FUNCTION   { "fn" },
 }
 
-enum MirPlaceKind : char (String asStr)
+enum MirPlaceBaseKind : char
 {
-	FIELD              { "field" },              // important that this is the default!
-	BUILT_IN_REF_VALUE { "built_in_ref_value" }, // used for int&.value built-in assignments
-	ARRAY_SLOT         { "array slot" }          // used array slots (int[slot])
-}
-
-enum MirProjectionKind : char (String asStr)
-{
-	FIELD   { "field" },
-	INDEXER { "index" },
+	SYMBOL,
+	REGISTER,
 }
 
 struct MirOperand
@@ -125,29 +119,25 @@ struct MirInstruction
 		ExprIdx sourceExprIdx;
 		StmtIdx sourceStmtIdx;
 	}
+	TypeInfo type;
+	TypeInfo arrayType; // INDEX_ADDR: storage kind, element type, and inline length.
 	MirRegisterID result;
 	MirOpCode opCode;
-	TypeInfo type;
 }
 
 struct MirPlace
 {
 	int idx;
-	SymbolIdx baseSymbolIdx;
-	MirProjectionIdx projectionIdx;
-	MirPlaceKind kind;
-	bool isGlobal;
-}
-
-struct MirProjection
-{
 	union
 	{
-		int fieldIdx;
-		MirOperand arrayIndex;
+		SymbolIdx baseSymbolIdx;
+		MirRegisterID baseReg;
 	}
-	MirProjectionIdx prevProjectionIdx; // Each projection stores index to previous projection in the chain (NO_PROJECTION for first projection!)
-	MirProjectionKind projectionKind;
+	MirPlaceBaseKind baseKind;
+	TypeInfo type; // Type of the value at this location.
+	short byteOffset;
+	bool isGlobal;
+	bool isIndirect; // The base slot contains a pointer to the storage.
 }
 
 struct MirTerminator
@@ -192,7 +182,6 @@ struct MirProgram
 	List{MirTerminator} terminators;
 	List{MirBlock} blocks;
 	List{MirPlace} places;
-	List{MirProjection} projections;
 	List{MirOperand} operands;
 }
 
@@ -204,7 +193,6 @@ fn void MirProgram.init(MirProgram* this, Allocator allocator, sz size)
 	this.terminators.init(allocator, size);
 	this.blocks.init(allocator, size);
 	this.places.init(allocator, size);
-	this.projections.init(allocator, size);
 	this.operands.init(allocator, size);
 }
 
@@ -288,42 +276,20 @@ fn void MirProgram.print_operand(MirProgram* this, MirOperand op, ProgramAst* as
 				this.print_function_name(op.fnCalleeIdx, ast);
 			}
 		case MirOperandKind.PLACE:
-
+			MirPlace* place = &this.places[op.placeIdx];
+			log::log("in ");
+			if (place.isIndirect) log::log("*(");
+			if (place.isGlobal) log::log("global ");
+			if (place.baseKind == MirPlaceBaseKind.REGISTER)
 			{
-				MirPlace* place = &this.places[op.placeIdx];
-				if (place.isGlobal)
-				{
-					log::log("global ");
-				}
-				log::log("in ", place.baseSymbolIdx);
-
-				if (place.kind == MirPlaceKind.BUILT_IN_REF_VALUE)
-				{
-					log::log("%s", place.kind.asStr);
-				}
-				else
-				{
-					if (place.projectionIdx == NO_PROJECTION)
-					{
-						log::log("_%s", place.baseSymbolIdx);
-						return;
-					}
-					else
-					{
-						MirProjection* projection = &this.projections[place.projectionIdx];
-						if (projection.projectionKind == MirProjectionKind.INDEXER)
-						{
-							log::log("%s, _%s[", place.kind.asStr, place.baseSymbolIdx);
-							this.print_operand(projection.arrayIndex, ast);
-							log::log("]");
-						}
-						else
-						{
-							log::log("%s, _%s_@fieldIdx:%s", place.kind.asStr, place.baseSymbolIdx, projection.fieldIdx);
-						}
-					}
-				}
+				log::log("_r%s", place.baseReg);
 			}
+			else
+			{
+				log::log("_%s", place.baseSymbolIdx);
+			}
+			if (place.isIndirect) log::log(")");
+			if (place.byteOffset != 0) log::log(" + %s bytes", place.byteOffset);
 		default:
 			log::log("<?>");
 	}
@@ -337,6 +303,12 @@ fn void MirProgram.print_instruction(MirProgram* this, MirInstruction inst, Prog
 		log::log("_r%s = ", inst.result);
 	}
 	log::log("%s %s", inst.opCode.asStr, inst.type.type);
+	if (inst.opCode == MirOpCode.INDEX_ADDR)
+	{
+		log::log(" <%s, stride %s", inst.arrayType.type, inst.arrayType.element_type().size());
+		if (inst.arrayType.is_inline_array()) log::log(", length %s", inst.arrayType.arraySize);
+		log::log(">");
+	}
 	if (inst.type.type == ValueType.REF)
 	{
 		log::log("->%s", inst.type.refToType);

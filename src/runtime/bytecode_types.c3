@@ -99,6 +99,7 @@ enum BCOpCode : char (String asStr)
 	GLOBAL_ADDR     { "glob_addr" },
 	OFFSET_ADDR     { "+off_addr" },
 	INDEX_ADDR      { "idx__addr" },
+	CHECK_NONNULL   { "check_ref" },
 }
 
 enum BCPlaceKind

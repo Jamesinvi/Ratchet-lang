@@ -104,6 +104,8 @@ enum ErrorKind : char (String asStr)
 	BREAK_WITHOUT_LOOP         { "\"break\" statement is only allowed inside a loop" },
 	NOT_INDEXABLE              { "Cannot index" },
 	INVALID_METHOD_RECEIVER    { "Method receiver must be a variable or field; store temporary results in a variable first" },
+	MEMBER_IS_READONLY         { "Member is readonly" },
+	INVALID_CALL               { "Unknown function or method" },
 }
 
 struct TypeResult

@@ -70,7 +70,7 @@ fn MirOperand MirGenerator.get_or_bind_place(MirGenerator* this, SymbolIdx symbo
 
 	MirPlace globalPlace = {
 		.baseSymbolIdx = symbolIdx,
-		.projectionIdx = NO_PROJECTION,
+		.type = symbol.type,
 		.isGlobal = true,
 	};
 	MirPlaceIdx placeIdx = this.push_place_get_idx(&globalPlace);
@@ -109,13 +109,6 @@ fn MirPlaceIdx MirGenerator.push_place_get_idx(MirGenerator* this, MirPlace* to_
 	MirPlaceIdx index = (MirPlaceIdx)this.output.places.len();
 	to_push.idx = index;
 	this.output.places.push(*to_push);
-	return index;
-}
-
-fn MirProjectionIdx MirGenerator.push_projection_get_idx(MirGenerator* this, MirProjection* to_push)
-{
-	MirProjectionIdx index = (MirProjectionIdx)this.output.projections.len();
-	this.output.projections.push(*to_push);
 	return index;
 }
 

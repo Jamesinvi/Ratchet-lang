@@ -193,7 +193,8 @@ fn void MirGenerator.lower_function_body(MirGenerator* this, MirFunctionIdx func
 		SymbolIdx paramSymbolIdx = this.symbolTable.declParamSymbols[i];
 		MirPlace paramPlace = {
 			.baseSymbolIdx = paramSymbolIdx,
-			.projectionIdx = NO_PROJECTION,
+			.type = this.symbolTable.symbols[paramSymbolIdx].type,
+			.isIndirect = this.symbolTable.symbols[paramSymbolIdx].passMode != ParamPassMode.VALUE,
 		};
 		MirPlaceIdx placeIdx = this.push_place_get_idx(&paramPlace);
 		this.bindings[paramSymbolIdx] = {
@@ -455,7 +456,7 @@ fn void MirGenerator.lower_var_decl(MirGenerator* this, StmtIdx stmtIdx)
 	Symbol* symbol          = &this.symbolTable.symbols[stmtSymbolIdx];
 	MirPlace newPlace = {
 		.baseSymbolIdx = stmtSymbolIdx,
-		.projectionIdx = NO_PROJECTION,
+		.type = symbol.type,
 		.isGlobal = symbol.kind == SymbolKind.GLOBAL_VAR,
 	};
 	MirPlaceIdx placeIdx = this.push_place_get_idx(&newPlace);
@@ -602,25 +603,7 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
 		case ExprKind.CALL: return this.lower_call(exprIdx);
 		case ExprKind.THIS: nextcase;
-		case ExprKind.VAR:
-			SymbolIdx varExprSymbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			TypeInfo varExprType = this.symbolTable.exprTypes[exprIdx];
-			MirOperand place = this.get_or_bind_place(varExprSymbolIdx);
-			MirRegisterID resultReg = this.currentReg++;
-			OperandIdx start = this.operands_len();
-			this.output.operands.push(place);
-			OperandIdx end = this.operands_len();
-
-			MirInstruction inst = {
-				.opCode = MirOpCode.LOAD,
-				.type = varExprType,
-				.result = resultReg,
-				.operandsStart = start,
-				.operandsEnd = end,
-				.sourceExprIdx = exprIdx,
-			};
-			this.output.instructions.push(inst);
-			return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
+		case ExprKind.VAR: return this.load_place_value(this.lower_place(exprIdx), exprIdx);
 		case ExprKind.NEW:
 			// We have type which stores the whole ref type
 			// We only need 1 operand: the value to which initialize the ref
@@ -659,27 +642,17 @@ fn MirOperand MirGenerator.lower_expr(MirGenerator* this, ExprIdx exprIdx)
 			this.output.instructions.push(inst);
 
 			return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
-		case ExprKind.INDEXER: nextcase;
 		case ExprKind.MEMBER:
-			// Members and indexed elements both load from a place.
-			TypeInfo memberType = this.symbolTable.exprTypes[exprIdx];
-			MirOperand place = this.lower_place(exprIdx);
-			MirRegisterID resultReg = this.currentReg++;
-			OperandIdx start = this.operands_len();
-			this.output.operands.push(place);
-			OperandIdx end = this.operands_len();
-
-			MirInstruction inst = {
-				.opCode = MirOpCode.LOAD,
-				.type = memberType,
-				.result = resultReg,
-				.operandsStart = start,
-				.operandsEnd = end,
-				.sourceExprIdx = exprIdx,
-			};
-
-			this.output.instructions.push(inst);
-			return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
+			TypeInfo baseType = this.symbolTable.exprTypes[expr.member.base];
+			if (baseType.is_inline_array())
+			{
+				// Evaluate the base, including calls and checked indexing, even though
+				// the array's length/capacity is a compile-time constant.
+				this.lower_value_place(expr.member.base);
+				return { .kind = MirOperandKind.IMM_INT, .immInt = baseType.arraySize };
+			}
+			nextcase;
+		case ExprKind.INDEXER: return this.load_place_value(this.lower_place(exprIdx), exprIdx);
 		case ExprKind.CAST:
 			MirOperand source = this.lower_expr(expr.cast.value);
 			MirRegisterID result = this.currentReg++;
@@ -809,107 +782,181 @@ fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 	return { .kind = MirOperandKind.REGISTER, .regId = resultReg };
 }
 
-
+<*
+ A place is resolved by MIR: base storage plus a constant byte offset.
+ Dynamic access (like heap array indexing) steps emit instructions before the place is consumed.
+*>
 fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 {
 	Expr* expr = &this.inputAst.expressions[exprIdx];
-
 	switch (expr.kind)
 	{
 		case ExprKind.THIS: nextcase;
 		case ExprKind.VAR:
-			// Variables and "this" have a symbol describing their storage.
-			// Reuse its place, or create one if needed.
-			SymbolIdx symbolIdx = this.symbolTable.exprSymbols[exprIdx];
-			assert(symbolIdx < this.bindings.len());
-
-			MirOperand place = this.get_or_bind_place(symbolIdx);
-			assert(place.kind == MirOperandKind.PLACE);
-			return place;
+			return this.get_or_bind_place(this.symbolTable.exprSymbols[exprIdx]);
 
 		case ExprKind.MEMBER:
-			// First describe the storage containing this member.
-			MirOperand baseOperand = this.lower_place(expr.member.base);
-			assert(baseOperand.kind == MirOperandKind.PLACE);
-			MirPlace basePlace = this.output.places[baseOperand.placeIdx];
-
 			TypeInfo baseType = this.symbolTable.exprTypes[expr.member.base];
-
-			// Each projection is part of a chain:
-			// str.foo.bar.x
-			//      ↑   ↑  ↑_ stores index to 'bar'
-			//      ↑   |_ stores index to 'foo'
-			//      |_ index is NO_PROJECTION
-			// 
-			// These links are prevProjectionIdx. "str" is the base symbol.
-			// Projection chains are stored backwards: newest points to previous.
-			// This lets places share common prefixes.
-			MirProjectionIdx projectionIdx = basePlace.projectionIdx;
-			MirPlaceKind placeKind;
-
+			TypeInfo memberType = this.symbolTable.exprTypes[exprIdx];
+			// .value handling for int&
 			if (baseType.is_builtin_ref_like())
 			{
-				// Primitive reference ".value" uses a special place kind.
-				// Preserve any projections that locate the reference.
-				placeKind = MirPlaceKind.BUILT_IN_REF_VALUE;
+				return this.lower_reference_place(expr.member.base, memberType);
+			}
+			// array handling for .length and .capacity. Only for ref-like arrays
+			if (baseType.is_array())
+			{
+				assert(!baseType.is_inline_array(), "Inline array metadata has no storage");
+				MirOperand operand = this.lower_reference_place(expr.member.base, memberType);
+				MirPlace* place    = &this.output.places[operand.placeIdx];
+				String name        = this.inputAst.names[expr.member.memberIdx].text();
+				// length is stored at offset 0, capacity at offset 4
+				place.byteOffset = name == "length" ? 0 : (short)int::size;
+				return operand;
+			}
+
+			MirOperand base;
+			if (baseType.is_struct_ref_like())
+			{
+				base = this.lower_reference_place(expr.member.base, baseType.pointee_type());
+				baseType = baseType.pointee_type();
 			}
 			else
 			{
-				placeKind = MirPlaceKind.FIELD;
-				MirProjection projection = {
-					.fieldIdx = this.symbolTable.memberFieldIndices[exprIdx],
-					.prevProjectionIdx = basePlace.projectionIdx,
-					.projectionKind = MirProjectionKind.FIELD,
-				};
-				projectionIdx = this.push_projection_get_idx(&projection);
+				base = this.lower_value_place(expr.member.base);
 			}
-
-			// Create a new place without modifying the base place.
-			// It retains the same root storage but selects a member.
-			MirPlace memberPlace = {
-				.baseSymbolIdx = basePlace.baseSymbolIdx,
-				.projectionIdx = projectionIdx,
-				.isGlobal = basePlace.isGlobal,
-				.kind = placeKind,
-			};
-
-			MirPlaceIdx placeIdx = this.push_place_get_idx(&memberPlace);
-			return { .kind = MirOperandKind.PLACE, .placeIdx = placeIdx };
+			assert(baseType.type == ValueType.STRUCT);
+			MemberIdx fieldIdx = this.symbolTable.memberFieldIndices[exprIdx];
+			FieldInfo* field = &globals::structTypes[baseType.structTypeIndex].fieldInfos[fieldIdx];
+			MirPlace place = this.output.places[base.placeIdx];
+			place.byteOffset += (short)field.offset;
+			place.type = memberType;
+			return this.create_operand_from_place(place);
 
 		case ExprKind.INDEXER:
-			// Locate the array's storage, including preceding projections
-			// like the field in object.items[i].
-			MirOperand baseOperand = this.lower_place(expr.indexer.base);
-			assert(baseOperand.kind == MirOperandKind.PLACE);
-
-			// Copy the place before lowering the index expression,
-			// which may append more places to the output list.
-			MirPlace basePlace = this.output.places[baseOperand.placeIdx];
-
-			// Lower the index once and retain its resulting operand.
-			// This may be an immediate integer or a register holding
-			MirOperand indexOperand = this.lower_expr(expr.indexer.index);
-
-			// Append an indexing step to the existing projection chain.
-			// Retain the operand so the VM can use its runtime value.
-			MirProjection projection = {
-				.arrayIndex = indexOperand,
-				.prevProjectionIdx = basePlace.projectionIdx,
-				.projectionKind = MirProjectionKind.INDEXER,
+			TypeInfo arrayType = this.symbolTable.exprTypes[expr.indexer.base];
+			MirOperand base;
+			if (arrayType.is_inline_array())
+			{
+				// Inline arrays can either be stored in stack frame, be a global or a field of some struct. Grab the location
+				base = this.address_of_place(this.lower_value_place(expr.indexer.base), expr.indexer.base);
+			}
+			else
+			{
+				// Heap arrays store the handle, so get the heap handle before evaluating the index expression.
+				base = this.lower_expr(expr.indexer.base);
+			}
+			MirOperand index = this.lower_expr(expr.indexer.index);
+			MirRegisterID result = this.currentReg++;
+			OperandIdx start = this.operands_len();
+			this.output.operands.push(base);
+			this.output.operands.push(index);
+			MirInstruction indexIntoArrayInstruction = {
+				.opCode = MirOpCode.INDEX_ADDR,
+				.type = analyzer::make_type(ValueType.PTR),
+				.arrayType = arrayType,
+				.result = result,
+				.operandsStart = start,
+				.operandsEnd = this.operands_len(),
+				.sourceExprIdx = exprIdx,
 			};
-			MirProjectionIdx projectionIdx = this.push_projection_get_idx(&projection);
-
-			MirPlace elementPlace = {
-				.baseSymbolIdx = basePlace.baseSymbolIdx,
-				.projectionIdx = projectionIdx,
-				.isGlobal = basePlace.isGlobal,
-				.kind = MirPlaceKind.ARRAY_SLOT,
+			this.output.instructions.push(indexIntoArrayInstruction);
+			MirPlace resultPlace = {
+				.baseKind = MirPlaceBaseKind.REGISTER,
+				.baseReg = result,
+				.type = arrayType.element_type(),
+				.isIndirect = true,
 			};
-
-			MirPlaceIdx placeIdx = this.push_place_get_idx(&elementPlace);
-			return { .kind = MirOperandKind.PLACE, .placeIdx = placeIdx };
+			return this.create_operand_from_place(resultPlace);
 
 		default: unreachable("Unsupported lvalue expression in lower_place %s", expr.kind);
 	}
+}
+
+
+<*
+ Materialize a value-producing base only when it has no existing storage.
+*>
+fn MirOperand MirGenerator.lower_value_place(MirGenerator* this, ExprIdx exprIdx)
+{
+	ExprKind kind = this.inputAst.expressions[exprIdx].kind;
+	if (kind == ExprKind.VAR || kind == ExprKind.THIS || kind == ExprKind.MEMBER || kind == ExprKind.INDEXER)
+	{
+		return this.lower_place(exprIdx);
+	}
+	MirOperand value = this.lower_expr(exprIdx);
+	assert(value.kind == MirOperandKind.REGISTER);
+	MirPlace resultPlace = {
+		.baseKind = MirPlaceBaseKind.REGISTER,
+		.baseReg = value.regId,
+		.type = this.symbolTable.exprTypes[exprIdx],
+	};
+	return this.create_operand_from_place(resultPlace);
+}
+
+fn MirOperand MirGenerator.lower_reference_place(MirGenerator* this, ExprIdx exprIdx, TypeInfo pointeeType)
+{
+	MirOperand reference = this.lower_expr(exprIdx);
+	OperandIdx start     = this.operands_len();
+	this.output.operands.push(reference);
+	MirInstruction nullCheckInstruction = {
+		.opCode = MirOpCode.CHECK_NONNULL,
+		.type = this.symbolTable.exprTypes[exprIdx],
+		.result = NO_REG,
+		.operandsStart = start,
+		.operandsEnd = this.operands_len(),
+		.sourceExprIdx = exprIdx,
+	};
+	this.output.instructions.push(nullCheckInstruction);
+	assert(reference.kind == MirOperandKind.REGISTER);
+	MirPlace resultPlace = {
+		.baseKind = MirPlaceBaseKind.REGISTER,
+		.baseReg = reference.regId,
+		.type = pointeeType,
+		.isIndirect = true,
+	};
+	return this.create_operand_from_place(resultPlace);
+}
+
+fn MirOperand MirGenerator.load_place_value(MirGenerator* this, MirOperand place, ExprIdx exprIdx)
+{
+	TypeInfo type        = this.output.places[place.placeIdx].type;
+	MirRegisterID result = this.currentReg++;
+	OperandIdx start     = this.operands_len();
+	this.output.operands.push(place);
+	this.output.instructions.push(
+		{
+			.opCode = MirOpCode.LOAD,
+			.type = type,
+			.result = result,
+			.operandsStart = start,
+			.operandsEnd = this.operands_len(),
+			.sourceExprIdx = exprIdx,
+		}
+	);
+	return { .kind = MirOperandKind.REGISTER, .regId = result };
+}
+
+fn MirOperand MirGenerator.address_of_place(MirGenerator* this, MirOperand place, ExprIdx exprIdx)
+{
+	MirRegisterID result = this.currentReg++;
+	OperandIdx start     = this.operands_len();
+	this.output.operands.push(place);
+	this.output.instructions.push(
+		{
+			.opCode = MirOpCode.ADDR,
+			.type = analyzer::make_type(ValueType.PTR),
+			.result = result,
+			.operandsStart = start,
+			.operandsEnd = this.operands_len(),
+			.sourceExprIdx = exprIdx,
+		}
+	);
+	return { .kind = MirOperandKind.REGISTER, .regId = result };
+}
+
+fn MirOperand MirGenerator.create_operand_from_place(MirGenerator* this, MirPlace place)
+{
+	return { .kind = MirOperandKind.PLACE, .placeIdx = this.push_place_get_idx(&place) };
 }
 

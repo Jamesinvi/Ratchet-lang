@@ -1,0 +1,12 @@
+struct Box {
+    int padding;
+    int[3] values;
+}
+
+fn bool program() {
+    Box& box;
+    // The known array length must not remove the null-base check.
+    box.values.length;
+    echo 99;
+    return false;
+}

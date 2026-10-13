@@ -1,0 +1,12 @@
+struct Box {
+    int padding;
+    int[3] values;
+}
+
+fn bool program() {
+    Box[1] boxes;
+    // Even a discarded constant property must evaluate and check its base.
+    boxes[1].values.length;
+    echo 99;
+    return false;
+}

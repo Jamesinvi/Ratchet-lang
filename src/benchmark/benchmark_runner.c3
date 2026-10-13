@@ -3,59 +3,59 @@ import main;
 import std::core::env;
 
 
-fn void compile_allocation() @benchmark
+fn void b_allocation() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/allocation.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_allocation.ratc")!!;
 }
 
-fn void compile_array_heap() @benchmark
+fn void b_array_heap() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/array_heap.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_array_heap.ratc")!!;
 }
 
-fn void compile_array_inline() @benchmark
+fn void b_array_inline() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/array_inline.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_array_inline.ratc")!!;
 }
 
-fn void compile_borrow_parameters() @benchmark
+fn void b_borrow_parameters() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/borrow_parameters.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_borrow_parameters.ratc")!!;
 }
 
-fn void compile_branching() @benchmark
+fn void b_branching() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/branching.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_branching.ratc")!!;
 }
 
-fn void compile_floating_point() @benchmark
+fn void b_floating_point() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/floating_point.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_floating_point.ratc")!!;
 }
 
-fn void compile_function_calls() @benchmark
+fn void b_function_calls() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/function_calls.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_function_calls.ratc")!!;
 }
 
-fn void compile_heat_diffusion() @benchmark
+fn void b_heat_diffusion() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/heat_diffusion.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_heat_diffusion.ratc")!!;
 }
 
-fn void compile_integer_math() @benchmark
+fn void b_integer_math() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/integer_math.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_integer_math.ratc")!!;
 }
 
-fn void compile_struct_fields() @benchmark
+fn void b_struct_fields() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/struct_fields.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_struct_fields.ratc")!!;
 }
 
-fn void compile_struct_references() @benchmark
+fn void b_struct_references() @benchmark
 {
-	compile_file("./src/benchmark/ratchet_benchmarks/struct_references.ratc")!!;
+	compile_file("./src/benchmark/compilation_benchmarks/b_struct_references.ratc")!!;
 }
 
 faultdef UNKNOWN_COMPILE_ERROR;
