@@ -156,18 +156,6 @@ fn void t_27_null_inline_array_property() @test
 {
 	compile_and_expect_runtime_error("./test/t_27_null_inline_array_property.ratc");
 }
-
-fn void compile_and_expect_runtime_error(String filename)
-{
-	defer main::cleanup();
-	main::CompilationResult result = main::compile_file(filename);
-	assert(result.outcome == main::CompilationOutcome.NO_ERROR);
-	DString output = dstring::new(mem);
-	defer output.free();
-	assert(vm::run(&result.compiledProgram, &output) == vm::RunResult.RUNTIME_ERR);
-	assert(output.len() == 0);
-}
-
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;
@@ -206,5 +194,16 @@ fn void? compile_and_run_file(String filename, String expectedResult, bool print
 	{
 		return OUTPUT_DOESNT_MATCH_ERROR~;
 	}
+}
+
+fn void compile_and_expect_runtime_error(String filename)
+{
+	defer main::cleanup();
+	main::CompilationResult result = main::compile_file(filename);
+	assert(result.outcome == main::CompilationOutcome.NO_ERROR);
+	DString output = dstring::new(mem);
+	defer output.free();
+	assert(vm::run(&result.compiledProgram, &output) == vm::RunResult.RUNTIME_ERR);
+	assert(output.len() == 0);
 }
 

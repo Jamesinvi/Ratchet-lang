@@ -92,6 +92,11 @@ fn bool TypeInfo.is_array(TypeInfo* this) @inline
 	return this.type == ValueType.ARR_INLINE || this.type == ValueType.ARR_REF_GC || this.type == ValueType.ARR_REF_NOGC;
 }
 
+fn bool TypeInfo.is_heap_array(TypeInfo* this) @inline
+{
+	return this.type == ValueType.ARR_REF_GC || this.type == ValueType.ARR_REF_NOGC;
+}
+
 fn bool TypeInfo.is_inline_array(TypeInfo* this) @inline
 {
 	return this.type == ValueType.ARR_INLINE;

@@ -95,9 +95,10 @@ fn RunResult Vm.execute_program(Vm* vm)
 	// Defer freeing so we always free memory no matter what happens
 	defer vm.trackedHeap.free();
 	defer vm.untrackedHeap.free();
+	defer free(vm.globalMemory);
 	if (vm.program.globalMemorySize > 0)
 	{
-		vm.globalMemory = (Byte*)vm.untrackedHeap.alloc((sz)vm.program.globalMemorySize, uptr::alignment);
+		vm.globalMemory = (Byte*)vm.untrackedHeap.alloc_raw((sz)vm.program.globalMemorySize, uptr::alignment);
 		mem::copy(vm.globalMemory, vm.program.globalInitialData.entries, vm.program.globalInitialData.len(), 1, 1);
 	}
 
@@ -464,13 +465,13 @@ macro Vm.cmp_op_immediate(Vm* vm, BCInstruction* inst, $Type, VmCmpOp $op)
 fn void Vm.alloc_gc(Vm* vm, BCInstruction* inst)
 {
 	// Get information about the type we need to allocate
-	TypeInfo pointeeType = (&vm.program.typeInfoTable[inst.typeInfoIdx]).pointee_type();
-	sz size              = pointeeType.size();
-	sz alignment         = pointeeType.alignment();
+	TypeInfo typeToAllocate = (&vm.program.typeInfoTable[inst.typeInfoIdx]).pointee_type();
+	sz size                 = typeToAllocate.size();
+	sz alignment            = typeToAllocate.alignment();
 
 	// src is the data we need to store at the allocated location
 	Byte* src       = &vm.stack[vm.frame.base + inst.leftOffset];
-	void* allocated = vm.trackedHeap.alloc(size, alignment);
+	void* allocated = vm.trackedHeap.alloc(typeToAllocate);
 	// copy the src data into the newly allocated spot
 	mem::copy(allocated, src, size, 1, 1);
 
@@ -478,27 +479,27 @@ fn void Vm.alloc_gc(Vm* vm, BCInstruction* inst)
 	// This is what is moved around when copying an int& around
 	uptr* dest = (uptr*)&vm.stack[vm.frame.base + inst.destOffset];
 	*dest = (uptr)allocated;
+	vm.trackedHeap.run_gc_if_necessary(vm.stack[:vm.stackHead], vm.globalMemory[:vm.program.globalMemorySize]);
 }
 
 fn void Vm.alloc_array(Vm* vm, BCInstruction* inst)
 {
-	// Get information about the array we need to allocate
-	TypeInfo arrayType   = vm.program.typeInfoTable[inst.typeInfoIdx];
-	TypeInfo elementType = (&vm.program.typeInfoTable[inst.typeInfoIdx]).element_type();
-	sz size              = elementType.size();
-	sz alignment         = elementType.alignment();
-
-	HeapTracker* heapToUse = arrayType.type == ValueType.ARR_REF_GC ? &vm.trackedHeap : &vm.untrackedHeap;
 	// array length is stored in left offset
-	int* arrLenPtr         = (int*)&vm.stack[vm.frame.base + inst.leftOffset];
-	int arrLen             = *arrLenPtr;
+	int* arrLenPtr = (int*)&vm.stack[vm.frame.base + inst.leftOffset];
+	int arrLen     = *arrLenPtr;
 	if (arrLen < 0) abort("Array length cannot be negative");
 	if (arrLen > (1 << 30)) abort("Array capacity exceeds supported range");
-	ArrayHandle* arrayHandle = heapToUse.alloc_array(size, alignment, arrLen);
+
+	// Get information about the array we need to allocate
+	TypeInfo* arrayType = &vm.program.typeInfoTable[inst.typeInfoIdx];
+
+	HeapTracker* heapToUse   = arrayType.type == ValueType.ARR_REF_GC ? &vm.trackedHeap : &vm.untrackedHeap;
+	ArrayHandle* arrayHandle = heapToUse.alloc_array(inst.typeInfoIdx, &vm.program.typeInfoTable, arrayType, arrLen);
 	// Store the address of the newly ArrayHandle into dest.
 	// This is what is moved around when copying an T[]& around
 	uptr* dest               = (uptr*)&vm.stack[vm.frame.base + inst.destOffset];
 	*dest = (uptr)arrayHandle;
+	vm.trackedHeap.run_gc_if_necessary(vm.stack[:vm.stackHead], vm.globalMemory[:vm.program.globalMemorySize]);
 }
 
 fn void Vm.mov_bytes(Vm* vm, BCInstruction* inst) @inline
