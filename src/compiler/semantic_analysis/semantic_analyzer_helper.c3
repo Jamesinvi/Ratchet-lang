@@ -120,7 +120,7 @@ fn TypeResult SemanticAnalyzer.fill_globals(SemanticAnalyzer* this)
 			}
 			// If type was valid, add this global declaration (+ assignment) to visible symbols to scope 0
 			SymbolIdx symbolIdx = this.symbols_len();
-			Symbol symbol       = { .kind = SymbolKind.GLOBAL_VAR, .idx = stmtIdx, .type = lhsType.value };
+			Symbol symbol       = { .kind = SymbolKind.GLOBAL_VAR, .name = this.ast.names[stmt.varDecl.nameIdx], .stmtIdx = stmtIdx, .type = lhsType.value };
 			this.symbolTable.symbols.push(symbol);
 			this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
 			this.current_scope().visibleSymbols.push(symbolIdx);
@@ -157,23 +157,6 @@ fn TypeResult SemanticAnalyzer.fill_globals(SemanticAnalyzer* this)
 		}
 	}
 	return type_ok(nullType);
-}
-
-fn TypeInfo make_type(ValueType type)
-{
-	TypeInfo info = { .type = type, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH };
-	return info;
-}
-
-fn TypeInfo make_ref_type(ValueType refToType, int structIndex)
-{
-	TypeInfo info = { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex, .arraySize = common::NO_LENGTH };
-	return info;
-}
-
-fn bool is_numeric_type(TypeInfo info)
-{
-	return info.type == ValueType.INT || info.type == ValueType.FLOAT || info.type == ValueType.DOUBLE;
 }
 
 <*
@@ -264,9 +247,9 @@ fn TypeResult SemanticAnalyzer.fill_structs_metadata(SemanticAnalyzer* this, Lis
 *>
 fn StructLayoutResult SemanticAnalyzer.try_fill_struct_field_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
-	int index                = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
+	int index                = get_struct_idx_bind_if_needed(this.ast.names[decl.nameIdx].text(), this.outputAllocator);
 	CompStructTypeInfo* info = &globals::structTypes[index];
-	String name              = ast.names[decl.structDecl.nameIdx].text();
+	String name              = ast.names[decl.nameIdx].text();
 
 	// First pass: check if we can actually fill in the info
 	StructLayoutResult fieldsAreDefined = this.check_fields_are_defined(decl, ast);
@@ -314,7 +297,7 @@ fn StructLayoutResult SemanticAnalyzer.try_fill_struct_field_info(SemanticAnalyz
 
 fn void SemanticAnalyzer.fill_struct_method_info(SemanticAnalyzer* this, Decl* decl, ProgramAst* ast)
 {
-	int index                      = get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
+	int index                      = get_struct_idx_bind_if_needed(this.ast.names[decl.nameIdx].text(), this.outputAllocator);
 	CompStructTypeInfo* structInfo = &globals::structTypes[index];
 	// Methods
 	foreach (&method : decl.structDecl.methods)
@@ -378,7 +361,7 @@ fn bool SemanticAnalyzer.is_expression_readonly(SemanticAnalyzer* this, ExprIdx 
 	// Is it a field/method?
 	if (expr.kind == ExprKind.MEMBER)
 	{
-		TypeInfo baseType = this.symbolTable.exprTypes[expr.member.base];
+		TypeInfo baseType = this.symbolTable.get_expression_type(expr.member.base);
 		// Is it one of the readonly .length and .capacity? if so return true
 		if (baseType.is_array())
 		{
@@ -396,5 +379,16 @@ macro SymbolIdx SemanticAnalyzer.symbols_len(SemanticAnalyzer* this)
 {
 	assert(this.symbolTable.symbols.len() < int::max);
 	return (SymbolIdx)this.symbolTable.symbols.len();
+}
+
+macro make_type(ValueType valueType)
+{
+	return common::make_type_runtime(valueType);
+}
+
+
+macro is_numeric_type(TypeInfo type)
+{
+	return common::is_numeric_type(type);
 }
 

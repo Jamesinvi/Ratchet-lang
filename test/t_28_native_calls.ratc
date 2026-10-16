@@ -1,0 +1,24 @@
+fn float nativeRoot(float value) {
+    return sqrtf(value);
+}
+
+fn double readClock() {
+    return clock();
+}
+
+fn bool program() {
+    float value = 81.0f;
+    echo nativeRoot(value);
+    echo sqrtf(nativeRoot(256.0f));
+    echo nativeRoot(sqrtf(625.0f));
+    echo nativeRoot(9.0f) + sqrtf(16.0f);
+
+    // Discarding native results must leave the caller's locals intact.
+    sqrtf(value);
+    double before = readClock();
+    clock();
+    double after = readClock();
+    echo after >= before;
+    echo value;
+    return false;
+}

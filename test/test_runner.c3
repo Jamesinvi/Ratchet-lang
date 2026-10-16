@@ -3,6 +3,7 @@ import main;
 import vm;
 import runtime;
 import log;
+import globals;
 
 
 fn void t_00_empty() @test
@@ -156,6 +157,25 @@ fn void t_27_null_inline_array_property() @test
 {
 	compile_and_expect_runtime_error("./test/t_27_null_inline_array_property.ratc");
 }
+
+fn void t_28_native_calls() @test
+{
+	defer main::cleanup();
+	main::CompilationResult result = main::compile_file("./test/t_28_native_calls.ratc", true);
+	assert(result.outcome == main::CompilationOutcome.NO_ERROR);
+	// Native dispatch must not retain pointers into the compilation arena.
+	globals::cleanup_compilation_only_data();
+	DString output = dstring::new(mem);
+	defer output.free();
+	assert(vm::run(&result.compiledProgram, &output) == vm::RunResult.OK);
+	assert(output.str_view() == "9.000000\n4.000000\n5.000000\n7.000000\ntrue\n81.000000\n");
+}
+
+fn void t_29_native_invalid_type() @test
+{
+	compile_and_expect_analysis_error("./test/t_29_native_invalid_type.ratc", compiler::analyzer::ErrorKind.TYPE_MISMATCH);
+}
+
 faultdef UNKNOWN_COMPILE_ERROR;
 faultdef OUTPUT_DOESNT_MATCH_ERROR;
 faultdef EXPECTED_ANALYSIS_ERROR;
@@ -205,5 +225,14 @@ fn void compile_and_expect_runtime_error(String filename)
 	defer output.free();
 	assert(vm::run(&result.compiledProgram, &output) == vm::RunResult.RUNTIME_ERR);
 	assert(output.len() == 0);
+}
+
+fn void compile_and_expect_analysis_error(String filename, compiler::analyzer::ErrorKind expectedKind)
+{
+	defer main::cleanup();
+	main::CompilationResult result = main::compile_file(filename, true);
+	assert(result.outcome == main::CompilationOutcome.ANALYSIS_ERROR);
+	assert(globals::compilationCtx.analysisErrors.len() > 0);
+	assert(globals::compilationCtx.analysisErrors[0].errKind == expectedKind);
 }
 

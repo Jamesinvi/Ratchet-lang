@@ -3,6 +3,7 @@ import common;
 import compiler;
 import debug;
 import std::collections::list;
+import std::collections::map;
 import common::stack;
 import log;
 import globals;
@@ -54,25 +55,16 @@ fn void SemanticAnalyzer.init(SemanticAnalyzer* this, ProgramAst* ast, SymbolTab
 	this.symbolTable.exprTypes.init(outputAllocator, exprLen);
 	this.symbolTable.stmtSymbols.init(outputAllocator, stmtLen);
 	this.symbolTable.declSymbols.init(outputAllocator, declLen);
-	this.symbolTable.declParamRanges.init(outputAllocator, declLen);
-	this.symbolTable.declParamSymbols.init(outputAllocator, exprLen + stmtLen + declLen);
-	this.symbolTable.callTargets.init(outputAllocator, exprLen);
-	this.symbolTable.callReceiverExpr.init(outputAllocator, exprLen);
-	this.symbolTable.memberFieldIndices.init(outputAllocator, exprLen);
-	this.symbolTable.methods.init(outputAllocator);
+	this.symbolTable.functions.init(outputAllocator);
+	// Hashmaps
+	this.symbolTable.memberFieldIndices.init(outputAllocator, 64);
+	this.symbolTable.callTargets.init(outputAllocator, 64);
 
 	// Fill lists with defaults
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.stmtSymbols, NO_SYMBOL, stmtLen);
 	common::list_append_fill{SymbolIdx}(&this.symbolTable.declSymbols, NO_SYMBOL, declLen);
-	common::list_append_fill{DeclParamRange}(&this.symbolTable.declParamRanges, { }, declLen);
-	common::list_append_fill{MemberIdx}(&this.symbolTable.memberFieldIndices, -1, exprLen);
-	for (sz i = 0; i < exprLen; i++)
-	{
-		this.symbolTable.exprSymbols.push(NO_SYMBOL);
-		this.symbolTable.exprTypes.push(nullType);
-		this.symbolTable.callTargets.push({ });
-		this.symbolTable.callReceiverExpr.push(parser::NO_IDX);
-	}
+	common::list_append_fill{SymbolIdx}(&this.symbolTable.exprSymbols, NO_SYMBOL, exprLen);
+	common::list_append_fill{TypeInfo}(&this.symbolTable.exprTypes, nullType, exprLen);
 
 
 	this.currentReturnType = make_type(ValueType.NULL);
@@ -102,38 +94,81 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	assert(this.ast.declarations.len() < int::max);
 	List{DeclIdx} structDeclIndices = { };
 	structDeclIndices.init(&this.localAllocator, this.ast.declarations.len() / 2);
-	// Predeclare function symbols with return types.
-	for (int i = 0; i < (int)this.ast.globalBlock.globalDeclarations.len(); i++)
+	// Register struct names before resolving callable signatures.
+	foreach (declIdx : this.ast.globalBlock.globalDeclarations)
 	{
-		DeclIdx declIdx = (DeclIdx)this.ast.globalBlock.globalDeclarations[i];
-		Decl* decl      = &this.ast.declarations[declIdx];
+		Decl* decl = &this.ast.declarations[declIdx];
+		if (decl.kind != DeclKind.STRUCT) continue;
+		get_struct_idx_bind_if_needed(this.ast.names[decl.nameIdx].text(), this.outputAllocator);
+		structDeclIndices.push(declIdx);
+	}
+	TypeResult metaDataResult = this.fill_structs_metadata(structDeclIndices);
+	if (metaDataResult.hadError) return metaDataResult;
+
+	// Complete every signature before analyzing any body, including forward calls.
+	foreach (declIdx : this.ast.globalBlock.globalDeclarations)
+	{
+		Decl* decl = &this.ast.declarations[declIdx];
 		if (decl.kind == DeclKind.FUNCTION)
 		{
-			Span declSpan         = this.ast.statements[decl.fnDecl.body].span;
-			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, declSpan);
-			if (returnType.hadError)
-			{
-				return returnType;
-			}
-			SymbolIdx symbolIdx = this.symbols_len();
-			Symbol symbol       = { .kind = SymbolKind.FUNCTION, .idx = declIdx, .type = returnType.value };
-			this.symbolTable.symbols.push(symbol);
+			Span span             = this.ast.statements[decl.fnDecl.body].span;
+			TypeResult returnType = this.create_type_from_ast(&decl.fnDecl.returnType, span);
+			if (returnType.hadError) return returnType;
+			FunctionAnalysisInfo info = {
+				.kind = CallTargetKind.FREE_FUN,
+				.fnDeclIdx = declIdx,
+				.returnType = returnType.value,
+				.receiverSymbolIdx = NO_SYMBOL,
+			};
+			SymbolIdx symbolIdx = this.declare_function(this.ast.names[decl.nameIdx], info, true);
 			this.symbolTable.declSymbols[declIdx] = symbolIdx;
-			this.current_scope().visibleSymbols.push(symbolIdx);
+			TypeResult paramsType = this.declare_params(symbolIdx, &decl.fnDecl.params, NO_SYMBOL);
+			if (paramsType.hadError) return paramsType;
 		}
 		else if (decl.kind == DeclKind.STRUCT)
 		{
-			get_struct_idx_bind_if_needed(this.ast.names[decl.structDecl.nameIdx].text(), this.outputAllocator);
-			structDeclIndices.push(declIdx);
+			foreach (methodIdx, &method : decl.structDecl.methods)
+			{
+				TypeResult result = this.declare_method(declIdx, (int)methodIdx, method);
+				if (result.hadError) return result;
+			}
 		}
 	}
-
-
-	// Structs info (metadata). This uses the temp structDeclIndices
-	TypeResult metaDataResult = this.fill_structs_metadata(structDeclIndices);
-	if (metaDataResult.hadError)
+	// Declare all native functions
+	foreach (idx, &nativeFn : common::nativeFunctions)
 	{
-		return metaDataResult;
+		InternedString name = globals::internedSourceStrings.get_or_intern(nativeFn.name);
+		SymbolIdx alreadyDeclaredFn;
+		// If the user has declared a function with this name, error!
+		if (this.try_resolve_visible_symbol(name, &alreadyDeclaredFn))
+		{
+			FuncIdx funcIdx = this.symbolTable.symbols[alreadyDeclaredFn].funcIdx;
+			Decl* funcDecl  = &this.ast.declarations[this.symbolTable.functions[funcIdx].fnDeclIdx];
+			return this.type_error(ErrorKind.FUNC_NAME_CLASHES_NATIVE, nullType, nullType, funcDecl.span);
+		}
+
+		FunctionAnalysisInfo info = {
+			.kind = CallTargetKind.NATIVE_FUN,
+			.nativeFnIdx = (NativeFnIdx)idx,
+			.returnType = nativeFn.returnType,
+			.receiverSymbolIdx = NO_SYMBOL,
+		};
+		SymbolIdx symbolIdx = this.declare_function(name, info, true);
+		sz nextFreeIdx      = 0;
+		SymbolIdx[] params  = mem::alloc::alloc_array(this.outputAllocator, SymbolIdx, nativeFn.params.len);
+		foreach (param : nativeFn.params)
+		{
+			// Each native-function parameter gets a generated symbol (not from source)
+			params[nextFreeIdx++] = this.symbols_len();
+			Symbol syntheticSymbol = {
+				.kind = SymbolKind.PARAM,
+				.type = param.type,
+				.passMode = param.passMode,
+			};
+			this.symbolTable.symbols.push(syntheticSymbol);
+		}
+		FuncIdx funcIdx = this.symbolTable.symbols[symbolIdx].funcIdx;
+		this.symbolTable.functions[funcIdx].params = params;
 	}
 
 	// Global symbols
@@ -149,25 +184,19 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 		switch (decl.kind)
 		{
 			case DeclKind.FUNCTION:
-
+				TypeResult declType = this.analyze_fn(decl, i);
+				if (declType.hadError)
 				{
-					TypeResult declType = this.analyze_fn(&decl.fnDecl, i);
+					return declType;
+				}
+			case DeclKind.STRUCT:
+				foreach (methodIdx, &method : decl.structDecl.methods)
+				{
+					assert(methodIdx < int::max);
+					TypeResult declType = this.analyze_method(method, (int)methodIdx);
 					if (declType.hadError)
 					{
 						return declType;
-					}
-				}
-			case DeclKind.STRUCT:
-
-				{
-					foreach (methodIdx, &method : decl.structDecl.methods)
-					{
-						assert(methodIdx < int::max);
-						TypeResult declType = this.analyze_method(method, (int)methodIdx);
-						if (declType.hadError)
-						{
-							return declType;
-						}
 					}
 				}
 			default: return this.type_error(ErrorKind.INVALID_TYPE, nullType, nullType, { });
@@ -176,27 +205,87 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	return type_ok(make_type(ValueType.NULL));
 }
 
-fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, List{ParamAst}* params)
+fn SymbolIdx SemanticAnalyzer.declare_function(SemanticAnalyzer* this, InternedString name, FunctionAnalysisInfo info, bool visible)
 {
+	SymbolIdx symbolIdx = this.symbols_len();
+	Symbol symbol = {
+		.kind = SymbolKind.FUNCTION,
+		.name = name,
+		.type = info.returnType,
+		.funcIdx = (FuncIdx)this.symbolTable.functions.len(),
+	};
+	info.symbolIdx = symbolIdx;
+	this.symbolTable.symbols.push(symbol);
+	this.symbolTable.functions.push(info);
+	if (visible) this.current_scope().visibleSymbols.push(symbolIdx);
+	return symbolIdx;
+}
+
+fn TypeResult SemanticAnalyzer.declare_params(SemanticAnalyzer* this, SymbolIdx functionSymbolIdx, List{ParamAst}* params, SymbolIdx receiverSymbolIdx)
+{
+	// If it's a method (has a reciever), add 1 to the params since the receiver is the first in the param list
+	sz allocationSize        = receiverSymbolIdx != NO_SYMBOL ? params.len() + 1 : params.len();
+	SymbolIdx[] paramSymbols = mem::alloc::alloc_array(this.outputAllocator, SymbolIdx, allocationSize);
+	sz nextFreeIdx           = 0;
+	if (receiverSymbolIdx != NO_SYMBOL) paramSymbols[nextFreeIdx++] = receiverSymbolIdx;
 	foreach (&param : *params)
 	{
 		TypeResult paramType = this.create_type_from_ast(&param.type, param.span);
-		if (paramType.hadError)
-		{
-			return paramType;
-		}
-		SymbolIdx symbolIdx = this.symbols_len();
-		Symbol symbol = {
+		if (paramType.hadError) return paramType;
+		paramSymbols[nextFreeIdx++] = this.symbols_len();
+		Symbol paramSymbol = {
 			.kind = SymbolKind.PARAM,
-			.idx = (SymbolIdx)param.nameIdx,
+			.name = this.ast.names[param.nameIdx],
 			.type = paramType.value,
 			.passMode = param.passMode,
 		};
-		this.symbolTable.symbols.push(symbol);
-		this.symbolTable.declParamSymbols.push(symbolIdx);
+		this.symbolTable.symbols.push(paramSymbol);
+	}
+	FuncIdx funcIdx = this.symbolTable.symbols[functionSymbolIdx].funcIdx;
+	this.symbolTable.functions[funcIdx].params = paramSymbols;
+	return type_ok(nullType);
+}
+
+fn TypeResult SemanticAnalyzer.declare_method(SemanticAnalyzer* this, DeclIdx structDeclIdx, int methodIdx, MethodDeclAst* method)
+{
+	Span span             = this.ast.statements[method.body].span;
+	TypeResult returnType = this.create_type_from_ast(&method.returnType, span);
+	if (returnType.hadError) return returnType;
+	TypeAst receiverTypeAst = {
+		.tokenType = TokenType.IDENTIFIER,
+		.arraySize = common::NO_LENGTH,
+		.nameIdx = this.ast.declarations[structDeclIdx].nameIdx,
+	};
+	TypeResult receiverType = this.create_type_from_ast(&receiverTypeAst, span);
+	if (receiverType.hadError) return receiverType;
+	SymbolIdx receiverSymbolIdx = this.symbols_len();
+	this.symbolTable.symbols.push(
+		{
+			.kind = SymbolKind.RECEIVER,
+			.type = receiverType.value,
+			.passMode = ParamPassMode.INOUT,
+		}
+	);
+	FunctionAnalysisInfo info = {
+		.kind = CallTargetKind.METHOD,
+		.methodId = { .structDeclIdx = structDeclIdx, .methodIdx = methodIdx },
+		.returnType = returnType.value,
+		.receiverSymbolIdx = receiverSymbolIdx,
+	};
+	SymbolIdx symbolIdx = this.declare_function(this.ast.names[method.nameIdx], info, false);
+	return this.declare_params(symbolIdx, &method.params, receiverSymbolIdx);
+}
+
+fn void SemanticAnalyzer.bind_params(SemanticAnalyzer* this, SymbolIdx functionSymbolIdx)
+{
+	FuncIdx funcIdx    = this.symbolTable.symbols[functionSymbolIdx].funcIdx;
+	SymbolIdx[] params = this.symbolTable.functions[funcIdx].params;
+	foreach (symbolIdx : params)
+	{
+		// The receiver is resolved through `this`, not through a parameter name.
+		if (this.symbolTable.symbols[symbolIdx].kind == SymbolKind.RECEIVER) continue;
 		this.current_scope().visibleSymbols.push(symbolIdx);
 	}
-	return type_ok(make_type(ValueType.NULL));
 }
 
 fn void SemanticAnalyzer.begin_scope(SemanticAnalyzer* this, TypeResult returnType, bool insideMethod)
@@ -225,87 +314,29 @@ fn void SemanticAnalyzer.end_scope(SemanticAnalyzer* this)
 	}
 }
 
-fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx structDeclIdx, InternedString methodName, ExprCall* call, ExprIdx callExprIdx, Span span, TypeResult* out)
+fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx structDeclIdx, InternedString methodName, ExprIdx callExprIdx, ExprIdx receiverExprIdx, TypeResult* out)
 {
-	if (structDeclIdx == parser::NO_IDX)
-	{
-		return false;
-	}
-
+	if (structDeclIdx == parser::NO_IDX) return false;
 	Decl* structDecl = &this.ast.declarations[structDeclIdx];
-	if (structDecl.kind != DeclKind.STRUCT)
-	{
-		return false;
-	}
-
+	if (structDecl.kind != DeclKind.STRUCT) return false;
 	int methodIdx = this.find_method_idx(&structDecl.structDecl, methodName);
-	if (methodIdx == parser::NO_IDX)
-	{
-		return false;
-	}
-
-	MethodDeclAst* method = &structDecl.structDecl.methods[methodIdx];
-	int argCount          = call.argsEnd - call.argsStart;
-	// Check argument count matchest the declaration
-	if (argCount != (int)method.params.len())
-	{
-		*out = this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, span);
-		return true;
-	}
-
-	// Check all arguments
-	for (int i = 0; i < argCount; i++)
-	{
-		ExprIdx argListIdx = call.argsStart + i;
-		ExprIdx argExprIdx = this.ast.args[argListIdx].exprIdx;
-		TypeResult argType = this.analyze_expr(argExprIdx);
-		if (argType.hadError)
-		{
-			*out = argType;
-			return true;
-		}
-		TypeResult expectedType     = this.create_type_from_ast(&method.params[i].type, span);
-		ParamPassMode paramPassMode = method.params[i].passMode;        // original declaration pass mode
-		ParamPassMode argPassMode   = this.ast.args[argListIdx].passMode; // call site pass mode
-		if (expectedType.hadError)
-		{
-			*out = expectedType;
-			return true;
-		}
-		if (!common::type_info_matches(argType.value, expectedType.value))
-		{
-			*out = this.type_error(ErrorKind.TYPE_MISMATCH, argType.value, expectedType.value, span);
-			return true;
-		}
-		// In/inout must match between the declaration and call
-		if (paramPassMode != argPassMode)
-		{
-			*out = this.type_error(ErrorKind.PASS_MODE_MISMATCH, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
-			return true;
-		}
-		// If parameter was passed as inout but is readonly, error
-		if (paramPassMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
-		{
-			*out = this.type_error(ErrorKind.MEMBER_IS_READONLY, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
-			return true;
-		}
-	}
-
-	this.symbolTable.callTargets[callExprIdx].kind = CallTargetKind.METHOD;
-	this.symbolTable.callTargets[callExprIdx].methodId = { .structDeclIdx = structDeclIdx, .methodIdx = methodIdx };
-	*out = this.create_type_from_ast(&method.returnType, span);
+	if (methodIdx == parser::NO_IDX) return false;
+	FunctionAnalysisInfo* method = this.symbolTable.find_method({ .structDeclIdx = structDeclIdx, .methodIdx = methodIdx });
+	assert(method != null);
+	*out = this.analyze_call_arguments(callExprIdx, method.symbolIdx, receiverExprIdx);
 	return true;
 }
 
-fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnDecl, DeclIdx ownerDeclIdx)
+fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, Decl* decl, DeclIdx ownerDeclIdx)
 {
+	FnDeclAst* fnDecl          = &decl.fnDecl;
 	Span fnSpan                = this.ast.statements[fnDecl.body].span;
 	TypeResult expectedRetType = this.create_type_from_ast(&fnDecl.returnType, fnSpan);
 	if (expectedRetType.hadError)
 	{
 		return expectedRetType;
 	}
-	debug::@log_analysis("fn '%s', expects '%s' return type", this.ast.names[fnDecl.nameIdx].text(), expectedRetType.value.type);
+	debug::@log_analysis("fn '%s', expects '%s' return type", this.ast.names[decl.nameIdx].text(), expectedRetType.value.type);
 	List{StmtIdx}* stmtsIndices = &this.ast.statements[fnDecl.body].blockStmt.stmts;
 
 	this.begin_scope(expectedRetType, false);
@@ -313,16 +344,7 @@ fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, FnDeclAst* fnD
 	SymbolIdx prevReceiverSymbolIdx = this.currentReceiverSymbolIdx;
 	this.currentStructDeclIdx = parser::NO_IDX;
 	this.currentReceiverSymbolIdx = NO_SYMBOL;
-	int paramsStart       = (int)this.symbolTable.declParamSymbols.len();
-	TypeResult paramsType = this.declare_params(&fnDecl.params);
-	if (paramsType.hadError)
-	{
-		return paramsType;
-	}
-	this.symbolTable.declParamRanges[ownerDeclIdx] = {
-		.start = paramsStart,
-		.end = (int)this.symbolTable.declParamSymbols.len(),
-	};
+	this.bind_params(this.symbolTable.declSymbols[ownerDeclIdx]);
 	// Scan and analyze all statments in the function
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
@@ -362,49 +384,11 @@ fn TypeResult SemanticAnalyzer.analyze_method(SemanticAnalyzer* this, MethodDecl
 	SymbolIdx prevReceiverSymbolIdx = this.currentReceiverSymbolIdx;
 	this.currentStructDeclIdx = methodDecl.structIdx;
 
-	Decl* structDecl = &this.ast.declarations[methodDecl.structIdx];
-	TypeAst receiverTypeAst = {
-		.tokenType = TokenType.IDENTIFIER,
-		.arraySize = common::NO_LENGTH,
-		.nameIdx = structDecl.structDecl.nameIdx,
-	};
-	TypeResult receiverType = this.create_type_from_ast(&receiverTypeAst, methodSpan);
-	if (receiverType.hadError)
-	{
-		return receiverType;
-	}
+	FunctionAnalysisInfo* methodInfo = this.symbolTable.find_method({ .structDeclIdx = methodDecl.structIdx, .methodIdx = methodIdx });
+	assert(methodInfo != null);
+	this.currentReceiverSymbolIdx = methodInfo.receiverSymbolIdx;
+	this.bind_params(methodInfo.symbolIdx);
 
-	int paramsStart             = (int)this.symbolTable.declParamSymbols.len();
-	SymbolIdx receiverSymbolIdx = this.symbols_len();
-	Symbol receiverSymbol = {
-		.kind = SymbolKind.RECEIVER,
-		.idx = NO_SYMBOL,
-		.type = receiverType.value,
-		.passMode = ParamPassMode.INOUT,
-	};
-	this.symbolTable.symbols.push(receiverSymbol);
-	this.symbolTable.declParamSymbols.push(receiverSymbolIdx);
-	this.currentReceiverSymbolIdx = receiverSymbolIdx;
-
-	TypeResult paramsType = this.declare_params(&methodDecl.params);
-
-	if (paramsType.hadError)
-	{
-		return paramsType;
-	}
-	MethodAnalysisInfo methodInfo = {
-		.id = {
-			.structDeclIdx = methodDecl.structIdx,
-			.methodIdx = methodIdx,
-		},
-		.paramRange = {
-			.start = paramsStart,
-			.end = (int)this.symbolTable.declParamSymbols.len(),
-		},
-		.receiverSymbolIdx = receiverSymbolIdx,
-		.returnType = expectedRetType.value,
-	};
-	this.symbolTable.methods.push(methodInfo);
 	this.currentReturnType = expectedRetType.value;
 	this.returnFound = false;
 
@@ -435,7 +419,7 @@ fn DeclIdx SemanticAnalyzer.find_struct_decl_idx(SemanticAnalyzer* this, int str
 	{
 		int index = (int)idx;
 		if (decl.kind != DeclKind.STRUCT) continue;
-		String structName = this.ast.names[decl.structDecl.nameIdx].text();
+		String structName = this.ast.names[decl.nameIdx].text();
 		if (!globals::structNamesToIdx.has_key(structName)) continue;
 		int? indexInStructNames = globals::structNamesToIdx.get(structName);
 		if (catch err = indexInStructNames) continue;
@@ -468,111 +452,96 @@ fn TypeResult SemanticAnalyzer.analyze_stmt(SemanticAnalyzer* this, StmtIdx stmt
 		case StmtKind.EXPR: return this.analyze_expr(stmt.exprStmt);
 		case StmtKind.ECHO: return this.analyze_expr(stmt.echoStmt);
 		case StmtKind.DECL:
-
+			TypeResult lhsType = this.create_type_from_ast(&stmt.varDecl.type, stmt.span);
+			if (lhsType.hadError) return lhsType;
+			SymbolIdx symbolIdx = this.symbols_len();
+			Symbol symbol = { .kind = SymbolKind.LOCAL, .name = this.ast.names[stmt.varDecl.nameIdx], .stmtIdx = stmtIdx, .type = lhsType.value };
+			this.symbolTable.symbols.push(symbol);
+			this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
+			this.current_scope().visibleSymbols.push(symbolIdx);
+			debug::@log_analysis("statement %s: %s is of type %s", stmt.kind, this.ast.names[stmt.varDecl.nameIdx].text(), lhsType.value.type);
+			if (stmt.varDecl.init != parser::NO_IDX)
 			{
-				TypeResult lhsType = this.create_type_from_ast(&stmt.varDecl.type, stmt.span);
-				if (lhsType.hadError) return lhsType;
-				SymbolIdx symbolIdx = this.symbols_len();
-				Symbol symbol       = { .kind = SymbolKind.LOCAL, .idx = stmtIdx, .type = lhsType.value };
-				this.symbolTable.symbols.push(symbol);
-				this.symbolTable.stmtSymbols[stmtIdx] = symbolIdx;
-				this.current_scope().visibleSymbols.push(symbolIdx);
-				debug::@log_analysis("statement %s: %s is of type %s", stmt.kind, this.ast.names[stmt.varDecl.nameIdx].text(), lhsType.value.type);
-				if (stmt.varDecl.init != parser::NO_IDX)
+				Expr* initExpr     = &this.ast.expressions[stmt.varDecl.init];
+				TypeResult rhsType = this.analyze_expr(stmt.varDecl.init);
+				if (rhsType.hadError)
 				{
-					Expr* initExpr     = &this.ast.expressions[stmt.varDecl.init];
-					TypeResult rhsType = this.analyze_expr(stmt.varDecl.init);
-					if (rhsType.hadError)
-					{
-						return rhsType;
-					}
-					if (common::type_info_matches(lhsType.value, rhsType.value))
-					{
-						return type_ok(lhsType.value);
-					}
-
-					return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
+					return rhsType;
 				}
-				return type_ok(lhsType.value);
+				if (common::type_info_matches(lhsType.value, rhsType.value))
+				{
+					return type_ok(lhsType.value);
+				}
+
+				return this.type_error(ErrorKind.TYPE_MISMATCH, rhsType.value, lhsType.value, initExpr.span);
 			}
+			return type_ok(lhsType.value);
 		case StmtKind.BLOCK:
-
+			// Same as function, scan and analyze all statements
+			bool insideMethod = this.is_in_method();
+			TypeResult scopeReturnType = type_ok(this.currentReturnType);
+			this.begin_scope(scopeReturnType, insideMethod);
+			foreach (childIdx : stmt.blockStmt.stmts)
 			{
-				// Same as function, scan and analyze all statements
-				bool insideMethod          = this.is_in_method();
-				TypeResult scopeReturnType = type_ok(this.currentReturnType);
-				this.begin_scope(scopeReturnType, insideMethod);
-				foreach (childIdx : stmt.blockStmt.stmts)
-				{
-					TypeResult result = this.analyze_stmt(childIdx);
+				TypeResult result = this.analyze_stmt(childIdx);
 
-					if (result.hadError)
-					{
-						return result;
-					}
+				if (result.hadError)
+				{
+					return result;
 				}
-				this.end_scope();
-				return type_ok(make_type(ValueType.NULL));
 			}
+			this.end_scope();
+			return type_ok(make_type(ValueType.NULL));
 		case StmtKind.IF:
-
+			TypeInfo boolType = make_type(ValueType.BOOL);
+			Expr* condExpr = &this.ast.expressions[stmt.ifStmt.cond];
+			TypeResult condType = this.analyze_expr(stmt.ifStmt.cond);
+			if (condType.hadError) return condType;
+			if (condType.value.type != ValueType.BOOL)
 			{
-				TypeInfo boolType   = make_type(ValueType.BOOL);
-				Expr* condExpr      = &this.ast.expressions[stmt.ifStmt.cond];
-				TypeResult condType = this.analyze_expr(stmt.ifStmt.cond);
-				if (condType.hadError) return condType;
-				if (condType.value.type != ValueType.BOOL)
-				{
-					return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
-				}
-				TypeResult thenType = this.analyze_stmt(stmt.ifStmt.thenBlock);
-				if (thenType.hadError) return thenType;
-				if (stmt.ifStmt.elseBlock != parser::NO_IDX)
-				{
-					TypeResult elseType = this.analyze_stmt(stmt.ifStmt.elseBlock);
-					if (elseType.hadError) return elseType;
-				}
-				return type_ok(make_type(ValueType.NULL));
+				return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
 			}
+			TypeResult thenType = this.analyze_stmt(stmt.ifStmt.thenBlock);
+			if (thenType.hadError) return thenType;
+			if (stmt.ifStmt.elseBlock != parser::NO_IDX)
+			{
+				TypeResult elseType = this.analyze_stmt(stmt.ifStmt.elseBlock);
+				if (elseType.hadError) return elseType;
+			}
+			return type_ok(make_type(ValueType.NULL));
 		case StmtKind.WHILE:
-
+			TypeInfo boolType = make_type(ValueType.BOOL);
+			Expr* condExpr = &this.ast.expressions[stmt.whileStmt.cond];
+			TypeResult condType = this.analyze_expr(stmt.whileStmt.cond);
+			if (condType.hadError) return condType;
+			if (condType.value.type != ValueType.BOOL)
 			{
-				TypeInfo boolType   = make_type(ValueType.BOOL);
-				Expr* condExpr      = &this.ast.expressions[stmt.whileStmt.cond];
-				TypeResult condType = this.analyze_expr(stmt.whileStmt.cond);
-				if (condType.hadError) return condType;
-				if (condType.value.type != ValueType.BOOL)
-				{
-					return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
-				}
-				this.currentLoopDepth++;
-				TypeResult bodyTypeResult = this.analyze_stmt(stmt.whileStmt.body);
-				this.currentLoopDepth--;
-				return bodyTypeResult;
+				return this.type_error(ErrorKind.TYPE_MISMATCH, condType.value, boolType, condExpr.span);
 			}
+			this.currentLoopDepth++;
+			TypeResult bodyTypeResult = this.analyze_stmt(stmt.whileStmt.body);
+			this.currentLoopDepth--;
+			return bodyTypeResult;
 		case StmtKind.RETURN:
-
+			this.returnFound = true;
+			if (stmt.retStmt.value == parser::NO_IDX)
 			{
-				this.returnFound = true;
-				if (stmt.retStmt.value == parser::NO_IDX)
+				if (this.currentReturnType.type != ValueType.NULL)
 				{
-					if (this.currentReturnType.type != ValueType.NULL)
-					{
-						return this.type_error(ErrorKind.TYPE_MISMATCH, nullType, this.currentReturnType, stmt.span);
-					}
-					return type_ok(nullType);
+					return this.type_error(ErrorKind.TYPE_MISMATCH, nullType, this.currentReturnType, stmt.span);
 				}
-				TypeResult valueType = this.analyze_expr(stmt.retStmt.value);
-				if (valueType.hadError)
-				{
-					return valueType;
-				}
-				if (!common::type_info_matches(this.currentReturnType, valueType.value))
-				{
-					return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
-				}
-				return type_ok(valueType.value);
+				return type_ok(nullType);
 			}
+			TypeResult valueType = this.analyze_expr(stmt.retStmt.value);
+			if (valueType.hadError)
+			{
+				return valueType;
+			}
+			if (!common::type_info_matches(this.currentReturnType, valueType.value))
+			{
+				return this.type_error(ErrorKind.TYPE_MISMATCH, valueType.value, this.currentReturnType, stmt.span);
+			}
+			return type_ok(valueType.value);
 		case StmtKind.BREAK:
 			if (this.currentLoopDepth == 0)
 			{
@@ -671,56 +640,22 @@ fn bool SemanticAnalyzer.try_resolve_visible_symbol(SemanticAnalyzer* this, Inte
 		Stack{SymbolIdx}* visibleSymbols = &this.scopes.items[scopeIdx].visibleSymbols;
 		for (sz i = (sz)visibleSymbols.size - 1; i >= 0; i--)
 		{
-			SymbolIdx symbolIdx = visibleSymbols.items[i];
-			Symbol* symbol      = &this.symbolTable.symbols[symbolIdx];
-			if (symbol.kind == SymbolKind.LOCAL)
-			{
-				Stmt* declStmt = &this.ast.statements[(StmtIdx)symbol.idx];
-				if (declStmt.kind != StmtKind.DECL) continue;
-				InternedString declName = this.ast.names[declStmt.varDecl.nameIdx];
-				if (declName.id == name.id)
-				{
-					*outSymbolIdx = symbolIdx;
-					return true;
-				}
-			}
-			else if (symbol.kind == SymbolKind.PARAM)
-			{
-				InternedString declName = this.ast.names[symbol.idx];
-				if (declName.id == name.id)
-				{
-					*outSymbolIdx = symbolIdx;
-					return true;
-				}
-			}
+			SymbolIdx symbolIdx       = visibleSymbols.items[i];
+			Symbol* symbol            = &this.symbolTable.symbols[symbolIdx];
+			InternedString symbolName = symbol.name;
+			*outSymbolIdx = symbolIdx;
+			if (symbolName.id == name.id) return true;
 		}
 		scopeIdx = this.scopes.items[scopeIdx].enclosingIdx;
 	}
 	Stack{SymbolIdx}* globalScopeSymbols = &this.scopes.items[0].visibleSymbols;
 	for (sz i = (sz)globalScopeSymbols.size - 1; i >= 0; i--)
 	{
-		SymbolIdx symbolIdx = globalScopeSymbols.items[i];
-		Symbol* symbol      = &this.symbolTable.symbols[symbolIdx];
-		if (symbol.kind == SymbolKind.FUNCTION)
-		{
-			Decl* decl              = &this.ast.declarations[(DeclIdx)symbol.idx];
-			InternedString declName = this.ast.names[decl.fnDecl.nameIdx];
-			if (declName.id == name.id)
-			{
-				*outSymbolIdx = symbolIdx;
-				return true;
-			}
-		}
-		else if (symbol.kind == SymbolKind.GLOBAL_VAR)
-		{
-			Stmt* stmt              = &this.ast.statements[(StmtIdx)symbol.idx];
-			InternedString declName = this.ast.names[stmt.varDecl.nameIdx];
-			if (declName.id == name.id)
-			{
-				*outSymbolIdx = symbolIdx;
-				return true;
-			}
-		}
+		SymbolIdx symbolIdx       = globalScopeSymbols.items[i];
+		Symbol* symbol            = &this.symbolTable.symbols[symbolIdx];
+		InternedString symbolName = symbol.name;
+		*outSymbolIdx = symbolIdx;
+		if (symbolName.id == name.id) return true;
 	}
 	return false;
 }
@@ -903,8 +838,7 @@ fn bool SemanticAnalyzer.is_place_expr(SemanticAnalyzer* this, ExprIdx exprIdx)
 
 fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx exprIdx)
 {
-	Expr* expr = &this.ast.expressions[exprIdx];
-	this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
+	Expr* expr       = &this.ast.expressions[exprIdx];
 	// Method calls: resolve against struct methods before treating as free function calls.
 	Expr* calleeExpr = &this.ast.expressions[expr.call.callee];
 	if (calleeExpr.kind == ExprKind.MEMBER)
@@ -921,13 +855,12 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 			DeclIdx structDeclIdx     = this.find_struct_decl_idx(baseInfo.structTypeIndex);
 			InternedString methodName = this.ast.names[calleeExpr.member.memberIdx];
 			TypeResult resolved       = { };
-			if (this.try_resolve_method_call(structDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved))
+			if (this.try_resolve_method_call(structDeclIdx, methodName, exprIdx, calleeExpr.member.base, &resolved))
 			{
 				if (!resolved.hadError && !this.is_place_expr(calleeExpr.member.base))
 				{
 					return this.type_error(ErrorKind.INVALID_METHOD_RECEIVER, baseInfo, baseInfo, expr.span);
 				}
-				this.symbolTable.callReceiverExpr[exprIdx] = calleeExpr.member.base;
 				return resolved;
 			}
 		}
@@ -936,9 +869,8 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 	{
 		InternedString methodName = this.ast.names[calleeExpr.varExpr];
 		TypeResult resolved       = { };
-		if (this.try_resolve_method_call(this.currentStructDeclIdx, methodName, &expr.call, exprIdx, expr.span, &resolved))
+		if (this.try_resolve_method_call(this.currentStructDeclIdx, methodName, exprIdx, parser::NO_IDX, &resolved))
 		{
-			this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
 			return resolved;
 		}
 	}
@@ -949,51 +881,69 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 		return calleeType;
 	}
 
-	// Get the function symbol, we need some extra data from the declaration
 	SymbolIdx symbolIdx = this.symbolTable.exprSymbols[expr.call.callee];
-	if (symbolIdx != NO_SYMBOL && this.symbolTable.symbols[symbolIdx].kind == SymbolKind.FUNCTION)
-	{
-		// Add extra info to the symbol table, useful in later passes
-		this.symbolTable.callTargets[exprIdx].kind = CallTargetKind.FREE_FUN;
-		this.symbolTable.callTargets[exprIdx].fnDeclIdx = this.symbolTable.symbols[symbolIdx].idx;
-		this.symbolTable.callReceiverExpr[exprIdx] = parser::NO_IDX;
-
-
-		Symbol* calleeSymbol = &this.symbolTable.symbols[symbolIdx];
-		FnDeclAst* fnDecl    = &this.ast.declarations[calleeSymbol.idx].fnDecl;
-		int argCount         = expr.call.argsEnd - expr.call.argsStart;
-		// Check argument count matchest he declaration
-		if (argCount != (int)fnDecl.params.len()) return this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, expr.span);
-		for (sz i = expr.call.argsStart; i < expr.call.argsEnd; i++)
-		{
-			sz paramIdx                 = i - expr.call.argsStart;
-			ParamPassMode paramPassMode = fnDecl.params[paramIdx].passMode; // original declaration pass mode
-			ExprIdx argExprIdx          = this.ast.args[i].exprIdx;
-			ParamPassMode argPassMode   = this.ast.args[i].passMode;        // call site pass mode
-
-			// Analyze the argument.
-			TypeResult argType = this.analyze_expr(argExprIdx);
-			if (argType.hadError)
-			{
-				return argType;
-			}
-			// In/inout must match between the declaration and call
-			if (paramPassMode != argPassMode)
-			{
-				return this.type_error(ErrorKind.PASS_MODE_MISMATCH, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
-			}
-			// If it was passed as inout but was readonly, error
-			if (paramPassMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
-			{
-				return this.type_error(ErrorKind.MEMBER_IS_READONLY, argType.value, argType.expected, this.ast.expressions[argExprIdx].span);
-			}
-		}
-		return type_ok(this.symbolTable.symbols[symbolIdx].type);
-	}
-	else
+	if (symbolIdx == NO_SYMBOL || this.symbolTable.symbols[symbolIdx].kind != SymbolKind.FUNCTION)
 	{
 		return this.type_error(ErrorKind.INVALID_CALL, nullType, nullType, expr.span);
 	}
+	return this.analyze_call_arguments(exprIdx, symbolIdx, parser::NO_IDX);
+}
+
+fn TypeResult SemanticAnalyzer.analyze_call_arguments(SemanticAnalyzer* this, ExprIdx callExprIdx, SymbolIdx functionSymbolIdx, ExprIdx receiverExprIdx)
+{
+	Expr* expr                = &this.ast.expressions[callExprIdx];
+	Symbol functionSymbol     = this.symbolTable.symbols[functionSymbolIdx];
+	FunctionAnalysisInfo info = this.symbolTable.functions[functionSymbol.funcIdx];
+	SymbolIdx[] params        = info.params;
+	int paramOffset           = info.kind == CallTargetKind.METHOD ? 1 : 0;
+	int argCount              = expr.call.argsEnd - expr.call.argsStart;
+	if (argCount != (int)params.len - paramOffset)
+	{
+		return this.type_error(ErrorKind.INVALID_ARITY, nullType, nullType, expr.span);
+	}
+	for (int i = 0; i < argCount; i++)
+	{
+		Symbol param       = this.symbolTable.symbols[params[(sz)(i + paramOffset)]];
+		ExprIdx argListIdx = expr.call.argsStart + i;
+		TypeResult result;
+		if (this.analyze_function_argument(param.type, this.ast.args[argListIdx].exprIdx, this.ast.args[argListIdx].passMode, param.passMode, &result)) return result;
+	}
+	this.symbolTable.callTargets[callExprIdx] = {
+		.functionSymbolIdx = functionSymbolIdx,
+		.receiverExprIdx = receiverExprIdx,
+	};
+	return type_ok(info.returnType);
+}
+
+faultdef NO_TYPE_ERROR;
+fn bool SemanticAnalyzer.analyze_function_argument(SemanticAnalyzer* this, TypeInfo expectedType, ExprIdx argExprIdx, ParamPassMode argPassMode, ParamPassMode paramPassMode, TypeResult* result)
+{
+	*result = this.analyze_expr(argExprIdx);
+
+	if (result.hadError)
+	{
+		return true;
+	}
+	// Expected type and real type doens't match
+	if (!common::type_info_matches(expectedType, result.value))
+	{
+		*result = this.type_error(ErrorKind.TYPE_MISMATCH, result.value, expectedType, this.ast.expressions[argExprIdx].span);
+		return true;
+	}
+	// In/inout must match between the declaration and call
+	if (paramPassMode != argPassMode)
+	{
+		*result = this.type_error(ErrorKind.PASS_MODE_MISMATCH, result.value, result.expected, this.ast.expressions[argExprIdx].span);
+		return true;
+	}
+	// If it was passed as inout but was readonly, error
+	if (paramPassMode == ParamPassMode.INOUT && this.is_expression_readonly(argExprIdx))
+	{
+		*result = this.type_error(ErrorKind.MEMBER_IS_READONLY, result.value, result.expected, this.ast.expressions[argExprIdx].span);
+		return true;
+	}
+
+	return false;
 }
 
 fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprIdx exprIdx)

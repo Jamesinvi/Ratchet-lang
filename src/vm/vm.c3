@@ -78,7 +78,7 @@ fn void Vm.init(Vm* this, BCProgram* program, OutStream output)
 
 fn RunResult Vm.execute_program(Vm* vm)
 {
-	if (vm.program.functions.len() == 0)
+	if (vm.program.functions.len() == 0 || vm.program.entryFunctionIdx < 0)
 	{
 		return RunResult.OK;
 	}
@@ -225,6 +225,7 @@ fn RunResult Vm.execute_program(Vm* vm)
 			case BCOpCode.BRANCH_IF_FALSE: vm.branch_if_false(inst);
 			case BCOpCode.JUMP: vm.jump(inst);
 			case BCOpCode.CALL: vm.call(inst);
+			case BCOpCode.CALL_NATIVE: vm.call_native(inst);
 			case BCOpCode.RETURN: vm.execute_return(inst);
 			default:
 				log::errlog("%s not currently supported", inst.opCode);
@@ -605,6 +606,43 @@ fn void Vm.call(Vm* vm, BCInstruction* inst)
 			mem::copy(dst, src, (sz)arg.size, 1, 1);
 		}
 	}
+}
+
+fn void Vm.call_native(Vm* vm, BCInstruction* inst)
+{
+	BCCallInfo callInfo  = vm.program.callInfos[inst.callInfoIdx];
+	NativeCall* nativeFn = &common::nativeFunctions[callInfo.nativeFnIdx];
+	short argumentCount  = callInfo.argsEnd - callInfo.argsStart;
+	assert(argumentCount == nativeFn.params.len);
+	@pool()
+	{
+		// Allocate temporary array for arguments
+		NativeRuntimeCallArg[] arguments = mem::talloc_array(NativeRuntimeCallArg, argumentCount);
+		for (sz i = 0; i < argumentCount; i++)
+		{
+			BCCallArg* arg = &vm.program.callArgs[(sz)callInfo.argsStart + i];
+			Byte* storage  = &vm.stack[vm.frame.base + arg.callerOffset];
+			if (arg.isBorrow)
+			{
+				if (arg.callerIsBorrow) storage = (Byte*)*(uptr*)storage;
+				storage += arg.projectionOffset;
+			}
+			// Reference values use the address of their pointer slot, just like other values.
+			arguments[i] = { .type = nativeFn.params[i].type, .data = storage };
+		}
+		// If return type is null call with empty result array
+		if (nativeFn.returnType.type == ValueType.NULL)
+		{
+			nativeFn.function(vm, arguments, { });
+		}
+		else
+		{
+			// Create the array to store the result for the native function
+			NativeRuntimeCallArg[1] resultStorage;
+			resultStorage[0] = { .type = nativeFn.returnType, .data = &vm.stack[vm.frame.base + callInfo.returnDestOffset] };
+			nativeFn.function(vm, arguments, &resultStorage);
+		}
+	};
 }
 
 fn void Vm.execute_return(Vm* vm, BCInstruction* inst)

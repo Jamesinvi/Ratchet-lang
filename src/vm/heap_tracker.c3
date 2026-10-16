@@ -88,6 +88,22 @@ fn ArrayHandle* HeapTracker.alloc_array(HeapTracker* this, TypeInfoIdx typeInfoI
 	return result;
 }
 
+fn void HeapTracker.realloc_array(HeapTracker* this, ArrayHandle* handle, TypeInfo arrayType)
+{
+	TypeInfo elementType = arrayType.element_type();
+	int elementSize      = elementType.size();
+	int alignment        = elementType.alignment();
+	// Allocate the handle using our allocator
+	void* oldBuffer      = handle.buffer;
+	sz oldAllocSize      = handle.capacity;
+	handle.buffer = this.alloc_raw((sz)handle.capacity * 2 * elementSize, alignment);
+	mem::copy(handle.buffer, oldBuffer, (sz)handle.length * elementSize);
+	handle.capacity *= 2;
+	free(oldBuffer);
+	this.size -= oldAllocSize * elementSize;
+}
+
+
 fn void* HeapTracker.alloc_raw(HeapTracker* this, sz size, int alignment)
 {
 	this.size += size;

@@ -85,6 +85,7 @@ enum BCOpCode : char (String asStr)
 	JUMP            { "jump_____" },
 	BRANCH_IF_FALSE { "br_false_" },
 	CALL            { "call_____" },
+	CALL_NATIVE     { "call__nat" },
 	RETURN          { "return___" },
 	ECHOI           { "echo____i" },
 	ECHOF           { "echo____f" },
@@ -221,7 +222,11 @@ struct BCGlobalSlot
 
 struct BCCallInfo
 {
-	BCFunctionIdx calleeIdx;
+	union
+	{
+		BCFunctionIdx calleeIdx;
+		NativeFnIdx nativeFnIdx;
+	}
 	BCArgIdx argsStart;
 	BCArgIdx argsEnd;
 	short returnDestOffset; // caller-frame offset, or NO_OFFSET if discarded
@@ -270,6 +275,7 @@ struct BCProgram
 
 fn void BCProgram.init(BCProgram* this, Allocator allocator)
 {
+	this.entryFunctionIdx = -1;
 	this.functions.init(allocator);
 	this.globalSlots.init(allocator);
 	this.globalInitialData.init(allocator);
@@ -394,7 +400,15 @@ fn void BCProgram.print_immediate(BCProgram* this, BCInstruction inst)
 		case BCOperandKind.IMM_DOUBLE: log::log("%s", inst.immDouble);
 		case BCOperandKind.IMM_BOOL: log::log("%s", inst.immBool);
 		case BCOperandKind.IMM_STRING: log::log("%s", this.strings[inst.immStringIdx]);
-		case BCOperandKind.FUNCTION: log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
+		case BCOperandKind.FUNCTION:
+			if (inst.opCode == BCOpCode.CALL_NATIVE)
+			{
+				log::log("native_%s", this.callInfos[inst.callInfoIdx].nativeFnIdx);
+			}
+			else
+			{
+				log::log("function_%s", this.callInfos[inst.callInfoIdx].calleeIdx);
+			}
 		case BCOperandKind.IMM_NULL: log::log("null");
 		case BCOperandKind.BLOCK: log::log("block_%s", inst.blockToJumpTo);
 		case BCOperandKind.SIZE: log::log("move %s bytes", inst.byteCount);

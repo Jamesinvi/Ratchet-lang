@@ -1,0 +1,4 @@
+fn bool program() {
+    echo sqrtf(25);
+    return false;
+}

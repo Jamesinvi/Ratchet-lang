@@ -16,6 +16,7 @@ const NO_REG        = -1;
 const NO_TERMINATOR = -1;
 const NO_BLOCK      = -1;
 const NO_METHOD     = -1;
+const NO_NATIVE_FN  = -1;
 const NO_FUNCTION   = -1;
 
 bitstruct MirRegisterFlags : char
@@ -157,13 +158,23 @@ struct MirBlock
 
 struct MirFunction
 {
+	SymbolIdx symbolIdx;
+	TypeInfo returnType;
 	MirBlockIdx blocksStart;
 	MirBlockIdx blocksEnd;
-	DeclIdx sourceDeclIdx; // function decl, or owning struct decl for a method
-	int sourceMethodIdx; // NO_METHOD for a free function
-	DeclParamRange paramRange;
-	TypeInfo returnType;
-	SymbolIdx receiverSymbolIdx; // NO_SYMBOL for a free function
+	SymbolIdx[] params;
+	union
+	{
+		DeclIdx sourceFnDecl;
+		DeclIdx sourceStructDecl;
+	}
+	union
+	{
+		int sourceMethodIdx; // NO_METHOD for a free function
+		NativeFnIdx nativeFnIdx; // Active when kind is NATIVE_FUN.
+	}
+	SymbolIdx receiverSymbolIdx; // NO_SYMBOL unless this is a method.
+	CallTargetKind kind;
 }
 
 struct MirGlobal
@@ -203,7 +214,7 @@ fn void MirProgram.print(MirProgram* this, ProgramAst* ast, SymbolTable* symbols
 	log::logn("globals: ");
 	foreach (globalIdx, &global : this.globals)
 	{
-		StmtIdx stmtIdx     = (StmtIdx)symbols.symbols[global.symbolIdx].idx;
+		StmtIdx stmtIdx     = symbols.symbols[global.symbolIdx].stmtIdx;
 		Stmt* globalDecl    = &ast.statements[stmtIdx];
 		InternedString name = ast.names[globalDecl.varDecl.nameIdx];
 		log::log("  %s %s", ast.names[globalDecl.varDecl.type.nameIdx].text(), name.text());
@@ -237,16 +248,21 @@ fn void MirProgram.print_function_name(MirProgram* this, MirFunctionIdx function
 		return;
 	}
 	MirFunction* function = &this.functions[functionIdx];
-	Decl* sourceDecl      = &ast.declarations[function.sourceDeclIdx];
-	if (function.sourceMethodIdx != NO_METHOD)
+	if (function.kind == CallTargetKind.NATIVE_FUN)
+	{
+		log::log("%s", common::nativeFunctions[function.nativeFnIdx].name);
+		return;
+	}
+	Decl* sourceDecl = &ast.declarations[function.sourceFnDecl];
+	if (function.kind == CallTargetKind.METHOD)
 	{
 		MethodDeclAst* method     = &sourceDecl.structDecl.methods[function.sourceMethodIdx];
-		InternedString structName = ast.names[sourceDecl.structDecl.nameIdx];
+		InternedString structName = ast.names[sourceDecl.nameIdx];
 		InternedString methodName = ast.names[method.nameIdx];
 		log::log("%s.%s", structName.text(), methodName.text());
 		return;
 	}
-	log::log("%s", ast.names[sourceDecl.fnDecl.nameIdx].text());
+	log::log("%s", ast.names[sourceDecl.nameIdx].text());
 }
 
 

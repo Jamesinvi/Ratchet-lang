@@ -289,7 +289,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 		// Not predeclared (unexpected), create a fresh one
 		Decl decl = { .kind = DeclKind.STRUCT };
 		decl.structDecl = { };
-		decl.structDecl.nameIdx = this.push_name_get_idx(name);
+		decl.nameIdx = this.push_name_get_idx(name);
 		decl.structDecl.fields.init(this.outputAllocator);
 		declIdx = this.push_decl_get_idx(&decl);
 		globals::declaredStructs.set(name, declIdx);
@@ -306,7 +306,7 @@ fn DeclIdx Parser.struct_declaration(Parser* this)
 		return declIdx;
 	}
 	// Ensure fields list is initialized
-	decl.structDecl.nameIdx = this.push_name_get_idx(name);
+	decl.nameIdx = this.push_name_get_idx(name);
 	decl.structDecl.fields.init(this.outputAllocator);
 	decl.structDecl.methods.init(this.outputAllocator);
 
@@ -441,6 +441,7 @@ fn DeclIdx Parser.fun_declaration(Parser* this)
 	// function name
 	this.consume(TokenType.IDENTIFIER, "Expected function name after return type");
 	String fnName = this.previous.value();
+	Span span     = { .line = this.previous.line };
 
 	// must exist from predeclaration
 	DeclIdx? declIdxOpt = globals::declaredFunctions.get(fnName);
@@ -452,7 +453,7 @@ fn DeclIdx Parser.fun_declaration(Parser* this)
 
 	DeclIdx declIdx = declIdxOpt;
 	Decl* decl      = &this.outputAst.declarations[declIdx];
-
+	decl.span = span;
 	// sanity
 	if (decl.kind != DeclKind.FUNCTION)
 	{

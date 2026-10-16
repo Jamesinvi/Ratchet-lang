@@ -185,7 +185,7 @@ fn null recordSale(inout Report report, Order order) {
     int shipping = policy.shipping(order.priority);
     int net = subtotal - discount;
     double tax = taxCharge(net, policy.taxRate);
-    updateTotals(report.totals, order, discount, shipping, tax);
+    updateTotals(inout report.totals, in order, discount, shipping, tax);
     report.revenue[order.sku] = report.revenue[order.sku] + net;
     report.checksum = report.checksum + net * (order.sku + 1);
 }
@@ -200,12 +200,12 @@ fn null rejectOrder(inout Report report, in Order order) {
 }
 
 fn bool processOrder(inout Inventory inventory, inout Report report, Order order) {
-    if (canFulfil(inventory, order) == false) {
-        rejectOrder(report, order);
+    if (canFulfil(in inventory, in order) == false) {
+        rejectOrder(inout report, in order);
         return false;
     }
-    reserve(inventory, order);
-    recordSale(report, order);
+    reserve(inout inventory, in order);
+    recordSale(inout report, order);
     return true;
 }
 
@@ -214,14 +214,14 @@ fn int processBatch(inout Inventory inventory, inout Report report, int seed) {
     int index = 0;
     while (index < inventory.initial.length) {
         Order order = makeOrder(seed, index);
-        if (processOrder(inventory, report, order)) {
+        if (processOrder(inout inventory, inout report, order)) {
             accepted = accepted + 1;
         }
         index = index + 1;
     }
     Order invalid = makeOrder(seed, 0);
     invalid.sku = 0 - 1;
-    if (processOrder(inventory, report, invalid)) {
+    if (processOrder(inout inventory, inout report, invalid)) {
         return 0 - 1;
     }
     return accepted;
@@ -242,13 +242,13 @@ fn bool inventoryBalances(in Inventory inventory) {
         }
         index = index + 1;
     }
-    int acquired = totalInline(inventory.initial) + totalInline(inventory.replenished);
-    return acquired == totalStock(inventory.stock) + totalInline(inventory.sold);
+    int acquired = totalInline(in inventory.initial) + totalInline(in inventory.replenished);
+    return acquired == totalStock(inventory.stock) + totalInline(in inventory.sold);
 }
 
 fn bool revenueBalances(in Report report) {
     int net = report.totals.subtotal - report.totals.discounts;
-    if (totalInline(report.revenue) != net) {
+    if (totalInline(in report.revenue) != net) {
         return false;
     }
     double expectedTax = (net as double) * report.policy.taxRate;
@@ -307,39 +307,39 @@ fn bool checkInventoryCopy(in Inventory inventory) {
 }
 
 fn int scenarioScore(in Inventory inventory, in Report report, int accepted) {
-    if (inventoryBalances(inventory) == false or revenueBalances(report) == false) {
+    if (inventoryBalances(in inventory) == false or revenueBalances(in report) == false) {
         return 0 - 1;
     }
-    if (checkReportCopy(report) == false or checkInventoryCopy(inventory) == false) {
+    if (checkReportCopy(in report) == false or checkInventoryCopy(in inventory) == false) {
         return 0 - 2;
     }
     if (report.totals.accepted != accepted) {
         return 0 - 3;
     }
-    if (report.totals.units != totalInline(inventory.sold)) {
+    if (report.totals.units != totalInline(in inventory.sold)) {
         return 0 - 4;
     }
-    return reportDigest(report) + stockChecksum(inventory);
+    return reportDigest(in report) + stockChecksum(in inventory);
 }
 
 fn int runScenario(int seed, int batches) {
     Inventory inventory;
-    initializeInventory(inventory, seed);
+    initializeInventory(inout inventory, seed);
     Policy policy = makePolicy(seed);
     Report report;
     report.policy = new Policy& { policy };
-    if (checkPolicyAlias(report) == false) {
+    if (checkPolicyAlias(inout report) == false) {
         return 0 - 5;
     }
 
     int accepted = 0;
     int batch = 0;
     while (batch < batches) {
-        accepted = accepted + processBatch(inventory, report, seed + batch);
-        replenish(inventory, seed + batch);
+        accepted = accepted + processBatch(inout inventory, inout report, seed + batch);
+        replenish(inout inventory, seed + batch);
         batch = batch + 1;
     }
-    return scenarioScore(inventory, report, accepted);
+    return scenarioScore(in inventory, in report, accepted);
 }
 
 fn bool program() {

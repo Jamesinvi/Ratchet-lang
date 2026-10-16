@@ -150,7 +150,7 @@ fn void Parser.predeclare_structs(Parser* this)
 			Decl decl              = { .kind = DeclKind.STRUCT };
 			decl.structDecl = { };
 			NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
-			decl.structDecl.nameIdx = nameIdx;
+			decl.nameIdx = nameIdx;
 			DeclIdx declIdx = this.push_decl_get_idx(&decl);
 
 			// Also register ref/pointer spellings so type checks succeed on tokens like "vec3*" / "vec3&".
@@ -197,17 +197,12 @@ fn void Parser.predeclare_functions(Parser* this)
 			decl.fnDecl = { };
 			NameIdx nameIdx = this.push_name_get_idx(nameTok.value());
 			decl.fnDecl.returnType = returnTypeAst;
-			decl.fnDecl.nameIdx = nameIdx;
+			decl.nameIdx = nameIdx;
 			debug::@log_parse("pre-declaring function '%s' with return type {%s} (at index %s)", nameTok.value(), this.outputAst.names[returnTypeAst.nameIdx].text(), nameIdx);
 			DeclIdx declIdx = this.push_decl_get_idx(&decl);
 			globals::declaredFunctions.set(nameTok.value(), declIdx);
 		}
 	}
-}
-
-
-fn void Parser.predeclare_natives(Parser* this)
-{
 }
 
 fn ExprIdx Parser.push_expr_get_idx(Parser* this, Expr* expr)

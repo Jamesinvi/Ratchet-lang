@@ -117,9 +117,9 @@ fn int sourceTemperature(in HeatSource source, int step) {
 }
 
 fn null injectHeat(int[]& grid, in Simulation config, in HeatSource source, int step) {
-    if (inside(config, source.x, source.y)) {
+    if (inside(in config, source.x, source.y)) {
         int index = cellIndex(source.x, source.y, config.width);
-        grid[index] = sourceTemperature(source, step);
+        grid[index] = sourceTemperature(in source, step);
     }
 }
 
@@ -166,11 +166,11 @@ fn Statistics measureGrid(int[]& grid, in Simulation config) {
     Statistics stats;
     stats.minimum = grid[0];
     stats.maximum = grid[0];
-    int count = cellCount(config);
+    int count = cellCount(in config);
     int index = 0;
     while (index < count) {
         int value = grid[index];
-        includeSample(stats, value, index, config.ambient + 100);
+        includeSample(inout stats, value, index, config.ambient + 100);
         stats.energy = stats.energy + sampleEnergy(value, config.energyScale);
         index = index + 1;
     }
@@ -192,10 +192,10 @@ fn int compareGrids(int[]& left, int[]& right, int count) {
 }
 
 fn Statistics runSimulation(in Simulation config, HeatSource source) {
-    int count = cellCount(config);
+    int count = cellCount(in config);
     int[]& current = new int[count]&;
     int[]& next = new int[count]&;
-    seedGrid(current, config, 17);
+    seedGrid(current, in config, 17);
     copyGrid(current, next, count);
 
     HeatSource secondary = source;
@@ -205,19 +205,19 @@ fn Statistics runSimulation(in Simulation config, HeatSource source) {
     int changes = 0;
     int step = 0;
     while (step < config.steps) {
-        diffuseRows(current, next, config);
-        copyEdges(current, next, config);
-        injectHeat(next, config, source, step);
-        injectHeat(next, config, secondary, step);
-        coolEdges(next, config);
+        diffuseRows(current, next, in config);
+        copyEdges(current, next, in config);
+        injectHeat(next, in config, in source, step);
+        injectHeat(next, in config, in secondary, step);
+        coolEdges(next, in config);
         changes = changes + compareGrids(current, next, count);
         int[]& previous = current;
         current = next;
         next = previous;
-        moveSource(source, config, step);
+        moveSource(inout source, in config, step);
         step = step + 1;
     }
-    Statistics stats = measureGrid(current, config);
+    Statistics stats = measureGrid(current, in config);
     stats.checksum = stats.checksum + changes;
     return stats;
 }
@@ -234,10 +234,10 @@ fn bool program() {
     source.y = 3;
     source.temperature = 512;
     source.variation = 31;
-    Statistics first = runSimulation(config, source);
+    Statistics first = runSimulation(in config, source);
     config.ambient = 30;
     source.temperature = 768;
-    Statistics second = runSimulation(config, source);
+    Statistics second = runSimulation(in config, source);
     echo first.checksum + second.checksum + (second.energy as int);
     return false;
 }

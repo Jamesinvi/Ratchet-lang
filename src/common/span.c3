@@ -1,7 +1,10 @@
 module common;
+
+alias FileId = int;
+
 struct Span
 {
-	int tokenStart; // index into tokens list
+	FileId file;
 	int line;
 }
 

@@ -14,6 +14,20 @@ enum ParamPassMode : char (String asStr)
 	INOUT { "inout" },
 }
 
+enum CallTargetKind : char
+{
+	INVALID,
+	FREE_FUN,
+	METHOD,
+	NATIVE_FUN,
+}
+
+struct FunctionParameter
+{
+	TypeInfo type;
+	ParamPassMode passMode;
+}
+
 enum ValueType : char
 {
 	NULL,
@@ -102,6 +116,37 @@ fn bool TypeInfo.is_inline_array(TypeInfo* this) @inline
 	return this.type == ValueType.ARR_INLINE;
 }
 
+fn TypeInfo make_type_runtime(ValueType type) @inline
+{
+	return { .type = type, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH };
+}
+
+fn bool is_numeric_type(TypeInfo info)
+{
+	return info.type == ValueType.INT || info.type == ValueType.FLOAT || info.type == ValueType.DOUBLE;
+}
+
+fn TypeInfo make_ref_type_runtime(ValueType refToType, int structIndex) @inline
+{
+	return { .type = ValueType.REF, .refToType = refToType, .structTypeIndex = structIndex, .arraySize = common::NO_LENGTH };
+}
+
+fn bool TypeInfo.is_struct_ref_like(TypeInfo* this) @inline
+{
+	return (this.type == ValueType.REF || this.type == ValueType.PTR) && this.refToType == ValueType.STRUCT;
+}
+
+macro TypeInfo make_type(ValueType $type)
+{
+	return { .type = $type, .refToType = ValueType.NULL, .structTypeIndex = common::NOT_STRUCT, .arraySize = common::NO_LENGTH };
+}
+
+macro TypeInfo make_ref_type(ValueType $refToType, int structIndex)
+{
+	return { .type = ValueType.REF, .refToType = $refToType, .structTypeIndex = structIndex, .arraySize = common::NO_LENGTH };
+}
+
+
 fn bool TypeInfo.is_builtin(TypeInfo* this) @inline
 {
 	switch (this.type)
@@ -138,12 +183,6 @@ fn TypeInfo TypeInfo.element_type(TypeInfo* this)
 	out.arraySize = NO_LENGTH;
 	return out;
 }
-
-fn bool TypeInfo.is_struct_ref_like(TypeInfo* this) @inline
-{
-	return (this.type == ValueType.REF || this.type == ValueType.PTR) && this.refToType == ValueType.STRUCT;
-}
-
 
 fn bool type_info_matches(TypeInfo a, TypeInfo b)
 {

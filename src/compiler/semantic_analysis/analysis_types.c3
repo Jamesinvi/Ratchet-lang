@@ -1,5 +1,6 @@
 module compiler::analyzer;
 import std::collections::list;
+import std::collections::map;
 import compiler;
 import common;
 import debug;
@@ -7,6 +8,8 @@ import debug;
 
 alias SymbolIdx = int;
 alias MemberIdx = int;
+alias NativeFnIdx = int;
+alias FuncIdx = int;
 const NO_SYMBOL = -1;
 
 enum SymbolKind : char
@@ -21,16 +24,17 @@ enum SymbolKind : char
 
 struct Symbol
 {
-	SymbolIdx idx;
+	union
+	{
+		ExprIdx exprIdx;
+		DeclIdx declIdx;
+		StmtIdx stmtIdx;
+		FuncIdx funcIdx; // index into SymbolTable.functions for FUNCTION symbols
+	}
+	InternedString name;
 	TypeInfo type;
 	SymbolKind kind;
 	ParamPassMode passMode;
-}
-
-struct DeclParamRange
-{
-	int start;
-	int end;
 }
 
 struct SymbolTable
@@ -40,53 +44,51 @@ struct SymbolTable
 	List{TypeInfo} exprTypes; // index by ExprIdx
 	List{SymbolIdx} stmtSymbols; // index by StmtIdx
 	List{SymbolIdx} declSymbols; // index by DeclIdx
-	List{DeclParamRange} declParamRanges; // index by DeclIdx
-	List{MemberIdx} memberFieldIndices; // indexed by ExprIdx, -1 if not a member expr
-	List{SymbolIdx} declParamSymbols; // flat storage for function param symbols
-	List{CallTarget} callTargets; // index by ExprIdx
-	List{ExprIdx} callReceiverExpr; // index by ExprIdx (NO_IDX when absent)
-	List{Scope} scopes; // name -> SymbolIdx
-	List{MethodAnalysisInfo} methods; // semantic data for source methods
+	HashMap{ExprIdx, MemberIdx} memberFieldIndices;
+	HashMap{ExprIdx, CallTarget} callTargets;
+	List{FunctionAnalysisInfo} functions; // index by FuncIdx
 }
 
-fn MethodAnalysisInfo* SymbolTable.find_method(SymbolTable* this, MethodId id)
+fn TypeInfo SymbolTable.get_expression_type(SymbolTable* this, ExprIdx exprIdx) @inline
 {
-	foreach (&method : this.methods)
+	return this.exprTypes[exprIdx];
+}
+
+fn FunctionAnalysisInfo* SymbolTable.find_method(SymbolTable* this, MethodId id)
+{
+	foreach (&function : this.functions)
 	{
-		if (method.id.structDeclIdx == id.structDeclIdx && method.id.methodIdx == id.methodIdx)
-		{
-			return method;
-		}
+		if (function.kind != CallTargetKind.METHOD) continue;
+		if (function.methodId.structDeclIdx == id.structDeclIdx && function.methodId.methodIdx == id.methodIdx) return function;
 	}
 	return null;
 }
 
-enum CallTargetKind : char
+struct FunctionAnalysisInfo
 {
-	INVALID,
-	FREE_FUN,
-	METHOD,
+	SymbolIdx symbolIdx;
+	TypeInfo returnType;
+	union
+	{
+		DeclIdx fnDeclIdx;
+		NativeFnIdx nativeFnIdx;
+		MethodId methodId;
+	}
+	SymbolIdx receiverSymbolIdx;
+	SymbolIdx[] params;
+	CallTargetKind kind;
 }
 
 struct CallTarget
 {
-	CallTargetKind kind;
-	DeclIdx fnDeclIdx;
-	MethodId methodId;
+	SymbolIdx functionSymbolIdx;
+	ExprIdx receiverExprIdx; // NO_IDX for free calls and implicit this
 }
 
 struct MethodId
 {
 	DeclIdx structDeclIdx;
 	int methodIdx;
-}
-
-struct MethodAnalysisInfo
-{
-	MethodId id;
-	DeclParamRange paramRange; // receiver is always parameter 0
-	SymbolIdx receiverSymbolIdx;
-	TypeInfo returnType;
 }
 
 
@@ -107,6 +109,7 @@ enum ErrorKind : char (String asStr)
 	MEMBER_IS_READONLY         { "Member is readonly" },
 	INVALID_CALL               { "Unknown function or method" },
 	PASS_MODE_MISMATCH         { "In/Inout modifiers must match between function definition and function call" },
+	FUNC_NAME_CLASHES_NATIVE   { "Function name clashes with built-in function" },
 }
 
 struct TypeResult

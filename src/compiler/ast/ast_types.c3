@@ -69,7 +69,6 @@ struct TypeAst
 struct FnDeclAst
 {
 	TypeAst returnType;
-	NameIdx nameIdx;
 	List{ParamAst} params;
 	StmtIdx body;
 }
@@ -77,28 +76,29 @@ struct FnDeclAst
 struct MethodDeclAst
 {
 	TypeAst returnType;
-	NameIdx nameIdx;
 	DeclIdx structIdx;
 	List{ParamAst} params;
+	NameIdx nameIdx;
 	StmtIdx body;
 }
 
 
 struct StructDeclAst
 {
-	NameIdx nameIdx;
 	List{FieldAst} fields;
 	List{MethodDeclAst} methods;
 }
 
 struct Decl
 {
-	DeclKind kind;
 	union
 	{
 		FnDeclAst fnDecl;
 		StructDeclAst structDecl;
 	}
+	Span span;
+	NameIdx nameIdx;
+	DeclKind kind;
 }
 
 
@@ -207,8 +207,6 @@ struct RetStmt      { ExprIdx value;}
 
 struct Stmt
 {
-	StmtKind kind;
-	Span span;
 	union
 	{
 		ExprIdx exprStmt;
@@ -219,19 +217,21 @@ struct Stmt
 		BlockStmt blockStmt;
 		RetStmt retStmt; // value might be NO_IDX ("return;")
 	}
+	Span span;
+	StmtKind kind;
 }
 
 
 fn void ProgramAst.init(ProgramAst* this, Allocator allocator)
 {
 	this.globalBlock = { };
-	this.globalBlock.globalDeclarations.init(allocator, 512);
-	this.globalBlock.globalStatements.init(allocator, 512);
-	this.declarations.init(allocator, 1024);
-	this.statements.init(allocator, 1024);
-	this.expressions.init(allocator, 1024);
-	this.names.init(allocator, 1024);
-	this.args.init(allocator, 1024);
+	this.globalBlock.globalDeclarations.init(allocator, 64);
+	this.globalBlock.globalStatements.init(allocator, 64);
+	this.declarations.init(allocator, 64);
+	this.statements.init(allocator, 256);
+	this.expressions.init(allocator, 256);
+	this.names.init(allocator, 128);
+	this.args.init(allocator, 128);
 }
 
 fn void ProgramAst.free(ProgramAst* this, Allocator allocator)
@@ -294,7 +294,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 	switch (decl.kind)
 	{
 		case DeclKind.FUNCTION:
-			InternedString funcName = this.names[decl.fnDecl.nameIdx];
+			InternedString funcName = this.names[decl.nameIdx];
 			InternedString retType = this.names[decl.fnDecl.returnType.nameIdx];
 			this.print_indent(indent);
 			log::log("fn %s(", funcName.text());
@@ -311,7 +311,7 @@ fn void ProgramAst.print_declaration(ProgramAst* this, Decl* decl, int indent)
 			Stmt* stmt = &this.statements[decl.fnDecl.body];
 			this.print_statement(stmt, indent + 2);
 		case DeclKind.STRUCT:
-			InternedString structName = this.names[decl.structDecl.nameIdx];
+			InternedString structName = this.names[decl.nameIdx];
 			this.print_indent(indent);
 			log::logn("struct %s \n{", structName.text());
 			foreach (&field : decl.structDecl.fields)

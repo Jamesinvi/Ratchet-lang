@@ -74,13 +74,13 @@ fn BCGenResult BCGenerator.run(BCGenerator* this)
 	// MIR and bytecode functions deliberately use the same stable index.
 	foreach (mirFunctionIdx, &func : this.mirInput.functions)
 	{
-		BCFunction functionResult = { };
+		BCFunction functionResult = { .symbolIdx = func.symbolIdx };
 		BCFunctionIdx funcIdx     = this.push_func_get_idx(&functionResult);
 		assert(funcIdx == mirFunctionIdx);
-		if (func.sourceMethodIdx == compiler::mir::NO_METHOD)
+		if (func.kind == CallTargetKind.FREE_FUN)
 		{
-			FnDeclAst* sourceFunction = &this.inputAst.declarations[func.sourceDeclIdx].fnDecl;
-			String functionName       = this.inputAst.names[sourceFunction.nameIdx].text();
+			Decl* sourceFunction = &this.inputAst.declarations[func.sourceFnDecl];
+			String functionName  = this.inputAst.names[sourceFunction.nameIdx].text();
 			if (functionName == "program")
 			{
 				this.bcOutput.entryFunctionIdx = funcIdx;
@@ -103,6 +103,7 @@ fn BCGenResult BCGenerator.run(BCGenerator* this)
 	// Second pass: actually lower the function instructions
 	foreach (funcIdx, &func : this.mirInput.functions)
 	{
+		if (func.kind == CallTargetKind.NATIVE_FUN) continue;
 		this.currentFrameOffset = 0;
 		this.localFrameOffset = 0;
 		this.prepare_func_bindings(func);
@@ -145,12 +146,12 @@ fn void BCGenerator.lower_fun(BCGenerator* this, MirFunction* funcInput, BCFunct
 	BCFunction* funcOutput = &this.bcOutput.functions[funcOutputIdx];
 	funcOutput.layoutStart = this.fun_frame_slots_len();
 
-	DeclParamRange params = funcInput.paramRange;
+	SymbolIdx[] params = funcInput.params;
 	// Bind all function parameters first! before anything else.
 	// If we don't do this, if a parameter is used after a local, vm will read the wrong offset in the stack frame
-	for (int i = params.start; i < params.end; i++)
+	for (int i = 0; i < params.len; i++)
 	{
-		SymbolIdx parameterSymbol = this.symbolTable.declParamSymbols[i];
+		SymbolIdx parameterSymbol = params[i];
 		// Reserves and records its offset.
 		this.bind_symbol_get_offset(parameterSymbol);
 	}
@@ -289,7 +290,7 @@ fn void BCGenerator.store_value(BCGenerator* this, MirInstruction* mirInstructio
 fn void BCGenerator.lower_zero_bytes(BCGenerator* this, MirInstruction* mirInstruction)
 {
 	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
-	BCPlace place = this.bind_place(&this.mirInput.places[source.placeIdx]);
+	BCPlace place     = this.bind_place(&this.mirInput.places[source.placeIdx]);
 	assert(place.kind == BCPlaceKind.LOCAL);
 	BCInstruction instruction = {
 		.destOffset = place.baseOffset + place.fieldOffset,
@@ -306,8 +307,8 @@ fn void BCGenerator.lower_zero_bytes(BCGenerator* this, MirInstruction* mirInstr
 fn void BCGenerator.lower_load(BCGenerator* this, MirInstruction* mirInstruction)
 {
 	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
-	BCPlace place = this.bind_place(&this.mirInput.places[source.placeIdx]);
-	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+	BCPlace place     = this.bind_place(&this.mirInput.places[source.placeIdx]);
+	short destOffset  = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
 	this.load_place(place, mirInstruction.type, destOffset);
 }
 
@@ -315,7 +316,7 @@ fn void BCGenerator.lower_address(BCGenerator* this, MirInstruction* mirInstruct
 {
 	MirOperand source = this.mirInput.operands[mirInstruction.operandsStart];
 	assert(source.kind == MirOperandKind.PLACE);
-	BCPlace place = this.bind_place(&this.mirInput.places[source.placeIdx]);
+	BCPlace place    = this.bind_place(&this.mirInput.places[source.placeIdx]);
 	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
 	BCInstruction instruction = {
 		.destOffset = destOffset,
@@ -348,12 +349,12 @@ fn void BCGenerator.lower_address(BCGenerator* this, MirInstruction* mirInstruct
 
 fn void BCGenerator.lower_index_address(BCGenerator* this, MirInstruction* mirInstruction)
 {
-	MirOperand base = this.mirInput.operands[mirInstruction.operandsStart];
+	MirOperand base  = this.mirInput.operands[mirInstruction.operandsStart];
 	MirOperand index = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
 	assert(base.kind == MirOperandKind.REGISTER);
-	short baseOffset = this.bind_operand_get_offset(base, this.get_type_from_operand(&base));
+	short baseOffset  = this.bind_operand_get_offset(base, this.get_type_from_operand(&base));
 	short indexOffset = this.bind_operand_get_offset(index, analyzer::make_type(ValueType.INT));
-	short destOffset = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
+	short destOffset  = this.bind_mir_register_get_offset(mirInstruction.result, mirInstruction.type);
 	BCInstruction instruction = {
 		.opCode = BCOpCode.INDEX_ADDR,
 		.destOffset = destOffset,
@@ -398,9 +399,9 @@ fn void BCGenerator.load_value(BCGenerator* this, TypeInfo typeInfo, short srcOf
 
 fn void BCGenerator.lower_store(BCGenerator* this, MirInstruction* mirInstruction)
 {
-	MirOperand dest = this.mirInput.operands[mirInstruction.operandsStart];
+	MirOperand dest   = this.mirInput.operands[mirInstruction.operandsStart];
 	MirOperand source = this.mirInput.operands[(sz)mirInstruction.operandsStart + 1];
-	BCPlace place = this.bind_place(&this.mirInput.places[dest.placeIdx]);
+	BCPlace place     = this.bind_place(&this.mirInput.places[dest.placeIdx]);
 	if (place.kind == BCPlaceKind.LOCAL)
 	{
 		// Keep direct stores, including immediates, on the existing path.
@@ -655,28 +656,23 @@ fn void BCGenerator.lower_cast(BCGenerator* this, MirInstruction* mirInstruction
 
 fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction)
 {
-	MirOperand callee           =  this.mirInput.operands[mirInstruction.operandsStart];
-	MirFunction* calleeFunction =  &this.mirInput.functions[callee.fnCalleeIdx];
+	MirOperand callee           = this.mirInput.operands[mirInstruction.operandsStart];
+	MirFunction* calleeFunction = &this.mirInput.functions[callee.fnCalleeIdx];
 	// Lower all call arguments
-	short argsStart             = -1;
-	short argsEnd               = -1;
-	short argsCount             =  0;
-	short calleeParamOffset     =  0;
+	BCArgIdx argsStart          = (BCArgIdx)this.bcOutput.callArgs.len();
+	short argsCount             = 0;
+	short calleeParamOffset     = 0;
+	assert((sz)(mirInstruction.operandsEnd - mirInstruction.operandsStart - 1) == calleeFunction.params.len);
 	for (int k = mirInstruction.operandsStart + 1; k < mirInstruction.operandsEnd; k++)
 	{
-		BCCallArg argument = { };
-		BCArgIdx argIdx    = this.push_callarg_get_idx(&argument);
-		if (argsCount == 0)
-		{
-			argsStart = argIdx;
-		}
-		DeclParamRange paramRange = calleeFunction.paramRange;
-		SymbolIdx paramSymbolIdx  = this.symbolTable.declParamSymbols[(sz)paramRange.start + argsCount];
-		Symbol* paramSymbol       = &this.symbolTable.symbols[paramSymbolIdx];
-		TypeInfo argType          = paramSymbol.type;
-		ParamPassMode passMode    = paramSymbol.passMode;
-		bool isBorrow             = passMode != ParamPassMode.VALUE;
-		short argAlignment        = isBorrow ? (short)uptr::alignment : (short)argType.alignment();
+		BCCallArg argument       = { };
+		BCArgIdx argIdx          = this.push_callarg_get_idx(&argument);
+		SymbolIdx paramSymbolIdx = calleeFunction.params[(int)argsCount];
+		Symbol* paramSymbol      = &this.symbolTable.symbols[paramSymbolIdx];
+		TypeInfo argType         = paramSymbol.type;
+		ParamPassMode passMode   = paramSymbol.passMode;
+		bool isBorrow            = passMode != ParamPassMode.VALUE;
+		short argAlignment       = isBorrow ? (short)uptr::alignment : (short)argType.alignment();
 		calleeParamOffset = common::align_offset(calleeParamOffset, argAlignment);
 		BCCallArg* callArg = &this.bcOutput.callArgs[argIdx];
 		callArg.isBorrow = isBorrow;
@@ -706,7 +702,7 @@ fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction
 		calleeParamOffset += this.bcOutput.callArgs[argIdx].size;
 		argsCount++;
 	}
-	argsEnd = argsStart + argsCount;
+	BCArgIdx argsEnd       = argsStart + argsCount;
 	short returnDestOffset = runtime::NO_OFFSET;
 	short returnSize       = 0;
 	if (mirInstruction.type.type != ValueType.NULL)
@@ -722,12 +718,14 @@ fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction
 		.returnDestOffset = returnDestOffset,
 		.returnSize = returnSize,
 	};
+	bool isNative = calleeFunction.kind == CallTargetKind.NATIVE_FUN;
+	if (isNative) callInfo.nativeFnIdx = calleeFunction.nativeFnIdx;
 	BCCallInfoIdx infoIdx = this.push_callinfo_get_idx(&callInfo);
 	BCInstruction instruction = {
 		.destOffset = returnDestOffset,
 		.leftOffset = runtime::NO_OFFSET,
 		.rightOffset = runtime::NO_OFFSET,
-		.opCode = BCOpCode.CALL,
+		.opCode = isNative ? BCOpCode.CALL_NATIVE : BCOpCode.CALL,
 		.callInfoIdx = infoIdx,
 		.immKind = BCOperandKind.FUNCTION,
 	};
