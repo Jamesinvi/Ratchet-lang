@@ -235,6 +235,7 @@ struct BCCallInfo
 
 struct BCCallArg
 {
+	TypeInfoIdx typeInfoIdx; // Complete resolved parameter type in BCProgram.typeInfoTable.
 	short callerOffset; // value offset, or base-place offset for a borrow
 	short calleeOffset; // aligned parameter offset in callee frame
 	short size;

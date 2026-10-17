@@ -94,6 +94,8 @@ fn MirGenResult MirGenerator.run(MirGenerator* this)
 				function.sourceMethodIdx = analysis.methodId.methodIdx;
 			case CallTargetKind.NATIVE_FUN:
 				function.nativeFnIdx = analysis.nativeFnIdx;
+			case CallTargetKind.NATIVE_METHOD:
+				function.nativeFnIdx = analysis.nativeFnIdx;
 			default: unreachable();
 		}
 		assert(this.output.functions.len() < int::max);
@@ -147,7 +149,7 @@ fn MirOperand MirGenerator.lower_global_initializer(MirGenerator* this, ExprIdx 
 fn void MirGenerator.lower_function_body(MirGenerator* this, MirFunctionIdx functionIdx)
 {
 	MirFunction* function = &this.output.functions[functionIdx];
-	if (function.kind == CallTargetKind.NATIVE_FUN) return;
+	if (function.kind == CallTargetKind.NATIVE_FUN || function.kind == CallTargetKind.NATIVE_METHOD) return;
 	Decl* sourceDecl = &this.inputAst.declarations[function.sourceFnDecl];
 	StmtIdx bodyIdx;
 	if (function.kind == CallTargetKind.FREE_FUN)
@@ -700,8 +702,14 @@ fn MirOperand MirGenerator.lower_call(MirGenerator* this, ExprIdx callExprIdx)
 		}
 		callOperands.push(receiver);
 	}
+	else if (calleeFunction.kind == CallTargetKind.NATIVE_METHOD)
+	{
+		ExprIdx receiverExprIdx = target.receiverExprIdx;
+		MirOperand receiver     = this.lower_place(receiverExprIdx);
+		callOperands.push(receiver);
+	}
 
-	int explicitParamOffset = calleeFunction.kind == CallTargetKind.METHOD ? 1 : 0;
+	int explicitParamOffset = (calleeFunction.kind == CallTargetKind.METHOD || calleeFunction.kind == CallTargetKind.NATIVE_METHOD) ? 1 : 0;
 	int explicitArgIdx      = 0;
 	for (ExprIdx i = callExpr.call.argsStart; i < callExpr.call.argsEnd; i++)
 	{
@@ -821,7 +829,6 @@ fn MirOperand MirGenerator.lower_place(MirGenerator* this, ExprIdx exprIdx)
 		default: unreachable("Unsupported lvalue expression in lower_place %s", expr.kind);
 	}
 }
-
 
 <*
  Materialize a value-producing base only when it has no existing storage.

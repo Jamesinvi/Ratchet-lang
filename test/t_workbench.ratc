@@ -1,9 +1,18 @@
 // Entry-point. Should return true if errors occurred
 fn bool program()
 {
-	float a = 25f;
-	float b = sqrtf(a);
-	echo b;
+	int size = 4;
+	float[]& a = new float[size]&;
+	a[0] = 32f;
+	echo a[0];
+	int i =0;
+	echo a.length;
+	while( i< 125){
+		a.add(221.15f);
+		i = i+1;
+	}
+	echo a.length;
+	echo a.capacity;
 	return false;
 }
 

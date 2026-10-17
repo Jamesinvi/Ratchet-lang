@@ -628,7 +628,7 @@ fn void Vm.call_native(Vm* vm, BCInstruction* inst)
 				storage += arg.projectionOffset;
 			}
 			// Reference values use the address of their pointer slot, just like other values.
-			arguments[i] = { .type = nativeFn.params[i].type, .data = storage };
+			arguments[i] = { .type = vm.program.typeInfoTable[arg.typeInfoIdx], .data = storage };
 		}
 		// If return type is null call with empty result array
 		if (nativeFn.returnType.type == ValueType.NULL)

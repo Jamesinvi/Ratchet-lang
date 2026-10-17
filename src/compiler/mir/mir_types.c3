@@ -171,10 +171,15 @@ struct MirFunction
 	union
 	{
 		int sourceMethodIdx; // NO_METHOD for a free function
-		NativeFnIdx nativeFnIdx; // Active when kind is NATIVE_FUN.
+		NativeFnIdx nativeFnIdx; // Active when kind is NATIVE_FUN or NATIVE_METHOD
 	}
 	SymbolIdx receiverSymbolIdx; // NO_SYMBOL unless this is a method.
 	CallTargetKind kind;
+}
+
+fn bool MirFunction.is_native(MirFunction* this) @inline
+{
+	return this.kind == CallTargetKind.NATIVE_FUN || this.kind == CallTargetKind.NATIVE_METHOD;
 }
 
 struct MirGlobal
@@ -248,7 +253,7 @@ fn void MirProgram.print_function_name(MirProgram* this, MirFunctionIdx function
 		return;
 	}
 	MirFunction* function = &this.functions[functionIdx];
-	if (function.kind == CallTargetKind.NATIVE_FUN)
+	if (function.is_native())
 	{
 		log::log("%s", common::nativeFunctions[function.nativeFnIdx].name);
 		return;

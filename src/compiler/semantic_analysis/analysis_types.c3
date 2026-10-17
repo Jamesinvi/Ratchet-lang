@@ -64,6 +64,17 @@ fn FunctionAnalysisInfo* SymbolTable.find_method(SymbolTable* this, MethodId id)
 	return null;
 }
 
+fn FunctionAnalysisInfo* SymbolTable.find_native_method(SymbolTable* this, NativeFnIdx nativeFnIdx, TypeInfo receiverType)
+{
+	foreach (&function : this.functions)
+	{
+		if (function.kind != CallTargetKind.NATIVE_METHOD) continue;
+		if (function.nativeFnIdx != nativeFnIdx) continue;
+		if (common::type_info_matches(this.symbols[function.receiverSymbolIdx].type, receiverType)) return function;
+	}
+	return null;
+}
+
 struct FunctionAnalysisInfo
 {
 	SymbolIdx symbolIdx;

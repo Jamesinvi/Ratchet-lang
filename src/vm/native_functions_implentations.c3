@@ -2,6 +2,7 @@ module vm;
 import common;
 import std::time;
 import std::math;
+import log;
 
 <*
  Argument convention for this function:

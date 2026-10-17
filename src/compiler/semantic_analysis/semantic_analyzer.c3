@@ -137,6 +137,7 @@ fn TypeResult SemanticAnalyzer.run(SemanticAnalyzer* this)
 	// Declare all native functions
 	foreach (idx, &nativeFn : common::nativeFunctions)
 	{
+		if (nativeFn.targetKind == CallTargetKind.NATIVE_METHOD) continue;
 		InternedString name = globals::internedSourceStrings.get_or_intern(nativeFn.name);
 		SymbolIdx alreadyDeclaredFn;
 		// If the user has declared a function with this name, error!
@@ -326,6 +327,66 @@ fn bool SemanticAnalyzer.try_resolve_method_call(SemanticAnalyzer* this, DeclIdx
 	*out = this.analyze_call_arguments(callExprIdx, method.symbolIdx, receiverExprIdx);
 	return true;
 }
+
+fn bool SemanticAnalyzer.try_resolve_native_method_call(SemanticAnalyzer* this, TypeInfo baseType, InternedString methodName, ExprIdx callExprIdx, ExprIdx receiverExprIdx, TypeResult* out)
+{
+	assert(baseType.is_heap_array());
+	foreach (methodIdx, &native : common::nativeFunctions)
+	{
+		if (native.targetKind != CallTargetKind.NATIVE_METHOD) continue;
+		assert(native.params.len > 0);
+		if (native.name != methodName.text() || baseType.type != native.params[0].type.type) continue;
+
+		assert(methodIdx < int::max);
+		NativeFnIdx nativeFnIdx = (NativeFnIdx)methodIdx;
+
+		// Look for the analysed method
+		FunctionAnalysisInfo* method = this.symbolTable.find_native_method(nativeFnIdx, baseType);
+		SymbolIdx symbolIdx;
+		// If present, use that, otherwise, generate a new one
+		if (method != null)
+		{
+			symbolIdx = method.symbolIdx;
+		}
+		else
+		{
+			// Resolve the template once per complete receiver type.
+			SymbolIdx receiverSymbolIdx = this.symbols_len();
+			Symbol receiverSymbol       = { .kind = SymbolKind.RECEIVER, .type = baseType, .passMode = native.params[0].passMode };
+			this.symbolTable.symbols.push(receiverSymbol);
+			// Params array (including the receiver)
+			SymbolIdx[] params = mem::alloc::alloc_array(this.outputAllocator, SymbolIdx, native.params.len);
+			params[0] = receiverSymbolIdx;
+			foreach (paramIdx, param : native.params)
+			{
+				if (paramIdx == 0) continue; // first is receiver, skip
+				TypeInfo paramType = param.type;
+				switch (param.flags)
+				{
+					case FunctionParameterFlags.NONE: break;
+					case FunctionParameterFlags.PARAMETER_TYPE_MATCHES_RECEIVER: paramType = baseType;
+					case FunctionParameterFlags.PARAMETER_TYPE_MATCHES_RECEIVER_ELEMENT: paramType = baseType.element_type();
+					default: unreachable();
+				}
+				params[paramIdx] = this.symbols_len();
+				Symbol paramSymbol = { .kind = SymbolKind.PARAM, .type = paramType, .passMode = param.passMode };
+				this.symbolTable.symbols.push(paramSymbol);
+			}
+			FunctionAnalysisInfo info = {
+				.kind = CallTargetKind.NATIVE_METHOD,
+				.nativeFnIdx = nativeFnIdx,
+				.returnType = native.returnType,
+				.receiverSymbolIdx = receiverSymbolIdx,
+				.params = params,
+			};
+			symbolIdx = this.declare_function(methodName, info, false);
+		}
+		*out = this.analyze_call_arguments(callExprIdx, symbolIdx, receiverExprIdx);
+		return true;
+	}
+	return false;
+}
+
 
 fn TypeResult SemanticAnalyzer.analyze_fn(SemanticAnalyzer* this, Decl* decl, DeclIdx ownerDeclIdx)
 {
@@ -844,12 +905,14 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 	if (calleeExpr.kind == ExprKind.MEMBER)
 	{
 		TypeResult baseType = this.analyze_expr(calleeExpr.member.base);
+
 		if (baseType.hadError)
 		{
 			return baseType;
 		}
 		TypeInfo baseInfo = baseType.value;
 		bool isStruct     = baseInfo.type == ValueType.STRUCT;
+		bool isArray      = baseInfo.is_heap_array();
 		if (isStruct)
 		{
 			DeclIdx structDeclIdx     = this.find_struct_decl_idx(baseInfo.structTypeIndex);
@@ -861,6 +924,16 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 				{
 					return this.type_error(ErrorKind.INVALID_METHOD_RECEIVER, baseInfo, baseInfo, expr.span);
 				}
+				return resolved;
+			}
+		}
+		else if (isArray)
+		{
+			InternedString methodName = this.ast.names[calleeExpr.member.memberIdx];
+			TypeResult resolved       = { };
+
+			if (this.try_resolve_native_method_call(baseInfo, methodName, exprIdx, calleeExpr.member.base, &resolved))
+			{
 				return resolved;
 			}
 		}
@@ -876,6 +949,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_call(SemanticAnalyzer* this, ExprIdx
 	}
 
 	TypeResult calleeType = this.analyze_expr(expr.call.callee);
+
 	if (calleeType.hadError)
 	{
 		return calleeType;
@@ -895,7 +969,7 @@ fn TypeResult SemanticAnalyzer.analyze_call_arguments(SemanticAnalyzer* this, Ex
 	Symbol functionSymbol     = this.symbolTable.symbols[functionSymbolIdx];
 	FunctionAnalysisInfo info = this.symbolTable.functions[functionSymbol.funcIdx];
 	SymbolIdx[] params        = info.params;
-	int paramOffset           = info.kind == CallTargetKind.METHOD ? 1 : 0;
+	int paramOffset           = (info.kind == CallTargetKind.METHOD || info.kind == CallTargetKind.NATIVE_METHOD) ? 1 : 0;
 	int argCount              = expr.call.argsEnd - expr.call.argsStart;
 	if (argCount != (int)params.len - paramOffset)
 	{
@@ -957,7 +1031,7 @@ fn TypeResult SemanticAnalyzer.analyze_expr_member(SemanticAnalyzer* this, ExprI
 	TypeInfo baseInfo = baseType.value;
 
 	// If we're analyzing a member of a (for example) int&
-	// We only accept the built-int .value property, reject anything else
+	// We only accept the built-in .value property, reject anything else
 	if (baseInfo.is_builtin_ref_like())
 	{
 		InternedString fieldName = this.ast.names[expr.member.memberIdx];

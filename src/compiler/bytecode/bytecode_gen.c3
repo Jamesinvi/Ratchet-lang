@@ -677,6 +677,7 @@ fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction
 		BCCallArg* callArg = &this.bcOutput.callArgs[argIdx];
 		callArg.isBorrow = isBorrow;
 		callArg.type = argType.type;
+		callArg.typeInfoIdx = this.push_typeinfo_get_idx(argType);
 		callArg.calleeOffset = calleeParamOffset;
 		if (isBorrow)
 		{
@@ -718,7 +719,7 @@ fn void BCGenerator.lower_call(BCGenerator* this, MirInstruction* mirInstruction
 		.returnDestOffset = returnDestOffset,
 		.returnSize = returnSize,
 	};
-	bool isNative = calleeFunction.kind == CallTargetKind.NATIVE_FUN;
+	bool isNative = calleeFunction.kind == CallTargetKind.NATIVE_FUN || calleeFunction.kind == CallTargetKind.NATIVE_METHOD;
 	if (isNative) callInfo.nativeFnIdx = calleeFunction.nativeFnIdx;
 	BCCallInfoIdx infoIdx = this.push_callinfo_get_idx(&callInfo);
 	BCInstruction instruction = {

@@ -20,12 +20,21 @@ enum CallTargetKind : char
 	FREE_FUN,
 	METHOD,
 	NATIVE_FUN,
+	NATIVE_METHOD,
+}
+
+constset FunctionParameterFlags : char
+{
+	NONE                                    = 0,
+	PARAMETER_TYPE_MATCHES_RECEIVER         = 1 << 0,
+	PARAMETER_TYPE_MATCHES_RECEIVER_ELEMENT = 1 << 1,
 }
 
 struct FunctionParameter
 {
 	TypeInfo type;
 	ParamPassMode passMode;
+	FunctionParameterFlags flags;
 }
 
 enum ValueType : char
